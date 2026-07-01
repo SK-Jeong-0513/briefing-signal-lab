@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Briefing Signal Lab — 매일 아침, 기술·금융·경제 신호를 하나의 브리핑으로</title>
+  <meta name="description" content="기술·금융·경제 신호를 매일 선별해 무료 샘플과 유료 전체 브리핑으로 제공하는 구독형 브리핑 플랫폼." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <!-- ── 헤더 ── -->
+  <header class="header">
+    <div class="wrap header__inner">
+      <a class="brand" href="#top" aria-label="Briefing Signal Lab">
+        <svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true">
+          <rect class="mark__bg" x="1" y="1" width="24" height="24" rx="6"/>
+          <path class="mark__line" d="M4 17 L9 11 L13 14 L17 7 L22 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="mark__dot" cx="17" cy="7" r="2"/>
+        </svg>
+        <span class="brand__name" data-i18n="brand"></span>
+      </a>
+      <nav class="nav" aria-label="주요">
+        <a class="nav__link" href="#samples" data-i18n="nav.tech"></a>
+        <a class="nav__link" href="#samples" data-i18n="nav.finance"></a>
+        <a class="nav__link" href="#samples" data-i18n="nav.economy"></a>
+        <a class="nav__link" href="#dashboard" data-i18n="nav.dashboard"></a>
+        <a class="nav__link" href="#library" data-i18n="nav.library"></a>
+      </nav>
+      <div class="header__actions">
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" data-lang="ko" aria-pressed="true">KO</button>
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+        <a class="btn btn--primary btn--sm" data-link="freeForm" target="_blank" rel="noopener" data-i18n="nav.subscribe"></a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ── HERO ── -->
+    <section class="hero band--surface">
+      <svg class="hero__signal" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <path class="signal-line signal-line--soft" d="M0 460 L150 430 L300 470 L450 400 L600 440 L750 360 L900 400 L1050 320 L1200 360"/>
+        <path class="signal-line" d="M0 420 L150 380 L300 410 L450 300 L600 340 L750 240 L900 290 L1050 180 L1200 230"/>
+        <circle class="signal-dot" cx="1050" cy="180" r="5"/>
+      </svg>
+      <div class="wrap hero__inner">
+        <span class="hero__kicker" data-i18n="hero.kicker"></span>
+        <h1 class="hero__title" data-i18n-html="hero.title"></h1>
+        <p class="hero__sub" data-i18n="hero.sub"></p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" data-link="freeForm" target="_blank" rel="noopener" data-i18n="hero.ctaPrimary"></a>
+          <a class="btn btn--ghost" href="#samples" data-i18n="hero.ctaSecondary"></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── WHAT ── -->
+    <section class="band">
+      <div class="wrap what__grid reveal">
+        <div>
+          <p class="eyebrow" data-i18n="what.heading"></p>
+          <h2 class="section-title" data-i18n="what.title"></h2>
+        </div>
+        <div>
+          <p class="section-sub" data-i18n="what.body"></p>
+          <ul class="points" id="points"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 샘플 브리핑 ── -->
+    <section class="band band--surface" id="samples">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="eyebrow" data-i18n="samples.heading"></p>
+          <h2 class="section-title" data-i18n="samples.title"></h2>
+          <p class="section-sub" data-i18n="samples.sub"></p>
+        </div>
+        <div class="grid-3" id="briefings"></div>
+      </div>
+    </section>
+
+    <!-- ── 무료/유료 비교 ── -->
+    <section class="band" id="membership">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="eyebrow" data-i18n="compare.heading"></p>
+          <h2 class="section-title" data-i18n="compare.title"></h2>
+        </div>
+        <div class="compare reveal" id="compare"></div>
+      </div>
+    </section>
+
+    <!-- ── 대시보드 티저 ── -->
+    <section class="band band--surface" id="dashboard">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="eyebrow" data-i18n="dashboard.heading"></p>
+          <h2 class="section-title" data-i18n="dashboard.title"></h2>
+          <p class="section-sub" data-i18n="dashboard.sub"></p>
+        </div>
+        <div class="ind-grid" id="indicators"></div>
+        <p class="sample-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+          <span data-i18n="dashboard.sampleNote"></span>
+        </p>
+      </div>
+    </section>
+
+    <!-- ── 서재 티저 ── -->
+    <section class="band" id="library">
+      <div class="wrap">
+        <div class="reveal">
+          <p class="eyebrow" data-i18n="library.heading"></p>
+          <h2 class="section-title" data-i18n="library.title"></h2>
+          <p class="section-sub" data-i18n="library.sub"></p>
+        </div>
+        <div class="lib-grid" id="library-list"></div>
+      </div>
+    </section>
+
+    <!-- ── CTA ── -->
+    <section class="band cta">
+      <div class="wrap reveal">
+        <h2 class="cta__title" data-i18n="cta.title"></h2>
+        <p class="cta__sub" data-i18n="cta.sub"></p>
+        <div class="cta__actions">
+          <a class="btn btn--primary" data-link="freeForm" target="_blank" rel="noopener" data-i18n="cta.freeCta"></a>
+          <a class="btn btn--ghost" data-link="paidForm" target="_blank" rel="noopener" data-i18n="cta.paidCta"></a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── 푸터 ── -->
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <div class="footer__brand">
+        <svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true">
+          <rect class="mark__bg" x="1" y="1" width="24" height="24" rx="6"/>
+          <path class="mark__line" d="M4 17 L9 11 L13 14 L17 7 L22 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="mark__dot" cx="17" cy="7" r="2"/>
+        </svg>
+        <span data-i18n="brand"></span>
+      </div>
+      <div>
+        <p class="footer__disc-title" data-i18n="footer.disclaimerTitle"></p>
+        <p class="footer__disc" data-i18n="footer.disclaimer"></p>
+      </div>
+      <p class="footer__disc" data-i18n="footer.sourceNote"></p>
+      <div class="footer__meta">
+        <span data-i18n="footer.rights"></span>
+        <span>paun.jeong@gmail.com</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/content.js"></script>
+  <script src="assets/script.js"></script>
+</body>
+</html>

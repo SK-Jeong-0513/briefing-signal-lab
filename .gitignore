@@ -1,0 +1,10 @@
+# 배포 repo에는 공개용 정적 사이트만 포함한다.
+# 아래는 내부 문서/스크래치 — 로컬 경로·사업 전략이 담겨 있어 공개하지 않는다.
+plan.md
+CLAUDE.md
+agents/
+.review/
+.gstack/
+*.bak
+.DS_Store
+Thumbs.db
