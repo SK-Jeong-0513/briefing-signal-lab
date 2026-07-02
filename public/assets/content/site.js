@@ -133,6 +133,15 @@ const UI = {
     },
     feedHeading: { ko: "최근 금융 브리핑", en: "Latest finance briefings" },
   },
+  economyPage: {
+    eyebrow: { ko: "ECONOMY BRIEFING", en: "ECONOMY BRIEFING" },
+    title: { ko: "경제 브리핑", en: "Economy Briefing" },
+    intro: {
+      ko: "금리·환율·물가·원자재 등 매크로 신호를 매일 선별해 요약합니다. 아래는 무료 공개 요약이며, 전체 심층본과 키워드 맞춤 브리핑은 유료(이메일)로 제공됩니다. 모든 내용은 정보 제공이며 투자 조언이 아닙니다.",
+      en: "We curate daily macro signals across rates, FX, inflation, and commodities. Below are the free public summaries; full deep-dives and keyword-tailored briefings are paid (by email). All content is information only, not investment advice.",
+    },
+    feedHeading: { ko: "최근 경제 브리핑", en: "Latest economy briefings" },
+  },
   soon: {
     badge: { ko: "준비 중", en: "COMING SOON" },
     suffix: { ko: "브리핑 · 준비 중", en: "Briefing · coming soon" },
@@ -218,6 +227,16 @@ const TOPICS = {
     { ko: "금리", en: "Rates" },
     { ko: "원자재", en: "Commodities" },
     { ko: "밸류업", en: "Value-up" },
+  ],
+  economy: [
+    { ko: "금리", en: "Rates" },
+    { ko: "환율", en: "FX" },
+    { ko: "물가", en: "Inflation" },
+    { ko: "고용", en: "Jobs" },
+    { ko: "성장률", en: "GDP" },
+    { ko: "유가", en: "Oil" },
+    { ko: "원자재", en: "Commodities" },
+    { ko: "무역수지", en: "Trade" },
   ],
 };
 
