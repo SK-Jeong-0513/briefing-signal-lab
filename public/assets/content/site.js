@@ -124,6 +124,15 @@ const UI = {
       en: "Information only, not investment advice. Personalized email delivery rolls out in stages; current content is sample data.",
     },
   },
+  financePage: {
+    eyebrow: { ko: "FINANCE BRIEFING", en: "FINANCE BRIEFING" },
+    title: { ko: "금융 브리핑", en: "Finance Briefing" },
+    intro: {
+      ko: "시장·실적·수급 신호를 매일 선별해 요약합니다. 아래는 무료 공개 요약이며, 전체 심층본과 키워드 맞춤 브리핑은 유료(이메일)로 제공됩니다. 모든 내용은 정보 제공이며 투자 조언이 아닙니다.",
+      en: "We curate daily market, earnings, and flow signals. Below are the free public summaries; full deep-dives and keyword-tailored briefings are paid (by email). All content is information only, not investment advice.",
+    },
+    feedHeading: { ko: "최근 금융 브리핑", en: "Latest finance briefings" },
+  },
   soon: {
     badge: { ko: "준비 중", en: "COMING SOON" },
     suffix: { ko: "브리핑 · 준비 중", en: "Briefing · coming soon" },
@@ -188,17 +197,29 @@ const LIBRARY = [
   },
 ];
 
-/* 유료 키워드 예시 칩 (설명용). 새 키워드는 여기 추가 */
-const TOPICS = [
-  { ko: "CPO", en: "CPO" },
-  { ko: "Glass Substrate", en: "Glass Substrate" },
-  { ko: "우주", en: "Space" },
-  { ko: "메모리", en: "Memory" },
-  { ko: "HBM", en: "HBM" },
-  { ko: "이차전지", en: "Battery" },
-  { ko: "로봇", en: "Robotics" },
-  { ko: "양자", en: "Quantum" },
-];
+/* 유료 키워드 예시 칩 (카테고리별). 새 키워드는 해당 배열에 추가 */
+const TOPICS = {
+  tech: [
+    { ko: "CPO", en: "CPO" },
+    { ko: "Glass Substrate", en: "Glass Substrate" },
+    { ko: "우주", en: "Space" },
+    { ko: "메모리", en: "Memory" },
+    { ko: "HBM", en: "HBM" },
+    { ko: "이차전지", en: "Battery" },
+    { ko: "로봇", en: "Robotics" },
+    { ko: "양자", en: "Quantum" },
+  ],
+  finance: [
+    { ko: "반도체", en: "Semis" },
+    { ko: "AI 테마", en: "AI theme" },
+    { ko: "배당주", en: "Dividends" },
+    { ko: "실적 시즌", en: "Earnings" },
+    { ko: "환율", en: "FX" },
+    { ko: "금리", en: "Rates" },
+    { ko: "원자재", en: "Commodities" },
+    { ko: "밸류업", en: "Value-up" },
+  ],
+};
 
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
 const LINKS = {

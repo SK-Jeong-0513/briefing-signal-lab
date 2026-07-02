@@ -157,43 +157,47 @@
     }).join("");
   }
 
-  /* 기술 브리핑 피드 (tech.html) — 무료 공개, 날짜순, 잠금 배지 없음 */
-  function renderTechFeed() {
-    var host = document.getElementById("tech-feed");
-    if (!host) return;
+  /* 카테고리 브리핑 피드 (tech/finance/economy 페이지) — data-feed-category로 카테고리 지정.
+   * 무료 공개, 날짜순(데이터 순서), 잠금 배지 없음 */
+  function renderCategoryFeeds() {
     var s = UI.samples;
-    var items = BRIEFINGS.filter(function (b) { return b.category === "tech"; });
-    host.innerHTML = items.map(function (b) {
-      var summary = b.summary[lang].map(function (line) { return "<li>" + line + "</li>"; }).join("");
-      var tags = b.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
-      var srcNames = b.sources.map(function (x) { return x.name; }).join(" · ");
-      var disc = b.disclaimer
-        ? '<span class="disclaimer-inline">' +
-          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>' +
-          (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>"
-        : "";
-      return (
-        '<article class="card reveal">' +
-          '<div class="card__top"><span class="chip">' + t(b.label) + '</span>' +
-            '<span class="badge-sample">' + b.date + " · " + t(s.sampleBadge) + "</span></div>" +
-          '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(b.spark) + '"/></svg>' +
-          '<h3 class="card__title">' + b.title[lang] + "</h3>" +
-          '<ul class="card__summary">' + summary + "</ul>" +
-          disc +
-          '<div class="card__meta">' + tags + "</div>" +
-          '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
-        "</article>"
-      );
-    }).join("");
+    document.querySelectorAll("[data-feed-category]").forEach(function (host) {
+      var cat = host.getAttribute("data-feed-category");
+      var items = BRIEFINGS.filter(function (b) { return b.category === cat; });
+      host.innerHTML = items.map(function (b) {
+        var summary = b.summary[lang].map(function (line) { return "<li>" + line + "</li>"; }).join("");
+        var tags = b.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+        var srcNames = b.sources.map(function (x) { return x.name; }).join(" · ");
+        var disc = b.disclaimer
+          ? '<span class="disclaimer-inline">' +
+            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>' +
+            (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>"
+          : "";
+        return (
+          '<article class="card reveal">' +
+            '<div class="card__top"><span class="chip">' + t(b.label) + '</span>' +
+              '<span class="badge-sample">' + b.date + " · " + t(s.sampleBadge) + "</span></div>" +
+            '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(b.spark) + '"/></svg>' +
+            '<h3 class="card__title">' + b.title[lang] + "</h3>" +
+            '<ul class="card__summary">' + summary + "</ul>" +
+            disc +
+            '<div class="card__meta">' + tags + "</div>" +
+            '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
+          "</article>"
+        );
+      }).join("");
+    });
   }
 
-  /* 유료 키워드 예시 칩 (tech.html) */
+  /* 유료 키워드 예시 칩 — data-topics로 카테고리 지정 */
   function renderTopicChips() {
-    var host = document.getElementById("topic-chips");
-    if (!host || typeof TOPICS === "undefined") return;
-    host.innerHTML = TOPICS.map(function (k) {
-      return '<span class="topic-chip">' + t(k) + "</span>";
-    }).join("");
+    if (typeof TOPICS === "undefined") return;
+    document.querySelectorAll("[data-topics]").forEach(function (host) {
+      var list = TOPICS[host.getAttribute("data-topics")] || [];
+      host.innerHTML = list.map(function (k) {
+        return '<span class="topic-chip">' + t(k) + "</span>";
+      }).join("");
+    });
   }
 
   function renderAll() {
@@ -203,7 +207,7 @@
     renderCompare();
     renderIndicators();
     renderLibrary();
-    renderTechFeed();
+    renderCategoryFeeds();
     renderTopicChips();
     observeReveals();
   }
