@@ -250,8 +250,8 @@ const LIBRARY = [
   },
 ];
 
-/* 외부 링크 — 실제 Google Form URL로 교체하세요 */
+/* 외부 링크 — Google Form (무료·유료 공통, 폼 내 구독유형 항목으로 구분) */
 const LINKS = {
-  freeForm: "YOUR_GOOGLE_FORM_URL",
-  paidForm: "YOUR_GOOGLE_FORM_URL",
+  freeForm: "https://forms.gle/bHSb2xx2GYoi7p1c8",
+  paidForm: "https://forms.gle/bHSb2xx2GYoi7p1c8",
 };
