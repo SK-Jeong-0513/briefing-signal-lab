@@ -1,7 +1,8 @@
-/* Briefing Signal Lab — 콘텐츠 데이터
- * 모든 카피는 {ko, en} 구조. 브리핑은 plan.md의 Briefing Issue 필드에 맞춤.
- * 실데이터(IonQ/Telegram) 연동 시 BRIEFINGS 배열만 교체하면 됨.
- * 주의: 아래 수치·종목은 전부 형식 검증용 "샘플·예시" 데이터. 실제 시장 데이터 아님.
+/* Briefing Signal Lab — 사이트 공통 콘텐츠.
+ * UI 카피(i18n) · 대시보드 지표 · 서재 · 외부 링크.
+ * 브리핑 데이터는 카테고리별 파일(tech.js / finance.js / economy.js)에서 정의되고,
+ * 이 파일 맨 아래에서 BRIEFINGS로 합쳐진다. (index.html은 카테고리 파일 → site.js → script.js 순으로 로드)
+ * 새 카테고리 추가: content/<name>.js 만들고 index.html에 script 추가, 아래 BRIEFINGS 합치기에 편입.
  */
 
 /* ── UI 카피 (i18n) ───────────────────────────────────── */
@@ -114,101 +115,6 @@ const UI = {
   },
 };
 
-/* ── 샘플 브리핑 (Briefing Issue 구조) ────────────────────
- * access_level: 'free' = 무료 축약 공개 / 'paid' = 유료 전체
- * spark: 미니 스파크라인용 샘플 시계열(장식/데이터 시각 요소, 실데이터 아님)
- */
-const BRIEFINGS = [
-  {
-    id: "tech-2026-07-02",
-    date: "2026-07-02",
-    category: "tech",
-    label: { ko: "기술", en: "Tech" },
-    title: {
-      ko: "온디바이스 추론이 다음 반도체 수요를 만든다",
-      en: "On-device inference is shaping the next chip demand",
-    },
-    summary: {
-      ko: [
-        "저전력 NPU를 얹은 신형 모바일 칩 발표가 이어지며 온디바이스 추론 경쟁이 본격화.",
-        "클라우드 비용 부담이 커지자 엣지 추론으로 워크로드를 옮기려는 움직임이 관찰됨.",
-        "관전 포인트: 메모리 대역폭과 전력 효율이 실제 채택 속도를 가른다.",
-      ],
-      en: [
-        "A wave of new mobile chips with low-power NPUs pushes on-device inference into real competition.",
-        "Rising cloud costs are nudging workloads toward edge inference.",
-        "Watch: memory bandwidth and power efficiency will decide adoption speed.",
-      ],
-    },
-    tags: ["AI", "반도체", "온디바이스"],
-    sources: [
-      { name: "Vendor Keynote", note: { ko: "제품 발표", en: "Product keynote" } },
-      { name: "Industry Note", note: { ko: "업계 관찰", en: "Industry note" } },
-    ],
-    access_level: "free",
-    spark: [4, 5, 5, 6, 8, 7, 9, 11, 10, 13],
-  },
-  {
-    id: "finance-2026-07-02",
-    date: "2026-07-02",
-    category: "finance",
-    label: { ko: "금융", en: "Finance" },
-    title: {
-      ko: "AI·전력 테마, 실적 시즌 앞두고 변동성 확대",
-      en: "AI & power themes: volatility widens ahead of earnings",
-    },
-    summary: {
-      ko: [
-        "데이터센터 전력 수요 서사가 이어지며 관련 테마의 거래량이 늘어남.",
-        "실적 발표를 앞두고 기대와 차익 실현이 엇갈려 일중 변동성이 커짐.",
-        "관전 포인트: 가이던스 톤과 설비투자 계획이 방향을 좌우.",
-      ],
-      en: [
-        "The data-center power-demand narrative keeps volume elevated in related names.",
-        "Ahead of earnings, expectation vs. profit-taking widens intraday swings.",
-        "Watch: guidance tone and capex plans will set direction.",
-      ],
-    },
-    tags: ["실적", "전력", "AI 테마"],
-    sources: [
-      { name: "Market Wrap", note: { ko: "시황 요약", en: "Market wrap" } },
-      { name: "Filing Note", note: { ko: "공시 관찰", en: "Filing note" } },
-    ],
-    access_level: "free",
-    disclaimer: true,
-    spark: [12, 11, 13, 10, 9, 12, 8, 11, 7, 9],
-  },
-  {
-    id: "economy-2026-07-02",
-    date: "2026-07-02",
-    category: "economy",
-    label: { ko: "경제", en: "Economy" },
-    title: {
-      ko: "금리·환율·원자재, 오늘 볼 3개의 매크로 신호",
-      en: "Rates, FX, commodities: three macro signals for today",
-    },
-    summary: {
-      ko: [
-        "장기 금리 흐름이 성장주 밸류에이션에 미치는 압력이 다시 주목됨.",
-        "환율 변동이 수출 섹터와 외국인 수급 심리에 반영되는 구간.",
-        "관전 포인트: 금·원유 등 원자재가 인플레 기대의 방향타 역할.",
-      ],
-      en: [
-        "Long-end rates are back in focus for growth-stock valuations.",
-        "FX moves are feeding through to exporters and foreign-flow sentiment.",
-        "Watch: gold and oil act as a compass for inflation expectations.",
-      ],
-    },
-    tags: ["금리", "환율", "원자재"],
-    sources: [
-      { name: "Macro Brief", note: { ko: "매크로 브리프", en: "Macro brief" } },
-      { name: "Rates Desk", note: { ko: "금리 관찰", en: "Rates desk" } },
-    ],
-    access_level: "free",
-    spark: [6, 6, 7, 7, 6, 8, 9, 8, 10, 9],
-  },
-];
-
 /* ── 대시보드 티저 지표 카드 (샘플 데이터) ─────────────── */
 const INDICATORS = [
   { key: "kospi", label: { ko: "KOSPI", en: "KOSPI" }, value: "2,7xx.x", change: "+0.6%", dir: "up", locked: false },
@@ -255,3 +161,10 @@ const LINKS = {
   freeForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EB%AC%B4%EB%A3%8C+%EC%83%98%ED%94%8C+%EA%B5%AC%EB%8F%85",
   paidForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EC%9C%A0%EB%A3%8C+%EC%A0%84%EC%B2%B4+%EB%B8%8C%EB%A6%AC%ED%95%91+%EB%AC%B8%EC%9D%98",
 };
+
+/* ── 브리핑 합치기 — 카테고리 파일들을 하나의 BRIEFINGS로 (없는 카테고리는 안전하게 건너뜀) ── */
+const BRIEFINGS = [].concat(
+  typeof BRIEFINGS_TECH !== "undefined" ? BRIEFINGS_TECH : [],
+  typeof BRIEFINGS_FINANCE !== "undefined" ? BRIEFINGS_FINANCE : [],
+  typeof BRIEFINGS_ECONOMY !== "undefined" ? BRIEFINGS_ECONOMY : []
+);
