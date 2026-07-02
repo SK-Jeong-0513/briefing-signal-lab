@@ -200,6 +200,123 @@
     });
   }
 
+  /* ── 경제 캘린더 (calendar.html) ── */
+  var calState = { view: "grid", y: null, m: null, region: "all", category: "all", importance: "all", bound: false };
+
+  function calYmd(d) {
+    var mm = ("0" + (d.getMonth() + 1)).slice(-2), dd = ("0" + d.getDate()).slice(-2);
+    return d.getFullYear() + "-" + mm + "-" + dd;
+  }
+  function calFiltered() {
+    if (typeof CAL_EVENTS === "undefined") return [];
+    return CAL_EVENTS.filter(function (e) {
+      if (calState.region !== "all" && e.region !== calState.region) return false;
+      if (calState.category !== "all" && e.category !== calState.category) return false;
+      if (calState.importance !== "all" && e.importance !== calState.importance) return false;
+      return true;
+    });
+  }
+  function calChip(group, val, label, active) {
+    return '<button class="cal-chip" type="button" data-cal-' + group + '="' + val + '" aria-pressed="' + active + '">' + label + "</button>";
+  }
+  function calFilterRow(labelText, group, current, options) {
+    var chips = calChip(group, "all", t(UI.calendarPage.all), current === "all");
+    chips += Object.keys(options).map(function (k) {
+      return calChip(group, k, t(options[k]), current === k);
+    }).join("");
+    return '<div class="cal-filter-row"><span class="cal-lbl">' + labelText + '</span><div class="cal-chips">' + chips + "</div></div>";
+  }
+  function calPill(e) {
+    return '<span class="cal-ev cal-ev--' + e.importance + '" title="' + e.title[lang] + '">' + e.title[lang] + "</span>";
+  }
+  function renderCalGrid(events) {
+    var cp = UI.calendarPage, wds = cp.weekdays[lang];
+    var startDow = new Date(calState.y, calState.m, 1).getDay();
+    var todayYmd = calYmd(new Date());
+    var byDate = {};
+    events.forEach(function (e) { (byDate[e.date] = byDate[e.date] || []).push(e); });
+    var head = wds.map(function (w) { return '<div class="cal-weekday">' + w + "</div>"; }).join("");
+    var cells = "";
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(calState.y, calState.m, 1 - startDow + i);
+      var ymd = calYmd(d);
+      var evs = byDate[ymd] || [];
+      var pills = evs.slice(0, 3).map(calPill).join("");
+      var more = evs.length > 3 ? '<div class="cal-more">+' + (evs.length - 3) + " " + t(cp.moreSuffix) + "</div>" : "";
+      cells += '<div class="cal-cell' + (d.getMonth() === calState.m ? "" : " cal-cell--out") + (ymd === todayYmd ? " cal-cell--today" : "") + '">' +
+        '<div class="cal-cell__num">' + d.getDate() + "</div>" + pills + more + "</div>";
+    }
+    return '<div class="cal-grid">' + head + cells + "</div>";
+  }
+  function renderCalAgenda(events) {
+    var cp = UI.calendarPage;
+    var list = events.filter(function (e) {
+      var p = e.date.split("-");
+      return parseInt(p[0], 10) === calState.y && parseInt(p[1], 10) === calState.m + 1;
+    }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    if (!list.length) return '<p class="cal-empty">' + t(cp.empty) + "</p>";
+    return '<div class="cal-agenda">' + list.map(function (e) {
+      var rtag = cp.regions[e.region] ? '<span class="tag">' + t(cp.regions[e.region]) + "</span>" : "";
+      var ctag = cp.categories[e.category] ? '<span class="tag">' + t(cp.categories[e.category]) + "</span>" : "";
+      var itag = '<span class="cal-imp cal-imp--' + e.importance + '">' + t(cp.importances[e.importance]) + "</span>";
+      return '<article class="cal-item">' +
+        '<div class="cal-item__date">' + e.date.slice(5) + "</div>" +
+        '<div class="cal-item__body">' +
+          '<h3 class="cal-item__title">' + e.title[lang] + "</h3>" +
+          '<p class="cal-item__note">' + e.note[lang] + "</p>" +
+          '<div class="card__meta">' + rtag + ctag + itag + "</div>" +
+        "</div>" +
+      "</article>";
+    }).join("") + "</div>";
+  }
+  function renderCalendar() {
+    var host = document.getElementById("calendar");
+    if (!host) return;
+    var cp = UI.calendarPage;
+    if (calState.y === null) { var now = new Date(); calState.y = now.getFullYear(); calState.m = now.getMonth(); }
+    var months = cp.months[lang];
+    var monthLabel = lang === "ko" ? (calState.y + "년 " + months[calState.m]) : (months[calState.m] + " " + calState.y);
+    var events = calFiltered();
+    var toolbar =
+      '<div class="cal-toolbar">' +
+        '<div class="cal-nav">' +
+          '<button class="cal-btn" type="button" data-cal-nav="prev" aria-label="' + t(cp.prev) + '">‹</button>' +
+          '<span class="cal-month">' + monthLabel + "</span>" +
+          '<button class="cal-btn" type="button" data-cal-nav="next" aria-label="' + t(cp.next) + '">›</button>' +
+          '<button class="cal-btn cal-btn--today" type="button" data-cal-nav="today">' + t(cp.today) + "</button>" +
+        "</div>" +
+        '<div class="cal-viewtoggle">' +
+          '<button type="button" data-cal-view="grid" aria-pressed="' + (calState.view === "grid") + '">' + t(cp.viewGrid) + "</button>" +
+          '<button type="button" data-cal-view="list" aria-pressed="' + (calState.view === "list") + '">' + t(cp.viewList) + "</button>" +
+        "</div>" +
+      "</div>";
+    var filters =
+      '<div class="cal-filters">' +
+        calFilterRow(t(cp.lblRegion), "region", calState.region, cp.regions) +
+        calFilterRow(t(cp.lblCategory), "category", calState.category, cp.categories) +
+        calFilterRow(t(cp.lblImportance), "importance", calState.importance, cp.importances) +
+      "</div>";
+    host.innerHTML = toolbar + filters + (calState.view === "grid" ? renderCalGrid(events) : renderCalAgenda(events));
+    if (!calState.bound) {
+      calState.bound = true;
+      host.addEventListener("click", function (e) {
+        var el = e.target.closest("[data-cal-view],[data-cal-nav],[data-cal-region],[data-cal-category],[data-cal-importance]");
+        if (!el || !host.contains(el)) return;
+        if (el.hasAttribute("data-cal-view")) calState.view = el.getAttribute("data-cal-view");
+        else if (el.hasAttribute("data-cal-nav")) {
+          var n = el.getAttribute("data-cal-nav");
+          if (n === "prev") { calState.m--; if (calState.m < 0) { calState.m = 11; calState.y--; } }
+          else if (n === "next") { calState.m++; if (calState.m > 11) { calState.m = 0; calState.y++; } }
+          else { var now = new Date(); calState.y = now.getFullYear(); calState.m = now.getMonth(); }
+        }
+        else if (el.hasAttribute("data-cal-region")) calState.region = el.getAttribute("data-cal-region");
+        else if (el.hasAttribute("data-cal-category")) calState.category = el.getAttribute("data-cal-category");
+        else if (el.hasAttribute("data-cal-importance")) calState.importance = el.getAttribute("data-cal-importance");
+        renderCalendar();
+      });
+    }
+  }
+
   function renderAll() {
     applyStaticI18n();
     renderPoints();
@@ -209,6 +326,7 @@
     renderLibrary();
     renderCategoryFeeds();
     renderTopicChips();
+    renderCalendar();
     observeReveals();
   }
 
