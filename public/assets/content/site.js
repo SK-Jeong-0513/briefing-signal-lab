@@ -9,6 +9,7 @@
 const UI = {
   brand: { ko: "브리핑 시그널 랩", en: "Briefing Signal Lab" },
   nav: {
+    samples: { ko: "오늘의 샘플", en: "Samples" },
     tech: { ko: "기술", en: "Tech" },
     finance: { ko: "금융", en: "Finance" },
     economy: { ko: "경제", en: "Economy" },
