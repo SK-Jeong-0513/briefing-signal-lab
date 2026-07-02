@@ -6,16 +6,18 @@
 
 ## 구조
 
+배포 대상은 `public/`만. (`.git`, README 등은 배포에서 제외 — Cloudflare Pages build output directory = `public`)
+
 ```
-index.html          랜딩 마크업 + 시그널 라인 SVG
-assets/style.css    디자인 토큰 + 레이아웃
-assets/script.js    KO/EN 토글, 동적 렌더, 스크롤 리빌
-assets/content.js   샘플 브리핑 데이터 + i18n 카피
+public/index.html          랜딩 마크업 + 시그널 라인 SVG
+public/assets/style.css    디자인 토큰 + 레이아웃
+public/assets/script.js    KO/EN 토글, 동적 렌더, 스크롤 리빌
+public/assets/content.js   샘플 브리핑 데이터 + i18n 카피
 ```
 
 ## 로컬 확인
 
-`index.html`을 브라우저로 열면 됩니다. 서버 불필요.
+`public/index.html`을 브라우저로 열면 됩니다. 서버 불필요.
 
 ## 수정 후 배포
 
