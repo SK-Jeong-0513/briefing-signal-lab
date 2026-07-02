@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>기술 브리핑 — Briefing Signal Lab</title>
-  <meta name="description" content="반도체·AI·소재·우주 등 기술 신호를 매일 선별해 요약하는 기술 브리핑. 무료 공개 요약 + 유료 키워드 맞춤 이메일 브리핑." />
+  <title>금융 브리핑 (준비 중) — Briefing Signal Lab</title>
+  <meta name="description" content="금융 브리핑 화면 준비 중. 무료 구독으로 오픈 소식을 받아보세요." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
@@ -12,8 +12,6 @@
   <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
-
-  <!-- ── 헤더 ── -->
   <header class="header">
     <div class="wrap header__inner">
       <a class="brand" href="index.html" aria-label="Briefing Signal Lab">
@@ -42,43 +40,19 @@
   </header>
 
   <main id="top">
-
-    <!-- ── 페이지 인트로 ── -->
     <section class="band">
-      <div class="wrap page-intro reveal">
-        <a class="nav__link" href="index.html" data-i18n="techPage.backHome" style="display:inline-block;margin-bottom:16px;"></a>
-        <p class="eyebrow" data-i18n="techPage.eyebrow"></p>
-        <h1 class="page-intro__title" data-i18n="techPage.title"></h1>
-        <p class="section-sub" data-i18n="techPage.intro"></p>
-      </div>
-    </section>
-
-    <!-- ── 무료 브리핑 피드 ── -->
-    <section class="band band--surface" id="feed">
-      <div class="wrap">
-        <h2 class="section-title reveal" data-i18n="techPage.feedHeading"></h2>
-        <div class="grid-3" id="tech-feed"></div>
-      </div>
-    </section>
-
-    <!-- ── 유료 키워드 맞춤 섹션 ── -->
-    <section class="band">
-      <div class="wrap reveal">
-        <p class="eyebrow" data-i18n="techPage.paidEyebrow"></p>
-        <h2 class="section-title" data-i18n="techPage.paidTitle"></h2>
-        <p class="section-sub" data-i18n="techPage.paidBody"></p>
-        <p class="topics-label" data-i18n="techPage.topicsLabel"></p>
-        <div class="topic-chips" id="topic-chips"></div>
-        <div style="margin-top:28px;">
-          <a class="btn btn--primary" data-link="paidForm" target="_blank" rel="noopener" data-i18n="techPage.paidCta"></a>
+      <div class="wrap page-intro reveal" style="text-align:center;max-width:56ch;margin-inline:auto;">
+        <span class="badge-sample" data-i18n="soon.badge" style="display:inline-block;margin-bottom:16px;"></span>
+        <h1 class="page-intro__title"><span data-i18n="nav.finance"></span> <span data-i18n="soon.suffix"></span></h1>
+        <p class="section-sub" data-i18n="soon.body" style="margin-inline:auto;"></p>
+        <div style="margin-top:28px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+          <a class="btn btn--primary" data-link="freeForm" target="_blank" rel="noopener" data-i18n="nav.subscribe"></a>
+          <a class="btn btn--ghost" href="tech.html" data-i18n="soon.seeTech"></a>
         </div>
-        <p class="footer__disc" data-i18n="techPage.paidNote" style="margin-top:16px;"></p>
       </div>
     </section>
-
   </main>
 
-  <!-- ── 푸터 ── -->
   <footer class="footer">
     <div class="wrap footer__inner">
       <div class="footer__brand">
@@ -93,7 +67,6 @@
         <p class="footer__disc-title" data-i18n="footer.disclaimerTitle"></p>
         <p class="footer__disc" data-i18n="footer.disclaimer"></p>
       </div>
-      <p class="footer__disc" data-i18n="footer.sourceNote"></p>
       <div class="footer__meta">
         <span data-i18n="footer.rights"></span>
         <span>paun.jeong@gmail.com</span>
@@ -101,8 +74,6 @@
     </div>
   </footer>
 
-  <!-- 기술 데이터 → 공통 콘텐츠(site.js) → 렌더 스크립트 -->
-  <script src="assets/content/tech.js"></script>
   <script src="assets/content/site.js"></script>
   <script src="assets/script.js"></script>
 </body>

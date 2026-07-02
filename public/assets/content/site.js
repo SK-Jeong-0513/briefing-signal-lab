@@ -124,6 +124,15 @@ const UI = {
       en: "Information only, not investment advice. Personalized email delivery rolls out in stages; current content is sample data.",
     },
   },
+  soon: {
+    badge: { ko: "준비 중", en: "COMING SOON" },
+    suffix: { ko: "브리핑 · 준비 중", en: "Briefing · coming soon" },
+    body: {
+      ko: "이 카테고리 브리핑 화면을 준비하고 있습니다. 먼저 기술 브리핑을 둘러보거나, 무료 구독으로 오픈 소식을 받아보세요.",
+      en: "We're preparing this category's briefing screen. Meanwhile, explore the tech briefing or subscribe free to hear when it opens.",
+    },
+    seeTech: { ko: "기술 브리핑 보기 →", en: "See tech briefing →" },
+  },
   footer: {
     disclaimerTitle: { ko: "면책 안내", en: "Disclaimer" },
     disclaimer: {
