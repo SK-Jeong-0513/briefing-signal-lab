@@ -224,6 +224,17 @@ ul { margin: 0; padding: 0; list-style: none; }
 .lib__sum { color: var(--muted); font-size: 0.9375rem; }
 .lib__more { color: var(--primary); font-weight: 600; font-size: 0.875rem; margin-top: auto; }
 
+/* ── 기술 페이지: 인트로 + 유료 키워드 칩 ─────────────── */
+.page-intro { max-width: 62ch; }
+.page-intro__title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
+.topics-label { font-size: 0.8125rem; font-weight: 600; color: var(--muted); margin-top: var(--s-lg); }
+.topic-chips { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-sm); }
+.topic-chip {
+  font-size: 0.9375rem; font-weight: 600; color: var(--primary);
+  background: var(--primary-soft); border: 1px solid var(--border);
+  padding: 8px 14px; border-radius: 999px;
+}
+
 /* ── CTA 밴드 ──────────────────────────────────────────── */
 .cta { background: var(--primary); color: var(--surface); text-align: center; }
 .cta .eyebrow { color: rgba(255,255,255,0.8); }

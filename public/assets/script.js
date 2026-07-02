@@ -55,15 +55,22 @@
 
   /* WHAT 포인트 */
   function renderPoints() {
-    document.getElementById("points").innerHTML = UI.what.points.map(function (p) {
+    var el = document.getElementById("points");
+    if (!el) return;
+    el.innerHTML = UI.what.points.map(function (p) {
       return '<li class="point">' + tickSvg() + "<span>" + t(p) + "</span></li>";
     }).join("");
   }
 
-  /* 샘플 브리핑 카드 */
+  /* 샘플 브리핑 카드 — 랜딩 티저: 카테고리별 대표 1건(최신) */
   function renderBriefings() {
+    var host = document.getElementById("briefings");
+    if (!host) return;
     var s = UI.samples;
-    document.getElementById("briefings").innerHTML = BRIEFINGS.map(function (b) {
+    var reps = ["tech", "finance", "economy"].map(function (c) {
+      return BRIEFINGS.filter(function (b) { return b.category === c; })[0];
+    }).filter(Boolean);
+    host.innerHTML = reps.map(function (b) {
       var summary = b.summary[lang].map(function (line) { return "<li>" + line + "</li>"; }).join("");
       var tags = b.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
       var srcNames = b.sources.map(function (x) { return x.name; }).join(" · ");
@@ -92,6 +99,8 @@
 
   /* 무료/유료 비교 */
   function renderCompare() {
+    var host = document.getElementById("compare");
+    if (!host) return;
     var c = UI.compare;
     function plan(kind) {
       var paid = kind === "paid";
@@ -110,13 +119,15 @@
         "</div>"
       );
     }
-    document.getElementById("compare").innerHTML = plan("free") + plan("paid");
+    host.innerHTML = plan("free") + plan("paid");
   }
 
   /* 지표 카드 */
   function renderIndicators() {
+    var host = document.getElementById("indicators");
+    if (!host) return;
     var d = UI.dashboard;
-    document.getElementById("indicators").innerHTML = INDICATORS.map(function (i) {
+    host.innerHTML = INDICATORS.map(function (i) {
       var lock = i.locked ? '<span class="ind__lock">' + t(d.locked) + "</span>" : "";
       return (
         '<div class="ind' + (i.locked ? " ind--locked" : "") + '">' + lock +
@@ -130,8 +141,10 @@
 
   /* 서재 */
   function renderLibrary() {
+    var host = document.getElementById("library-list");
+    if (!host) return;
     var m = UI.library.readMore;
-    document.getElementById("library-list").innerHTML = LIBRARY.map(function (n) {
+    host.innerHTML = LIBRARY.map(function (n) {
       var tags = n.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
       return (
         '<article class="lib reveal">' +
@@ -144,6 +157,45 @@
     }).join("");
   }
 
+  /* 기술 브리핑 피드 (tech.html) — 무료 공개, 날짜순, 잠금 배지 없음 */
+  function renderTechFeed() {
+    var host = document.getElementById("tech-feed");
+    if (!host) return;
+    var s = UI.samples;
+    var items = BRIEFINGS.filter(function (b) { return b.category === "tech"; });
+    host.innerHTML = items.map(function (b) {
+      var summary = b.summary[lang].map(function (line) { return "<li>" + line + "</li>"; }).join("");
+      var tags = b.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+      var srcNames = b.sources.map(function (x) { return x.name; }).join(" · ");
+      var disc = b.disclaimer
+        ? '<span class="disclaimer-inline">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>' +
+          (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>"
+        : "";
+      return (
+        '<article class="card reveal">' +
+          '<div class="card__top"><span class="chip">' + t(b.label) + '</span>' +
+            '<span class="badge-sample">' + b.date + " · " + t(s.sampleBadge) + "</span></div>" +
+          '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(b.spark) + '"/></svg>' +
+          '<h3 class="card__title">' + b.title[lang] + "</h3>" +
+          '<ul class="card__summary">' + summary + "</ul>" +
+          disc +
+          '<div class="card__meta">' + tags + "</div>" +
+          '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
+        "</article>"
+      );
+    }).join("");
+  }
+
+  /* 유료 키워드 예시 칩 (tech.html) */
+  function renderTopicChips() {
+    var host = document.getElementById("topic-chips");
+    if (!host || typeof TOPICS === "undefined") return;
+    host.innerHTML = TOPICS.map(function (k) {
+      return '<span class="topic-chip">' + t(k) + "</span>";
+    }).join("");
+  }
+
   function renderAll() {
     applyStaticI18n();
     renderPoints();
@@ -151,6 +203,8 @@
     renderCompare();
     renderIndicators();
     renderLibrary();
+    renderTechFeed();
+    renderTopicChips();
     observeReveals();
   }
 
