@@ -53,6 +53,7 @@ const UI = {
     sampleBadge: { ko: "샘플", en: "SAMPLE" },
     lockedLabel: { ko: "전체 브리핑은 유료 구독", en: "Full briefing — paid" },
     sourcesLabel: { ko: "출처", en: "Sources" },
+    techMore: { ko: "기술 브리핑 전체 보기 →", en: "See all tech briefings →" },
   },
   compare: {
     heading: { ko: "MEMBERSHIP", en: "MEMBERSHIP" },
@@ -100,6 +101,28 @@ const UI = {
     },
     freeCta: { ko: "무료로 구독하기", en: "Subscribe free" },
     paidCta: { ko: "유료 문의 / 대기자 등록", en: "Paid inquiry / waitlist" },
+  },
+  techPage: {
+    backHome: { ko: "← 홈", en: "← Home" },
+    eyebrow: { ko: "TECH BRIEFING", en: "TECH BRIEFING" },
+    title: { ko: "기술 브리핑", en: "Tech Briefing" },
+    intro: {
+      ko: "반도체·AI·소재·우주 등 기술 신호를 매일 선별해 요약합니다. 아래는 무료 공개 요약이며, 전체 심층본과 키워드 맞춤 브리핑은 유료(이메일)로 제공됩니다.",
+      en: "We curate daily tech signals across chips, AI, materials, and space. Below are the free public summaries; full deep-dives and keyword-tailored briefings are paid (by email).",
+    },
+    feedHeading: { ko: "최근 기술 브리핑", en: "Latest tech briefings" },
+    paidEyebrow: { ko: "PAID · 키워드 맞춤", en: "PAID · CUSTOM KEYWORDS" },
+    paidTitle: { ko: "원하는 키워드로, 매일 이메일 브리핑", en: "Your keywords, briefed to your inbox daily" },
+    paidBody: {
+      ko: "관심 키워드를 고르면 해당 주제만 선별해 매일 이메일로 브리핑을 보내드립니다. 아래는 예시 키워드입니다.",
+      en: "Pick your keywords and we send a daily email briefing curated to just those topics. Examples below.",
+    },
+    topicsLabel: { ko: "예시 키워드", en: "Example keywords" },
+    paidCta: { ko: "유료 키워드 브리핑 신청", en: "Request paid keyword briefing" },
+    paidNote: {
+      ko: "정보 제공·투자 조언 아님. 개인화 이메일 발송은 순차 오픈 예정이며, 현재 콘텐츠는 샘플입니다.",
+      en: "Information only, not investment advice. Personalized email delivery rolls out in stages; current content is sample data.",
+    },
   },
   footer: {
     disclaimerTitle: { ko: "면책 안내", en: "Disclaimer" },
@@ -154,6 +177,18 @@ const LIBRARY = [
     },
     tags: ["대시보드", "설계"],
   },
+];
+
+/* 유료 키워드 예시 칩 (설명용). 새 키워드는 여기 추가 */
+const TOPICS = [
+  { ko: "CPO", en: "CPO" },
+  { ko: "Glass Substrate", en: "Glass Substrate" },
+  { ko: "우주", en: "Space" },
+  { ko: "메모리", en: "Memory" },
+  { ko: "HBM", en: "HBM" },
+  { ko: "이차전지", en: "Battery" },
+  { ko: "로봇", en: "Robotics" },
+  { ko: "양자", en: "Quantum" },
 ];
 
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
