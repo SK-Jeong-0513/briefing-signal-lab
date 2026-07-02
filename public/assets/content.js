@@ -250,8 +250,8 @@ const LIBRARY = [
   },
 ];
 
-/* 외부 링크 — Google Form (무료·유료 공통, 폼 내 구독유형 항목으로 구분) */
+/* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
 const LINKS = {
-  freeForm: "https://forms.gle/bHSb2xx2GYoi7p1c8",
-  paidForm: "https://forms.gle/bHSb2xx2GYoi7p1c8",
+  freeForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EB%AC%B4%EB%A3%8C+%EC%83%98%ED%94%8C+%EA%B5%AC%EB%8F%85",
+  paidForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EC%9C%A0%EB%A3%8C+%EC%A0%84%EC%B2%B4+%EB%B8%8C%EB%A6%AC%ED%95%91+%EB%AC%B8%EC%9D%98",
 };
