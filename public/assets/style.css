@@ -235,6 +235,16 @@ ul { margin: 0; padding: 0; list-style: none; }
   padding: 8px 14px; border-radius: 999px;
 }
 
+/* 오늘의 샘플 브리핑 상단 카테고리 진입 칩 */
+.samples-nav { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-lg); }
+.samples-nav a {
+  font-size: 0.9375rem; font-weight: 600; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 8px 16px; border-radius: 999px;
+  transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+}
+.samples-nav a:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+
 /* ── CTA 밴드 ──────────────────────────────────────────── */
 .cta { background: var(--primary); color: var(--surface); text-align: center; }
 .cta .eyebrow { color: rgba(255,255,255,0.8); }
