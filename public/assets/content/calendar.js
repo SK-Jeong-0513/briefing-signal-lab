@@ -13,7 +13,7 @@
  *   날짜=2026-07-15, 지역=한국/미국/중국/유럽/기타, 분류=경제지표/통화정책/채권·입찰/실적/컨퍼런스·이벤트/내 일정, 영향도=높음/보통/낮음
  *   title_en/note_en은 선택(비우면 한국어로 표시).
  */
-const CAL_SHEET_URL = "";
+const CAL_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTu517RrSrdj2QZrwF-v750ta7hq2kq2Z4OxxTTyQF5qsrWWvh9UOGAt3rbBzm8gLTPInrOG6LNnjuJ/pub?gid=0&single=true&output=csv";
 
 const CAL_EVENTS = [
   { date: "2026-07-04", region: "us", category: "indicator", importance: "high", mine: false,

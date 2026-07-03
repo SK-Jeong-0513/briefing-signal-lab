@@ -239,12 +239,14 @@
       for (var r = 1; r < rows.length; r++) {
         var row = rows[r];
         if (!row || !(row[iD] || "").trim()) continue;
-        var cat = calMap(iC >= 0 ? row[iC] : "", CAT, "event");
+        var rawCat = iC >= 0 ? (row[iC] || "").trim() : "";
+        var cat = calMap(rawCat.split("(")[0], CAT, "event"); // 괄호 앞 기본 분류로 매핑
         var tk = (row[iT] || "").trim(), nk = iN >= 0 ? (row[iN] || "").trim() : "";
         out.push({
           date: (row[iD] || "").trim(),
           region: calMap(iR >= 0 ? row[iR] : "", REG, "etc"),
           category: cat,
+          catRaw: rawCat,
           importance: calMap(iI >= 0 ? row[iI] : "", IMP, "mid"),
           mine: cat === "mine",
           title: { ko: tk, en: (iTe >= 0 && (row[iTe] || "").trim()) || tk },
@@ -308,7 +310,8 @@
     if (!list.length) return '<p class="cal-empty">' + t(cp.empty) + "</p>";
     return '<div class="cal-agenda">' + list.map(function (e) {
       var rtag = cp.regions[e.region] ? '<span class="tag">' + t(cp.regions[e.region]) + "</span>" : "";
-      var ctag = cp.categories[e.category] ? '<span class="tag">' + t(cp.categories[e.category]) + "</span>" : "";
+      var catLabel = (lang === "ko" && e.catRaw) ? e.catRaw : (cp.categories[e.category] ? t(cp.categories[e.category]) : "");
+      var ctag = catLabel ? '<span class="tag">' + catLabel + "</span>" : "";
       var itag = '<span class="cal-imp cal-imp--' + e.importance + '">' + t(cp.importances[e.importance]) + "</span>";
       return '<article class="cal-item">' +
         '<div class="cal-item__date">' + e.date.slice(5) + "</div>" +
