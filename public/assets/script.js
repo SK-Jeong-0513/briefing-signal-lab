@@ -253,7 +253,10 @@
           note: { ko: nk, en: (iNe >= 0 && (row[iNe] || "").trim()) || nk },
         });
       }
-      if (out.length) { calData = out; renderCalendar(); }
+      // 중복 방어: 같은 날짜+제목은 1건만 (시트 중복행/게시 캐시 대비)
+      var seen = {}, deduped = [];
+      out.forEach(function (e) { var k = e.date + "|" + e.title.ko; if (!seen[k]) { seen[k] = 1; deduped.push(e); } });
+      if (deduped.length) { calData = deduped; renderCalendar(); }
     }).catch(function () { /* 실패 시 샘플 유지 */ });
   }
 
