@@ -6,6 +6,15 @@
  * importance: high | mid | low
  * 주의: 날짜·항목은 형식 검증용 "샘플·예시" 데이터. 실제 일정과 다를 수 있음.
  */
+/* 구글 시트 연동:
+ * 아래에 시트의 "웹에 게시(CSV)" URL을 넣으면, 그 시트가 캘린더의 실제 소스가 됩니다(공개).
+ * 비어 있으면 아래 CAL_EVENTS 샘플을 사용합니다.
+ * 시트 열(첫 행 헤더): 날짜 | 지역 | 분류 | 영향도 | 제목 | 설명 | title_en | note_en
+ *   날짜=2026-07-15, 지역=한국/미국/중국/유럽/기타, 분류=경제지표/통화정책/채권·입찰/실적/컨퍼런스·이벤트/내 일정, 영향도=높음/보통/낮음
+ *   title_en/note_en은 선택(비우면 한국어로 표시).
+ */
+const CAL_SHEET_URL = "";
+
 const CAL_EVENTS = [
   { date: "2026-07-04", region: "us", category: "indicator", importance: "high", mine: false,
     title: { ko: "미국 6월 고용보고서", en: "US June jobs report" },

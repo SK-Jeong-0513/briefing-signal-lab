@@ -202,14 +202,65 @@
 
   /* ── 경제 캘린더 (calendar.html) ── */
   var calState = { view: "grid", y: null, m: null, region: "all", category: "all", importance: "all", bound: false };
+  var calData = (typeof CAL_EVENTS !== "undefined") ? CAL_EVENTS.slice() : [];
+
+  /* 구글 시트(CSV) 연동 — CAL_SHEET_URL 있으면 시트가 소스, 실패/공백이면 샘플 유지 */
+  function calParseCSV(text) {
+    var rows = [], row = [], cur = "", i = 0, inQ = false;
+    for (; i < text.length; i++) {
+      var c = text[i];
+      if (inQ) {
+        if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else inQ = false; }
+        else cur += c;
+      } else if (c === '"') inQ = true;
+      else if (c === ",") { row.push(cur); cur = ""; }
+      else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else if (c !== "\r") cur += c;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows;
+  }
+  function calMap(v, map, dflt) { v = (v || "").trim(); return map[v] || v.toLowerCase() || dflt; }
+  function loadCalSheet() {
+    if (typeof CAL_SHEET_URL !== "string" || !CAL_SHEET_URL) return;
+    var REG = { "한국": "kr", "미국": "us", "중국": "cn", "유럽": "eu", "기타": "etc" };
+    var CAT = { "경제지표": "indicator", "통화정책": "policy", "채권·입찰": "bond", "채권입찰": "bond", "실적": "earnings", "컨퍼런스·이벤트": "event", "이벤트": "event", "내 일정": "mine", "내일정": "mine" };
+    var IMP = { "높음": "high", "보통": "mid", "낮음": "low" };
+    fetch(CAL_SHEET_URL).then(function (r) { return r.text(); }).then(function (text) {
+      var rows = calParseCSV(text);
+      if (rows.length < 2) return;
+      var H = rows[0].map(function (h) { return h.trim().toLowerCase(); });
+      var idx = function (names) { for (var i = 0; i < H.length; i++) if (names.indexOf(H[i]) >= 0) return i; return -1; };
+      var iD = idx(["날짜", "date"]), iR = idx(["지역", "region"]), iC = idx(["분류", "category"]),
+        iI = idx(["영향도", "impact", "importance"]), iT = idx(["제목", "title", "title_ko"]),
+        iN = idx(["설명", "note", "note_ko"]), iTe = idx(["title_en"]), iNe = idx(["note_en"]);
+      if (iD < 0 || iT < 0) return;
+      var out = [];
+      for (var r = 1; r < rows.length; r++) {
+        var row = rows[r];
+        if (!row || !(row[iD] || "").trim()) continue;
+        var cat = calMap(iC >= 0 ? row[iC] : "", CAT, "event");
+        var tk = (row[iT] || "").trim(), nk = iN >= 0 ? (row[iN] || "").trim() : "";
+        out.push({
+          date: (row[iD] || "").trim(),
+          region: calMap(iR >= 0 ? row[iR] : "", REG, "etc"),
+          category: cat,
+          importance: calMap(iI >= 0 ? row[iI] : "", IMP, "mid"),
+          mine: cat === "mine",
+          title: { ko: tk, en: (iTe >= 0 && (row[iTe] || "").trim()) || tk },
+          note: { ko: nk, en: (iNe >= 0 && (row[iNe] || "").trim()) || nk },
+        });
+      }
+      if (out.length) { calData = out; renderCalendar(); }
+    }).catch(function () { /* 실패 시 샘플 유지 */ });
+  }
 
   function calYmd(d) {
     var mm = ("0" + (d.getMonth() + 1)).slice(-2), dd = ("0" + d.getDate()).slice(-2);
     return d.getFullYear() + "-" + mm + "-" + dd;
   }
   function calFiltered() {
-    if (typeof CAL_EVENTS === "undefined") return [];
-    return CAL_EVENTS.filter(function (e) {
+    return calData.filter(function (e) {
       if (calState.region !== "all" && e.region !== calState.region) return false;
       if (calState.category !== "all" && e.category !== calState.category) return false;
       if (calState.importance !== "all" && e.importance !== calState.importance) return false;
@@ -376,6 +427,7 @@
     try { var saved = localStorage.getItem("bsl-lang"); if (saved === "en" || saved === "ko") lang = saved; } catch (e) {}
     applyLinks();
     setLang(lang);
+    if (document.getElementById("calendar")) loadCalSheet();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });
