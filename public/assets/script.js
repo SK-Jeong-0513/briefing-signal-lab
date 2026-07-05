@@ -52,6 +52,12 @@
       ? '<svg class="mk mk--on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'
       : '<svg class="mk mk--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14"/></svg>';
   }
+  function lockSvg() {
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  }
+  function discSvg() {
+    return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
+  }
 
   /* WHAT 포인트 */
   function renderPoints() {
@@ -374,6 +380,97 @@
     }
   }
 
+  /* ── 기술 페이지: 분야 메뉴 + 주간 다이제스트 + 헤드라이너 딥다이브 (tech.html) ── */
+  var techState = { domain: null, bound: false };
+  function techDomainById(id) {
+    if (typeof TECH_DOMAINS === "undefined") return null;
+    return TECH_DOMAINS.filter(function (d) { return d.id === id; })[0] || null;
+  }
+  function techFirstLive() {
+    if (typeof TECH_DOMAINS === "undefined") return null;
+    var d = TECH_DOMAINS.filter(function (x) { return x.status === "live"; })[0];
+    return d ? d.id : null;
+  }
+  function techIssueOf(id) {
+    if (typeof TECH_WEEKLY === "undefined") return null;
+    return TECH_WEEKLY.filter(function (w) { return w.domain === id; })[0] || null;
+  }
+  function renderTechMenu() {
+    var host = document.querySelector("[data-tech-menu]");
+    if (!host) return;
+    var tp = UI.techPage;
+    host.innerHTML = TECH_DOMAINS.map(function (d) {
+      if (d.status === "live") {
+        var sel = d.id === techState.domain;
+        return '<button class="tech-chip" type="button" data-tech-domain="' + d.id + '" aria-pressed="' + sel + '">' + t(d.label) + "</button>";
+      }
+      return '<button class="tech-chip tech-chip--soon" type="button" disabled aria-disabled="true">' +
+        t(d.label) + '<span class="tech-chip__soon">' + t(tp.soonBadge) + "</span></button>";
+    }).join("");
+  }
+  function renderTechIssue() {
+    var host = document.querySelector("[data-tech-weekly]");
+    if (!host) return;
+    var tp = UI.techPage, s = UI.samples;
+    var dom = techDomainById(techState.domain), issue = techIssueOf(techState.domain);
+    if (!dom || !issue) { host.innerHTML = '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(tp.soonBody) + "</p>"; return; }
+    var sigs = issue.signals.map(function (sig) {
+      return '<li class="sig"><div class="sig__main">' +
+        '<span class="sig__title">' + sig.title[lang] + "</span>" +
+        '<span class="sig__lede">' + sig.lede[lang] + "</span></div>" +
+        '<span class="tag">#' + sig.tag + "</span></li>";
+    }).join("");
+    var digest =
+      '<h3 class="tech-sub">' + t(tp.digestHeading) + " · " + issue.signals.length + "</h3>" +
+      '<ul class="sig-list">' + sigs + "</ul>" +
+      '<div class="card__locked">' + lockSvg() + t(tp.signalLock) + "</div>";
+    var h = issue.headliner;
+    var summary = h.summary[lang].map(function (l) { return "<li>" + l + "</li>"; }).join("");
+    var tags = h.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+    var srcNames = h.sources.map(function (x) { return x.name; }).join(" · ");
+    var head =
+      '<article class="card headliner">' +
+        '<div class="card__top"><span class="badge-head">' + t(tp.headBadge) + "</span>" +
+          '<span class="badge-sample">' + t(s.sampleBadge) + "</span></div>" +
+        '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' +
+        '<h3 class="card__title">' + h.title[lang] + "</h3>" +
+        '<ul class="card__summary">' + summary + "</ul>" +
+        '<span class="disclaimer-inline">' + discSvg() + (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>" +
+        '<div class="card__meta">' + tags + "</div>" +
+        '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
+        '<div class="deep-lock">' +
+          '<div class="deep-lock__head">' + lockSvg() + t(tp.deepLockTitle) + "</div>" +
+          '<div class="deep-row"><span class="deep-row__k">' + t(tp.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" +
+          '<div class="deep-row"><span class="deep-row__k">' + t(tp.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" +
+          '<p class="deep-lock__desc">' + t(tp.deepLockDesc) + "</p>" +
+        "</div>" +
+      "</article>";
+    var head2 = '<div class="tech-issue__head"><span class="chip">' + t(dom.label) + "</span>" +
+      '<span class="tech-issue__week">' + t(issue.week) + " " + t(tp.weekSuffix) + "</span></div>";
+    host.innerHTML = '<div class="tech-issue">' + head2 +
+      '<p class="tech-tagline section-sub">' + t(dom.tagline) + "</p>" + digest + head + "</div>";
+  }
+  function renderTechWeekly() {
+    if (typeof TECH_DOMAINS === "undefined") return;
+    if (!document.querySelector("[data-tech-menu]")) return;
+    if (techState.domain === null) techState.domain = techFirstLive();
+    renderTechMenu();
+    renderTechIssue();
+    if (!techState.bound) {
+      techState.bound = true;
+      var menu = document.querySelector("[data-tech-menu]");
+      if (menu) {
+        menu.addEventListener("click", function (e) {
+          var el = e.target.closest("[data-tech-domain]");
+          if (!el || !menu.contains(el)) return;
+          techState.domain = el.getAttribute("data-tech-domain");
+          renderTechMenu();
+          renderTechIssue();
+        });
+      }
+    }
+  }
+
   function renderAll() {
     applyStaticI18n();
     renderPoints();
@@ -383,6 +480,7 @@
     renderLibrary();
     renderCategoryFeeds();
     renderTopicChips();
+    renderTechWeekly();
     renderCalendar();
     observeReveals();
   }

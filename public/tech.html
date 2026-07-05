@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>기술 브리핑 — Briefing Signal Lab</title>
-  <meta name="description" content="반도체·AI·소재·우주 등 기술 신호를 매일 선별해 요약하는 기술 브리핑. 무료 공개 요약 + 유료 키워드 맞춤 이메일 브리핑." />
+  <meta name="description" content="AI 인프라·반도체 공급망 등 기술 밸류체인의 선행 신호를 매주 선별하는 기술 브리핑. 무료 공개 요약 + 유료 분야 구독(신호 전문·딥다이브)." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
@@ -55,22 +55,22 @@
       </div>
     </section>
 
-    <!-- ── 무료 브리핑 피드 ── -->
+    <!-- ── 분야 선택 + 이번 주 브리핑 ── -->
     <section class="band band--surface" id="feed">
       <div class="wrap">
         <h2 class="section-title reveal" data-i18n="techPage.feedHeading"></h2>
-        <div class="grid-3" data-feed-category="tech"></div>
+        <p class="tech-menu-label" data-i18n="techPage.menuLabel"></p>
+        <div class="tech-menu" data-tech-menu></div>
+        <div data-tech-weekly></div>
       </div>
     </section>
 
-    <!-- ── 유료 키워드 맞춤 섹션 ── -->
+    <!-- ── 유료 분야 구독 섹션 ── -->
     <section class="band">
       <div class="wrap reveal">
         <p class="eyebrow" data-i18n="techPage.paidEyebrow"></p>
         <h2 class="section-title" data-i18n="techPage.paidTitle"></h2>
         <p class="section-sub" data-i18n="techPage.paidBody"></p>
-        <p class="topics-label" data-i18n="techPage.topicsLabel"></p>
-        <div class="topic-chips" data-topics="tech"></div>
         <div style="margin-top:28px;">
           <a class="btn btn--primary" data-link="paidForm" target="_blank" rel="noopener" data-i18n="techPage.paidCta"></a>
         </div>

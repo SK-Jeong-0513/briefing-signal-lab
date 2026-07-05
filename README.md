@@ -11,18 +11,19 @@
 
 ```
 public/index.html          랜딩 (샘플 3카드 대표 + 카테고리 진입 칩)
-public/tech.html           기술 브리핑 페이지 (피드 + 유료 키워드 섹션)
+public/tech.html           기술 브리핑 페이지 (분야 메뉴 + 주간 다이제스트/헤드라이너 + 유료 분야 구독)
 public/finance.html        금융 브리핑 페이지
 public/economy.html        경제 브리핑 페이지
 public/calendar.html       경제 캘린더 (격자/리스트, 지역·분류·영향도 필터)
 public/assets/style.css    디자인 토큰 + 레이아웃
 public/assets/script.js    KO/EN 토글, 동적 렌더, 캘린더 모듈, 시트 로더
-public/assets/content/tech.js|finance.js|economy.js   카테고리별 브리핑 데이터(BRIEFINGS_*)
+public/assets/content/tech.js       기술: 주간·분야 모델(TECH_DOMAINS, TECH_WEEKLY) + 랜딩용 BRIEFINGS_TECH 파생
+public/assets/content/finance.js|economy.js   카테고리별 브리핑 데이터(BRIEFINGS_*, 일간 flat)
 public/assets/content/site.js       UI 카피·TOPICS·각 페이지 i18n·LINKS + BRIEFINGS 합치기
 public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시트 URL(CAL_SHEET_URL)
 ```
 
-- 브리핑 피드 컨테이너는 `data-feed-category`, 유료 칩은 `data-topics` 속성으로 카테고리 지정 → script.js가 범용 렌더.
+- 금융·경제 피드는 `data-feed-category`, 유료 칩은 `data-topics` → script.js 범용 렌더. 기술은 `data-tech-menu`(분야 칩)+`data-tech-weekly`(주간 이슈) → `renderTechWeekly`가 별도 렌더.
 - 경제 캘린더는 `CAL_SHEET_URL`(구글 시트 웹게시 CSV)이 있으면 시트가 소스, 없으면 `CAL_EVENTS` 샘플.
 
 콘텐츠 추가/수정과 브랜치→배포 절차는 [CONTRIBUTING.md](CONTRIBUTING.md) 참고.

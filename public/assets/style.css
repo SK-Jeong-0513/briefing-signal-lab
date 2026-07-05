@@ -235,6 +235,52 @@ ul { margin: 0; padding: 0; list-style: none; }
   padding: 8px 14px; border-radius: 999px;
 }
 
+/* ── 기술 페이지: 분야 메뉴 + 주간 이슈(다이제스트 + 헤드라이너) ─────── */
+.tech-menu-label { font-size: 0.8125rem; font-weight: 600; color: var(--muted); margin-top: var(--s-lg); }
+.tech-menu { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-sm); }
+.tech-chip {
+  font-family: var(--font); font-size: 0.9375rem; font-weight: 600; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); padding: 8px 16px; border-radius: 999px;
+  cursor: pointer; transition: border-color .15s ease, color .15s ease, background-color .15s ease;
+}
+.tech-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.tech-chip[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.tech-chip--soon { color: var(--muted); cursor: default; display: inline-flex; align-items: center; gap: 6px; }
+.tech-chip--soon:hover { border-color: var(--border); color: var(--muted); background: var(--surface); }
+.tech-chip__soon {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted);
+  background: var(--canvas); border: 1px solid var(--border); padding: 1px 6px; border-radius: 999px;
+}
+
+.tech-issue { margin-top: var(--s-xl); }
+.tech-issue__head { display: flex; align-items: center; gap: var(--s-md); flex-wrap: wrap; }
+.tech-issue__week { font-size: 0.875rem; font-weight: 600; color: var(--muted); }
+.tech-tagline { margin-top: var(--s-sm); }
+.tech-sub { font-size: 1.0625rem; font-weight: 650; margin-top: var(--s-xl); }
+
+.sig-list { margin-top: var(--s-md); display: flex; flex-direction: column; }
+.sig { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-md); padding: var(--s-md) 0; border-top: 1px solid var(--border); }
+.sig:last-child { border-bottom: 1px solid var(--border); }
+.sig__main { display: flex; flex-direction: column; gap: 2px; }
+.sig__title { font-weight: 650; font-size: 0.9375rem; }
+.sig__lede { color: var(--muted); font-size: 0.9375rem; }
+.sig .tag { flex: none; margin-top: 2px; }
+
+.headliner { margin-top: var(--s-lg); }
+.badge-head {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--primary); background: var(--primary-soft); padding: 3px 10px; border-radius: 999px;
+}
+.deep-lock {
+  border: 1px dashed var(--border); background: var(--canvas); border-radius: var(--r-md);
+  padding: var(--s-md); display: flex; flex-direction: column; gap: var(--s-sm);
+}
+.deep-lock__head { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
+.deep-row { display: flex; gap: var(--s-sm); font-size: 0.875rem; }
+.deep-row__k { flex: none; width: 68px; font-weight: 600; color: var(--muted); }
+.deep-row__v { color: var(--text); filter: blur(3px); user-select: none; }
+.deep-lock__desc { font-size: 0.8125rem; color: var(--muted); }
+
 /* 오늘의 샘플 브리핑 상단 카테고리 진입 칩 */
 .samples-nav { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-lg); }
 .samples-nav a {
@@ -342,4 +388,6 @@ ul { margin: 0; padding: 0; list-style: none; }
   .grid-3, .ind-grid, .lib-grid { grid-template-columns: 1fr; }
   .points { grid-template-columns: 1fr; }
   .hero__inner { padding-block: 64px 72px; }
+  .sig { flex-direction: column; gap: 6px; }
+  .sig .tag { margin-top: 0; }
 }
