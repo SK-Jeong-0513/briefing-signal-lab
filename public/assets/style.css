@@ -361,6 +361,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 .footer__disc-title { font-size: 0.8125rem; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; }
 .footer__disc { font-size: 0.8125rem; color: var(--muted); line-height: 1.6; max-width: 90ch; }
 .footer__meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-md); color: var(--muted); font-size: 0.8125rem; border-top: 1px solid var(--border); padding-top: var(--s-lg); }
+.footer__meta a { color: inherit; transition: color .15s ease; }
+.footer__meta a:hover { color: var(--primary); }
 
 /* ── 모션 (절제된 마이크로) ─────────────────────────────── */
 /* 숨김 상태는 .js가 있을 때만 — JS 미로드 시 콘텐츠는 그대로 보임(silent failure 방지) */

@@ -113,6 +113,7 @@ const UI = {
       en: "A weekly briefing for investors who read technology as a flow of capital. We catch leading signals from primary sources before the headlines and connect them to the value chain. Pick a domain to follow — the summaries below are free; full signals and deep-dives are paid.",
     },
     feedHeading: { ko: "이번 주 브리핑", en: "This week's briefing" },
+    freeBadge: { ko: "무료 공개", en: "Free" },
     menuLabel: { ko: "분야 선택", en: "Choose a domain" },
     soonBadge: { ko: "곧", en: "Soon" },
     weekSuffix: { ko: "· 주간 다이제스트", en: "· weekly digest" },
@@ -217,8 +218,8 @@ const UI = {
   footer: {
     disclaimerTitle: { ko: "면책 안내", en: "Disclaimer" },
     disclaimer: {
-      ko: "본 서비스의 모든 브리핑은 정보 제공과 관찰 노트를 목적으로 하며 투자 조언이 아닙니다. 특정 종목의 매수·매도를 권유하지 않습니다. 데이터의 실시간성과 정확성을 보장하지 않으며, 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다. 현재 페이지의 수치·종목은 형식 검증용 샘플 데이터입니다.",
-      en: "All briefings are for information and observation only and are not investment advice. We do not recommend buying or selling any security. We do not guarantee real-time accuracy; investment decisions and outcomes are the user's own responsibility. Figures and tickers on this page are sample data for format validation.",
+      ko: "본 서비스의 모든 브리핑은 정보 제공과 관찰 노트를 목적으로 하며 투자 조언이 아닙니다. 특정 종목의 매수·매도를 권유하지 않습니다. 데이터의 실시간성과 정확성을 보장하지 않으며, 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다. 기술 브리핑은 공개 출처 기반 관찰이며, 그 외 카테고리의 수치·종목은 형식 검증용 샘플입니다.",
+      en: "All briefings are for information and observation only and are not investment advice. We do not recommend buying or selling any security. We do not guarantee real-time accuracy; investment decisions and outcomes are the user's own responsibility. The tech briefing is observation based on public sources; figures and tickers in other categories are sample data for format validation.",
     },
     sourceNote: {
       ko: "기사 전문을 복사하지 않으며 제목·링크·짧은 요약·자체 해석 중심으로 구성합니다.",

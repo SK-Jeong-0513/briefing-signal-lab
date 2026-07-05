@@ -431,7 +431,7 @@
     var head =
       '<article class="card headliner">' +
         '<div class="card__top"><span class="badge-head">' + t(tp.headBadge) + "</span>" +
-          '<span class="badge-sample">' + t(s.sampleBadge) + "</span></div>" +
+          '<span class="badge-sample">' + t(tp.freeBadge) + "</span></div>" +
         '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' +
         '<h3 class="card__title">' + h.title[lang] + "</h3>" +
         '<ul class="card__summary">' + summary + "</ul>" +
