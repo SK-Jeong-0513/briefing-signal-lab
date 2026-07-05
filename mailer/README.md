@@ -8,7 +8,8 @@
 
 ## 설치 (약 10분)
 
-1. **폼 응답 구글 시트** 열기 → **확장 프로그램 → Apps Script**.
+1. **폼 응답 구글 시트** 열기 → **확장 프로그램(Extensions) → Apps Script**.
+   - ⚠️ 반드시 **시트에서** 열 것. `script.google.com`에서 새 프로젝트로 만들면 시트에 연결(bound)되지 않아 `getActiveSpreadsheet()`가 null → 에러. 그 경우 `CFG.SHEET_ID`에 시트 URL의 `/d/<ID>/edit` ID를 넣으면 독립 프로젝트로도 동작.
 2. `Code.gs` 전체를 붙여넣기.
 3. 상단 **CFG** 확인/수정:
    - `SALT` → 아무 문자열로 교체(토큰 생성용, 노출돼도 큰 문제는 아니나 바꿀 것).

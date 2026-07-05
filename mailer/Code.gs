@@ -26,6 +26,7 @@ const CFG = {
   SUBJECT:   "[기술 브리핑] 이번 주 신호 — AI 인프라 · 반도체 공급망",
   OPERATOR_EMAIL: "paun.jeong@gmail.com", // TEST_MODE 수신지 + 수신거부 mailto
   SALT: "bsl-CHANGE-ME-token-salt",   // 토큰 생성용. 아무 문자열로 교체.
+  SHEET_ID: "",                       // 시트에 연결(bound)된 스크립트면 비워둠. 독립(standalone) 프로젝트면 시트 URL의 /d/<여기>/edit ID를 넣을 것.
   SHEET_NAME: "",                     // 응답 시트 이름. 비우면 첫 시트.
   COL: {                              // 시트 헤더와 정확히 일치
     email:    "이메일",
@@ -88,7 +89,8 @@ const C = { primary: "#2454D6", soft: "#E8EEFF", text: "#17202A", muted: "#5F6B7
 
 // ===== 시트 헬퍼 =====
 function sheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = CFG.SHEET_ID ? SpreadsheetApp.openById(CFG.SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) throw new Error("스프레드시트를 못 찾음. 시트에 연결된 스크립트가 아니면(독립 프로젝트) CFG.SHEET_ID에 시트 ID를 넣으세요. (시트 URL의 /d/<ID>/edit)");
   return CFG.SHEET_NAME ? ss.getSheetByName(CFG.SHEET_NAME) : ss.getSheets()[0];
 }
 function readRows_() {
