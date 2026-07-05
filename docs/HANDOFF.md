@@ -43,6 +43,7 @@
 - 기술 브리핑은 **주간**. 금융/경제 주기는 별도 결정(이번 grill 범위 밖 — 기술만 확정).
 - 분야는 소싱 파이프라인 단위 = 독자가 원하는 게 고정 분야 밖이면 소싱이 무너짐. 그래서 분야 메뉴로 고정하고 티어=분야 수.
 - 배포는 `main` push → GitHub Actions 자동. `public/`만 서빙.
+- **Pages 배포 stuck 이슈(2026-07-06 발생·해결):** upload는 성공하나 마지막 "Deploy"만 "Deployment failed, try again later"로 지속 실패(7/3~7/5). 원인=코드/워크플로/전역장애 아님, **레포별 Pages 백엔드 상태가 막힘**. 해결=Pages 소스 토글로 리셋 — `gh api -X PUT repos/OWNER/REPO/pages -f source[branch]=main -f source[path]=/` (legacy로) 후 즉시 `-f build_type=workflow`로 복귀 → 재배포 트리거하면 성공. 재발 시 이 순서로. (Settings→Pages 소스 토글 UI와 동일 효과)
 - 기존 IonQ/Telegram 자동화는 향후 "주식종목브리핑"용 — 현재 기술/금융/경제 브리핑엔 미사용.
 - 캘린더 뷰토글에 `class="lang"` 쓰지 말 것(전역 KO/EN 리스너 하이재킹). `.cal-viewtoggle` 사용.
 
