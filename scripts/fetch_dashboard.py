@@ -57,31 +57,52 @@ def yahoo(symbol):
 
 
 def treasury_tga():
-    """미 재무부 DTS — TGA 종가 잔고($M). 무키."""
+    """미 재무부 DTS — TGA 종가 잔고($M). 무키. Closing Balance 행에서 금액 필드 자동 탐색."""
     base = ("https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/"
-            "operating_cash_balance?fields=record_date,account_type,close_today_bal"
-            "&filter=record_date:gte:2023-01-01&sort=record_date&page[size]=10000")
+            "operating_cash_balance?filter=record_date:gte:2023-01-01&sort=record_date&page[size]=10000")
     j = get(base)
     rows = j.get("data", [])
     if not rows:
         print("  [TGA] data 없음. keys=%s" % list(j.keys()))
         return [], []
-    kinds = sorted(set((r.get("account_type") or "") for r in rows))
-    print("  [TGA] account_type 종류: %s" % kinds)
-    KEYS = ("TGA", "Treasury General Account", "Federal Reserve Account")
-    seen, out_t, out_v = set(), [], []
+
+    def amount(row):
+        # 금액으로 보이는 필드 자동 탐색(*_bal / amt 계열 중 파싱 가능한 첫 값)
+        for k in ("close_today_bal", "open_today_bal"):
+            v = row.get(k)
+            if v not in (None, "", "null"):
+                try:
+                    return float(v)
+                except Exception:
+                    pass
+        for k, v in row.items():
+            if ("bal" in k or "amt" in k) and v not in (None, "", "null"):
+                try:
+                    return float(v)
+                except Exception:
+                    pass
+        return None
+
+    seen, out_t, out_v, sample = set(), [], [], None
     for row in rows:
         acct = (row.get("account_type") or "")
-        if not any(k in acct for k in KEYS):
+        if "TGA" not in acct or "Closing" not in acct:
             continue
-        d = row.get("record_date"); bal = row.get("close_today_bal")
-        if not d or bal in (None, "", "null") or d in seen:
+        d = row.get("record_date")
+        if not d or d in seen:
+            continue
+        v = amount(row)
+        if v is None:
+            if sample is None:
+                sample = row
             continue
         try:
             ts = int(time.mktime(time.strptime(d, "%Y-%m-%d")))
-            out_t.append(ts); out_v.append(round(float(bal), 1)); seen.add(d)
+            out_t.append(ts); out_v.append(round(v, 1)); seen.add(d)
         except Exception:
             continue
+    if not out_v and sample:
+        print("  [TGA] Closing 행 금액 필드 못 찾음. 샘플=%s" % sample)
     return out_t, out_v
 
 
