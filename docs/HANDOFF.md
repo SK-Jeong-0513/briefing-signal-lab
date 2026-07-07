@@ -40,7 +40,8 @@
 - **TGA↔지수 페어:** 코드 있으나 재무부 API가 로컬 샌드박스에서 차단돼 미수집 → **Actions 첫 실행 때 채워질 예정(account_type 필터 확인 필요).**
 - **차트:** 이중 Y축(좌 primary, 우 warning), 6M/1Y/3Y 토글. 상관계수 없음(향후).
 - **P2 완성(2026-07-07):** ① 페어5 우축을 **드롭다운**으로(기본 삼성전자 + SK하이닉스·한미·주성·리노·동일가중 바스켓). ② **산업 밸류체인 지표 섹션** — 자동 프록시 카드(SOXX·SMH·MU·TSM·SOX, 최근추세+~1M%) + 수동 핵심(`valuechain_manual.json`의 HBM 스팟가격, **수동·샘플** 배지, 에디터 주간 갱신). ③ TGA도 정상(878pts). 데이터 워크플로가 GITHUB_TOKEN 푸시 후 배포 자동 트리거하도록 수정.
-- **남은 것:** ① 반도체 바스켓/드롭다운 티커 최종 확정(현재 기본값) ② **P3=수출 데이터: 사용자가 공공데이터포털 API 키 확보함 → 정확한 엔드포인트 + 키를 Actions Secret으로 주면 수출↔종목 페어 배선** ③ HBM 등 수동 지표 실제 수치·출처로 교체 ④ 랜딩 #dashboard 옛 6카드 티저를 dashboard.html로 연결/정리 ⑤ (선택) 상관계수 배지.
+- **P3 수출 완료(2026-07-07):** 관세청 수출 주요국가별 10일 잠정치 API(`apis.data.go.kr/1220000/cntyMmUtPrviExpAcrs/getCntyMmUtPrviExpAcrs`, https). 필수 파라미터=`strtYymm`/`endYymm`(YYYYMM 6자리). 키=Actions Secret `DATA_GO_KR_KEY`(fetch 스텝 env로 매핑). 응답 item{priodYear,priodMon,priodDt("01~10"),itemUsdAmt00=총계·01~10=주요국}. **월별 총액(10일 3구간 합산) 66개월 실데이터** → `exports` series + **`export-krsemi`(수출↔반도체 종목) 6번째 페어**. ⚠️ 사용자가 실키를 채팅에 노출 → 재발급 권고함.
+- **남은 것:** ① 반도체 바스켓/드롭다운 티커 최종 확정(현재 기본값) ② HBM 등 수동 지표 실제 수치·출처로 교체 ③ 랜딩 #dashboard 옛 6카드 티저를 dashboard.html로 연결/정리 ④ (선택) 상관계수 배지 ⑤ 수출은 월별(66점)이라 종목(일별) 오버레이 시 월 해상도 — 필요시 개선.
 
 ## 주간 발행 파이프라인 (2026-07-06 확정안)
 
