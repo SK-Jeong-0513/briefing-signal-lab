@@ -221,6 +221,15 @@ def customs_export():
     return out_t, out_v
 
 
+def _prev_series(key):
+    """직전 dashboard.json에서 series[key] 반환(수집 실패 시 보존용)."""
+    try:
+        with open(OUT, encoding="utf-8") as f:
+            return json.load(f).get("series", {}).get(key)
+    except Exception:
+        return None
+
+
 def main():
     series = {}
     for key, (name, unit, sym) in YAHOO.items():
@@ -249,6 +258,11 @@ def main():
         if ev:
             series["exports"] = {"name": "수출 총액(월별)", "unit": "천$", "t": et, "v": ev}
             print("exports: %d pts" % len(ev))
+        else:  # 수집 실패(인증·네트워크 등) 시 직전 dashboard.json의 수출 데이터 보존
+            prev = _prev_series("exports")
+            if prev and prev.get("v"):
+                series["exports"] = prev
+                print("[수출] 수집 실패 → 직전 데이터 보존(%d pts)" % len(prev["v"]))
     except Exception as e:
         print("[WARN] 수출 실패: %s" % e)
 
