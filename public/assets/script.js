@@ -380,40 +380,33 @@
     }
   }
 
-  /* ── 기술 페이지: 분야 메뉴 + 주간 다이제스트 + 헤드라이너 딥다이브 (tech.html) ── */
-  var techState = { domain: null, bound: false };
-  function techDomainById(id) {
-    if (typeof TECH_DOMAINS === "undefined") return null;
-    return TECH_DOMAINS.filter(function (d) { return d.id === id; })[0] || null;
+  /* ── 주간 브리핑 렌더 — tech/finance=분야 모델, economy=단일 다이제스트. 공용. ── */
+  var weeklyState = {};
+  function weeklyCfgs() {
+    var cfgs = [];
+    if (typeof TECH_DOMAINS !== "undefined")
+      cfgs.push({ key: "tech", ui: UI.techPage, mode: "domains", domains: TECH_DOMAINS, weekly: TECH_WEEKLY, badge: UI.techPage.freeBadge, menuSel: "[data-tech-menu]", hostSel: "[data-tech-weekly]" });
+    if (typeof FINANCE_DOMAINS !== "undefined")
+      cfgs.push({ key: "finance", ui: UI.financePage, mode: "domains", domains: FINANCE_DOMAINS, weekly: FINANCE_WEEKLY, badge: UI.samples.sampleBadge, menuSel: "[data-finance-menu]", hostSel: "[data-finance-weekly]" });
+    if (typeof ECONOMY_WEEKLY !== "undefined")
+      cfgs.push({ key: "economy", ui: UI.economyPage, mode: "single", single: ECONOMY_WEEKLY, badge: UI.samples.sampleBadge, hostSel: "[data-economy-weekly]" });
+    return cfgs;
   }
-  function techFirstLive() {
-    if (typeof TECH_DOMAINS === "undefined") return null;
-    var d = TECH_DOMAINS.filter(function (x) { return x.status === "live"; })[0];
-    return d ? d.id : null;
-  }
-  function techIssueOf(id) {
-    if (typeof TECH_WEEKLY === "undefined") return null;
-    return TECH_WEEKLY.filter(function (w) { return w.domain === id; })[0] || null;
-  }
-  function renderTechMenu() {
-    var host = document.querySelector("[data-tech-menu]");
-    if (!host) return;
-    var tp = UI.techPage;
-    host.innerHTML = TECH_DOMAINS.map(function (d) {
+  function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
+  function weeklyFirstLive(cfg) { var d = (cfg.domains || []).filter(function (x) { return x.status === "live"; })[0]; return d ? d.id : null; }
+  function weeklyIssueOf(cfg, id) { return (cfg.weekly || []).filter(function (w) { return w.domain === id; })[0] || null; }
+  function weeklyMenuHtml(cfg) {
+    var st = weeklyState[cfg.key], ui = cfg.ui;
+    return cfg.domains.map(function (d) {
       if (d.status === "live") {
-        var sel = d.id === techState.domain;
-        return '<button class="tech-chip" type="button" data-tech-domain="' + d.id + '" aria-pressed="' + sel + '">' + t(d.label) + "</button>";
+        return '<button class="tech-chip" type="button" data-weekly-domain="' + d.id + '" aria-pressed="' + (d.id === st.domain) + '">' + t(d.label) + "</button>";
       }
       return '<button class="tech-chip tech-chip--soon" type="button" disabled aria-disabled="true">' +
-        t(d.label) + '<span class="tech-chip__soon">' + t(tp.soonBadge) + "</span></button>";
+        t(d.label) + '<span class="tech-chip__soon">' + t(ui.soonBadge) + "</span></button>";
     }).join("");
   }
-  function renderTechIssue() {
-    var host = document.querySelector("[data-tech-weekly]");
-    if (!host) return;
-    var tp = UI.techPage, s = UI.samples;
-    var dom = techDomainById(techState.domain), issue = techIssueOf(techState.domain);
-    if (!dom || !issue) { host.innerHTML = '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(tp.soonBody) + "</p>"; return; }
+  function weeklyIssueHtml(cfg, issue, headLabel, tagline) {
+    var ui = cfg.ui, s = UI.samples;
     var sigs = issue.signals.map(function (sig) {
       return '<li class="sig"><div class="sig__main">' +
         '<span class="sig__title">' + sig.title[lang] + "</span>" +
@@ -421,17 +414,17 @@
         '<span class="tag">#' + sig.tag + "</span></li>";
     }).join("");
     var digest =
-      '<h3 class="tech-sub">' + t(tp.digestHeading) + " · " + issue.signals.length + "</h3>" +
+      '<h3 class="tech-sub">' + t(ui.digestHeading) + " · " + issue.signals.length + "</h3>" +
       '<ul class="sig-list">' + sigs + "</ul>" +
-      '<div class="card__locked">' + lockSvg() + t(tp.signalLock) + "</div>";
+      '<div class="card__locked">' + lockSvg() + t(ui.signalLock) + "</div>";
     var h = issue.headliner;
     var summary = h.summary[lang].map(function (l) { return "<li>" + l + "</li>"; }).join("");
     var tags = h.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
     var srcNames = h.sources.map(function (x) { return x.name; }).join(" · ");
     var head =
       '<article class="card headliner">' +
-        '<div class="card__top"><span class="badge-head">' + t(tp.headBadge) + "</span>" +
-          '<span class="badge-sample">' + t(tp.freeBadge) + "</span></div>" +
+        '<div class="card__top"><span class="badge-head">' + t(ui.headBadge) + "</span>" +
+          '<span class="badge-sample">' + t(cfg.badge) + "</span></div>" +
         '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' +
         '<h3 class="card__title">' + h.title[lang] + "</h3>" +
         '<ul class="card__summary">' + summary + "</ul>" +
@@ -439,37 +432,49 @@
         '<div class="card__meta">' + tags + "</div>" +
         '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
         '<div class="deep-lock">' +
-          '<div class="deep-lock__head">' + lockSvg() + t(tp.deepLockTitle) + "</div>" +
-          '<div class="deep-row"><span class="deep-row__k">' + t(tp.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" +
-          '<div class="deep-row"><span class="deep-row__k">' + t(tp.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" +
-          '<p class="deep-lock__desc">' + t(tp.deepLockDesc) + "</p>" +
+          '<div class="deep-lock__head">' + lockSvg() + t(ui.deepLockTitle) + "</div>" +
+          '<div class="deep-row"><span class="deep-row__k">' + t(ui.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" +
+          '<div class="deep-row"><span class="deep-row__k">' + t(ui.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" +
+          '<p class="deep-lock__desc">' + t(ui.deepLockDesc) + "</p>" +
         "</div>" +
       "</article>";
-    var head2 = '<div class="tech-issue__head"><span class="chip">' + t(dom.label) + "</span>" +
-      '<span class="tech-issue__week">' + t(issue.week) + " " + t(tp.weekSuffix) + "</span></div>";
-    host.innerHTML = '<div class="tech-issue">' + head2 +
-      '<p class="tech-tagline section-sub">' + t(dom.tagline) + "</p>" + digest + head + "</div>";
+    var head2 = '<div class="tech-issue__head"><span class="chip">' + headLabel + "</span>" +
+      '<span class="tech-issue__week">' + t(issue.week) + " " + t(ui.weekSuffix) + "</span></div>";
+    var tl = tagline ? '<p class="tech-tagline section-sub">' + tagline + "</p>" : "";
+    return '<div class="tech-issue">' + head2 + tl + digest + head + "</div>";
   }
-  function renderTechWeekly() {
-    if (typeof TECH_DOMAINS === "undefined") return;
-    if (!document.querySelector("[data-tech-menu]")) return;
-    if (techState.domain === null) techState.domain = techFirstLive();
-    renderTechMenu();
-    renderTechIssue();
-    if (!techState.bound) {
-      techState.bound = true;
-      var menu = document.querySelector("[data-tech-menu]");
-      if (menu) {
-        menu.addEventListener("click", function (e) {
-          var el = e.target.closest("[data-tech-domain]");
-          if (!el || !menu.contains(el)) return;
-          techState.domain = el.getAttribute("data-tech-domain");
-          renderTechMenu();
-          renderTechIssue();
-        });
-      }
+  function renderWeekly(cfg) {
+    var host = document.querySelector(cfg.hostSel);
+    if (!host) return;
+    if (!weeklyState[cfg.key]) weeklyState[cfg.key] = { domain: null, bound: false };
+    var st = weeklyState[cfg.key];
+    if (cfg.mode === "single") {
+      var iss = cfg.single;
+      host.innerHTML = weeklyIssueHtml(cfg, iss, t(iss.label), iss.tagline ? t(iss.tagline) : "");
+      return;
+    }
+    if (st.domain === null) st.domain = weeklyFirstLive(cfg);
+    var menu = document.querySelector(cfg.menuSel);
+    if (menu) menu.innerHTML = weeklyMenuHtml(cfg);
+    var dom = weeklyDomainById(cfg, st.domain), issue = weeklyIssueOf(cfg, st.domain);
+    host.innerHTML = (dom && issue)
+      ? weeklyIssueHtml(cfg, issue, t(dom.label), t(dom.tagline))
+      : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
+    if (menu && !st.bound) {
+      st.bound = true;
+      menu.addEventListener("click", function (e) {
+        var el = e.target.closest("[data-weekly-domain]");
+        if (!el || !menu.contains(el)) return;
+        st.domain = el.getAttribute("data-weekly-domain");
+        menu.innerHTML = weeklyMenuHtml(cfg);
+        var d2 = weeklyDomainById(cfg, st.domain), i2 = weeklyIssueOf(cfg, st.domain);
+        host.innerHTML = (d2 && i2)
+          ? weeklyIssueHtml(cfg, i2, t(d2.label), t(d2.tagline))
+          : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
+      });
     }
   }
+  function renderAllWeekly() { weeklyCfgs().forEach(function (cfg) { renderWeekly(cfg); }); }
 
   function renderAll() {
     applyStaticI18n();
@@ -480,7 +485,7 @@
     renderLibrary();
     renderCategoryFeeds();
     renderTopicChips();
-    renderTechWeekly();
+    renderAllWeekly();
     renderCalendar();
     observeReveals();
   }

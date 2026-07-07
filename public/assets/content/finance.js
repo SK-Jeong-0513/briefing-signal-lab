@@ -1,127 +1,72 @@
-/* 금융(Finance) 브리핑 데이터 — 최신순.
- * 탭 작업 = 이 배열에 항목 추가/교체. Briefing Issue 필드(plan.md) 준수.
- * 금융 항목은 disclaimer: true 를 넣으면 카드에 "정보 제공·투자 조언 아님" 인라인 배지가 붙는다.
- * 주의: 수치·종목은 형식 검증용 "샘플·예시" 데이터.
+/* 금융(Finance) 브리핑 데이터 — 주간 · 자산군(분야) 모델. 미시(Micro): 종목·자산 가격·수급·실적.
+ * 구조는 기술(tech.js)과 동일: FINANCE_DOMAINS(분야) + FINANCE_WEEKLY(분야별 주간 이슈).
+ * 경계: 경제=매크로·정책, 금융=자산·시장·기업(종목/수급). 기술=산업 메커니즘, 금융=종목·주가.
+ * 주의: 수치·종목은 형식 검증용 "샘플" 데이터. 정보 제공이며 투자 조언 아님.
  */
-const BRIEFINGS_FINANCE = [
+
+const FINANCE_DOMAINS = [
+  { id: "kr-equity", label: { ko: "국내 증시", en: "KR Equities" }, status: "live",
+    tagline: { ko: "코스피·수급·종목·실적", en: "KOSPI, flows, names, earnings" } },
+  { id: "us-equity", label: { ko: "미국 증시", en: "US Equities" }, status: "live",
+    tagline: { ko: "빅테크·성장주·밸류에이션", en: "Big tech, growth, valuation" } },
+  { id: "bond", label: { ko: "채권·금리 시장", en: "Rates & Credit" }, status: "soon",
+    tagline: { ko: "국채·크레딧·스프레드", en: "Govvies, credit, spreads" } },
+  { id: "commodity", label: { ko: "원자재·대체", en: "Commodities & Alts" }, status: "soon",
+    tagline: { ko: "에너지·금속·대체자산", en: "Energy, metals, alts" } },
+  { id: "flows", label: { ko: "펀드·자금흐름", en: "Funds & Flows" }, status: "soon",
+    tagline: { ko: "수급·ETF·포지셔닝", en: "Flows, ETFs, positioning" } },
+];
+
+const FINANCE_WEEKLY = [
   {
-    id: "finance-2026-07-02",
-    date: "2026-07-02",
-    category: "finance",
-    label: { ko: "금융", en: "Finance" },
-    title: {
-      ko: "AI·전력 테마, 실적 시즌 앞두고 변동성 확대",
-      en: "AI & power themes: volatility widens ahead of earnings",
-    },
-    summary: {
-      ko: [
-        "데이터센터 전력 수요 서사가 이어지며 관련 테마의 거래량이 늘어남.",
-        "실적 발표를 앞두고 기대와 차익 실현이 엇갈려 일중 변동성이 커짐.",
-        "관전 포인트: 가이던스 톤과 설비투자 계획이 방향을 좌우.",
-      ],
-      en: [
-        "The data-center power-demand narrative keeps volume elevated in related names.",
-        "Ahead of earnings, expectation vs. profit-taking widens intraday swings.",
-        "Watch: guidance tone and capex plans will set direction.",
-      ],
-    },
-    tags: ["실적", "전력", "AI 테마"],
-    sources: [
-      { name: "Market Wrap", note: { ko: "시황 요약", en: "Market wrap" } },
-      { name: "Filing Note", note: { ko: "공시 관찰", en: "Filing note" } },
+    id: "kr-equity-2026-W27", domain: "kr-equity", week: { ko: "2026년 7월 1주", en: "Jul, Week 1 · 2026" }, date: "2026-07-03",
+    signals: [
+      { title: { ko: "외국인·기관 수급 방향", en: "Foreign/institutional flows" }, lede: { ko: "반도체 대형주 중심 수급이 지수 방향을 좌우.", en: "Flows into large-cap semis steer the index." }, tag: "수급" },
+      { title: { ko: "실적 시즌 진입", en: "Earnings season kicks off" }, lede: { ko: "가이던스와 재고 사이클이 업종별 온도차를 만든다.", en: "Guidance and inventory cycles split sectors." }, tag: "실적" },
+      { title: { ko: "주도주 순환 조짐", en: "Leadership rotation signs" }, lede: { ko: "반도체 외 이차전지·바이오로 순환 매수 시도.", en: "Rotation attempts beyond semis into batteries and bio." }, tag: "순환" },
+      { title: { ko: "밸류업 정책 모멘텀", en: "Value-up policy momentum" }, lede: { ko: "주주환원 확대 기대가 저PBR 업종에 재부각.", en: "Buyback/dividend hopes revisit low-PBR sectors." }, tag: "밸류업" },
     ],
-    access_level: "free",
-    disclaimer: true,
-    spark: [12, 11, 13, 10, 9, 12, 8, 11, 7, 9],
+    headliner: {
+      title: { ko: "국내 증시: 수급과 실적이 주도주를 가른다", en: "KR equities: flows and earnings decide the leaders" },
+      summary: {
+        ko: ["반도체 대형주 수급이 지수 방향을 잡는 가운데 실적 시즌이 겹친다.", "가이던스·재고 사이클이 업종별 차별화를 키운다.", "관전 포인트: 주도주가 반도체에 집중되는지, 순환이 넓어지는지."],
+        en: ["Large-cap semi flows set index direction as earnings season overlaps.", "Guidance and inventory cycles widen sector dispersion.", "Watch: whether leadership stays in semis or rotation broadens."],
+      },
+      tags: ["수급", "실적", "밸류업"],
+      sources: [{ name: "Exchange Flows", note: { ko: "수급", en: "Flows" } }, { name: "Earnings", note: { ko: "실적", en: "Earnings" } }],
+      spark: [5, 6, 6, 7, 6, 8, 7, 9, 8, 10],
+      valueChain: { ko: "관련: 반도체 대형주 → 소부장 → 밸류업 저PBR", en: "Linked: large-cap semis → materials/parts → low-PBR value-up" },
+      watch: { ko: "수급 쏠림과 실적 가이던스가 주도주 지속성을 가른다.", en: "Flow concentration and guidance decide leadership durability." },
+    },
   },
   {
-    id: "finance-2026-07-01",
-    date: "2026-07-01",
-    category: "finance",
-    label: { ko: "금융", en: "Finance" },
-    title: {
-      ko: "반도체 업황 바닥론, 실적 눈높이 재조정 국면",
-      en: "Chip-cycle trough talk: earnings estimates get reset",
-    },
-    summary: {
-      ko: [
-        "메모리 가격 반등 신호가 나오며 반도체 업황 바닥론에 힘이 실림.",
-        "다만 실적 추정치 상향은 아직 제한적이라 밸류에이션 부담이 병존.",
-        "관전 포인트: 재고 정상화 속도와 하반기 수요 가이던스.",
-      ],
-      en: [
-        "Signs of a memory-price rebound add weight to the chip-cycle trough thesis.",
-        "Yet upward earnings revisions remain limited, so valuation concerns coexist.",
-        "Watch: pace of inventory normalization and second-half demand guidance.",
-      ],
-    },
-    tags: ["반도체", "실적", "메모리"],
-    sources: [
-      { name: "Sector Note", note: { ko: "섹터 관찰", en: "Sector note" } },
-      { name: "Broker Comment", note: { ko: "증권가 코멘트", en: "Broker comment" } },
+    id: "us-equity-2026-W27", domain: "us-equity", week: { ko: "2026년 7월 1주", en: "Jul, Week 1 · 2026" }, date: "2026-07-02",
+    signals: [
+      { title: { ko: "빅테크 실적 기대", en: "Big-tech earnings bar" }, lede: { ko: "AI capex 사이클이 실적 눈높이를 끌어올린다.", en: "The AI capex cycle lifts the earnings bar." }, tag: "빅테크" },
+      { title: { ko: "성장주 밸류에이션 부담", en: "Growth valuation stretch" }, lede: { ko: "금리 민감도가 높은 고밸류 성장주에 변동성.", en: "Rate-sensitive high-multiple names see volatility." }, tag: "밸류에이션" },
+      { title: { ko: "금리 민감도 재부각", en: "Rate sensitivity back in focus" }, lede: { ko: "장기금리 변동이 성장주·리츠 심리를 흔든다.", en: "Long-end moves swing growth and REIT sentiment." }, tag: "금리민감" },
+      { title: { ko: "AI capex 수혜 확산", en: "AI capex beneficiaries broaden" }, lede: { ko: "칩 밖으로 전력·네트워크·데이터센터로 수혜가 번진다.", en: "Beyond chips, benefits spread to power, networking, datacenters." }, tag: "AIcapex" },
     ],
-    access_level: "free",
-    disclaimer: true,
-    spark: [7, 6, 6, 5, 6, 7, 7, 9, 8, 10],
-  },
-  {
-    id: "finance-2026-06-30",
-    date: "2026-06-30",
-    category: "finance",
-    label: { ko: "금융", en: "Finance" },
-    title: {
-      ko: "환율·금리 동반 움직임, 수출주 수급에 영향",
-      en: "FX and rates move together, shaping exporter flows",
+    headliner: {
+      title: { ko: "미국 증시: AI capex가 실적 기대를 끌어올린다", en: "US equities: AI capex lifts the earnings bar" },
+      summary: {
+        ko: ["하이퍼스케일러 capex 상향이 관련 실적 기대를 끌어올린다.", "고밸류 성장주는 금리 민감도가 변동성의 원천으로 남는다.", "관전 포인트: capex 수혜가 칩 밖 전력·네트워크로 넓어지는 속도."],
+        en: ["Rising hyperscaler capex lifts related earnings expectations.", "High-multiple growth stays rate-sensitive, a source of volatility.", "Watch: how fast capex benefits broaden beyond chips to power and networking."],
+      },
+      tags: ["빅테크", "AIcapex", "금리민감"],
+      sources: [{ name: "Earnings Call", note: { ko: "실적", en: "Earnings" } }, { name: "Market Note", note: { ko: "시장", en: "Market" } }],
+      spark: [6, 7, 7, 8, 9, 8, 10, 11, 10, 12],
+      valueChain: { ko: "관련: 가속기 → 전력·네트워크 → 데이터센터 리츠", en: "Linked: accelerators → power/networking → datacenter REITs" },
+      watch: { ko: "금리 경로와 capex 지속성이 성장주 방향을 가른다.", en: "The rate path and capex durability steer growth stocks." },
     },
-    summary: {
-      ko: [
-        "원화 약세와 장기 금리 변동이 겹치며 수출주·성장주 수급이 엇갈림.",
-        "외국인 순매수/순매도 전환이 지수 방향의 단기 변수로 부각.",
-        "관전 포인트: 환율 레벨과 외국인 수급의 방향 일치 여부.",
-      ],
-      en: [
-        "A weaker won alongside long-rate swings splits flows between exporters and growth names.",
-        "A flip in foreign net buying/selling becomes a short-term driver of the index.",
-        "Watch: whether the FX level and foreign flows point the same way.",
-      ],
-    },
-    tags: ["환율", "금리", "수급"],
-    sources: [
-      { name: "Macro Desk", note: { ko: "매크로 데스크", en: "Macro desk" } },
-      { name: "Flow Data", note: { ko: "수급 데이터", en: "Flow data" } },
-    ],
-    access_level: "free",
-    disclaimer: true,
-    spark: [9, 10, 8, 9, 7, 8, 6, 7, 8, 6],
-  },
-  {
-    id: "finance-2026-06-27",
-    date: "2026-06-27",
-    category: "finance",
-    label: { ko: "금융", en: "Finance" },
-    title: {
-      ko: "배당·밸류업 테마, 정책 기대에 재부각",
-      en: "Dividend & value-up themes back in focus on policy hopes",
-    },
-    summary: {
-      ko: [
-        "주주환원 확대·밸류업 정책 기대가 저PBR 업종 관심으로 이어짐.",
-        "배당 수익률과 자사주 정책이 종목 선별의 기준으로 다시 언급됨.",
-        "관전 포인트: 정책 구체화 여부와 실제 환원 규모의 확인.",
-      ],
-      en: [
-        "Hopes for bigger shareholder returns and value-up policy revive interest in low-PBR sectors.",
-        "Dividend yield and buyback policy are again cited as stock-selection criteria.",
-        "Watch: whether policy gets concrete and how large actual returns turn out.",
-      ],
-    },
-    tags: ["배당주", "밸류업", "정책"],
-    sources: [
-      { name: "Policy Brief", note: { ko: "정책 브리프", en: "Policy brief" } },
-      { name: "Strategy Note", note: { ko: "전략 관찰", en: "Strategy note" } },
-    ],
-    access_level: "free",
-    disclaimer: true,
-    spark: [5, 6, 6, 7, 7, 8, 8, 9, 10, 11],
   },
 ];
+
+/* 랜딩 티저 계약 유지 — 가동 분야 헤드라이너에서 파생 */
+const BRIEFINGS_FINANCE = FINANCE_WEEKLY
+  .filter(function (w) { return FINANCE_DOMAINS.some(function (d) { return d.id === w.domain && d.status === "live"; }); })
+  .map(function (w) {
+    return { id: w.id, date: w.date, category: "finance", label: { ko: "금융", en: "Finance" },
+      title: w.headliner.title, summary: w.headliner.summary, tags: w.headliner.tags,
+      sources: w.headliner.sources, access_level: "free", spark: w.headliner.spark };
+  });
