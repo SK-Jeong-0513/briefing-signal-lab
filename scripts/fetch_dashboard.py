@@ -163,9 +163,9 @@ def customs_export():
         print("[수출] DATA_GO_KR_KEY 시크릿 없음 — 건너뜀")
         return [], []
     keyq = key if "%" in key else urllib.parse.quote(key, safe="")
-    today = time.strftime("%Y%m%d")
+    ym = time.strftime("%Y%m")   # 현재 년월 (strtYymm/endYymm은 YYYYMM 6자리)
     url = (EXP_BASE + "/getCntyMmUtPrviExpAcrs?serviceKey=" + keyq +
-           "&numOfRows=2000&pageNo=1&strtYymm=20210101&endYymm=" + today)
+           "&numOfRows=2000&pageNo=1&strtYymm=202101&endYymm=" + ym)
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=30) as r:
             body = r.read().decode("utf-8", "replace")
