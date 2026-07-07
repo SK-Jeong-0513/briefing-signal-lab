@@ -93,21 +93,22 @@
     }).join("");
   }
 
-  function vcCard(name, unit, v, manual) {
-    var last = v[v.length - 1], chg = pctChg(v), dir = chg >= 0 ? "up" : "down";
+  function vcCard(name, unit, v, manual, period) {
+    var chg = (manual && v.length >= 2) ? (v[v.length - 1] / v[v.length - 2] - 1) * 100 : pctChg(v);
+    var last = v[v.length - 1], dir = chg >= 0 ? "up" : "down", per = period || "~1M";
     var suffix = (unit && unit !== "$" && unit !== "pt" && unit !== "원") ? " " + unit : "";
     return '<div class="vc-card">' +
-      '<div class="vc-card__label">' + name + (manual ? '<span class="vc-tag">수동·샘플</span>' : "") + "</div>" +
+      '<div class="vc-card__label">' + name + (manual ? '<span class="vc-tag">수동</span>' : "") + "</div>" +
       '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + spark(v) + '"/></svg>' +
       '<div class="vc-card__val">' + fmtNum(last) + suffix + "</div>" +
-      '<div class="vc-card__chg vc-' + dir + '">' + (chg >= 0 ? "+" : "") + chg.toFixed(1) + '% <span>~1M</span></div></div>';
+      '<div class="vc-card__chg vc-' + dir + '">' + (chg >= 0 ? "+" : "") + chg.toFixed(1) + '% <span>' + per + '</span></div></div>';
   }
   function renderValueChain() {
     var hostv = document.querySelector("[data-dash-vc]");
     if (!hostv) return;
     var cards = [];
     (state.data.valuechain || []).forEach(function (k) { var s = state.data.series[k]; if (s && s.v.length) cards.push(vcCard(s.name, s.unit, s.v, false)); });
-    if (state.manual && state.manual.items) state.manual.items.forEach(function (it) { if (it.v && it.v.length) cards.push(vcCard(it.label, it.unit, it.v, true)); });
+    if (state.manual && state.manual.items) state.manual.items.forEach(function (it) { if (it.v && it.v.length) cards.push(vcCard(it.label, it.unit, it.v, true, it.period)); });
     hostv.innerHTML = cards.join("") || '<p class="section-sub">밸류체인 지표를 준비 중입니다.</p>';
   }
 

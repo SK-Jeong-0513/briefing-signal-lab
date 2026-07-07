@@ -199,17 +199,6 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ── 대시보드 티저 ─────────────────────────────────────── */
 .ind-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-md); margin-top: var(--s-xl); }
-.ind {
-  position: relative; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-md); padding: var(--s-md); box-shadow: var(--e-raised);
-}
-.ind__label { font-size: 0.8125rem; color: var(--muted); font-weight: 600; }
-.ind__value { font-size: 1.375rem; font-weight: 700; margin-top: 4px; letter-spacing: -0.01em; }
-.ind__change { font-size: 0.8125rem; font-weight: 600; margin-top: 2px; }
-.ind__change--up { color: var(--success); }
-.ind__change--down { color: var(--danger); }
-.ind--locked .ind__value, .ind--locked .ind__change { filter: blur(5px); user-select: none; }
-.ind__lock { position: absolute; top: var(--s-md); right: var(--s-md); font-size: 0.6875rem; font-weight: 700; color: var(--muted); border: 1px solid var(--border); padding: 2px 7px; border-radius: 999px; }
 .sample-note { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--muted); margin-top: var(--s-lg); }
 
 /* ── 서재 ──────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 /* Briefing Signal Lab — script.js
  * i18n(KO/EN) 토글 · 동적 렌더링 · 스파크라인 · 절제된 모션.
- * 의존: content.js (UI, BRIEFINGS, INDICATORS, LIBRARY, LINKS)
+ * 의존: content.js (UI, BRIEFINGS, LIBRARY, LINKS)
  */
 (function () {
   "use strict";
@@ -126,23 +126,6 @@
       );
     }
     host.innerHTML = plan("free") + plan("paid");
-  }
-
-  /* 지표 카드 */
-  function renderIndicators() {
-    var host = document.getElementById("indicators");
-    if (!host) return;
-    var d = UI.dashboard;
-    host.innerHTML = INDICATORS.map(function (i) {
-      var lock = i.locked ? '<span class="ind__lock">' + t(d.locked) + "</span>" : "";
-      return (
-        '<div class="ind' + (i.locked ? " ind--locked" : "") + '">' + lock +
-          '<div class="ind__label">' + t(i.label) + "</div>" +
-          '<div class="ind__value">' + i.value + "</div>" +
-          '<div class="ind__change ind__change--' + i.dir + '">' + i.change + "</div>" +
-        "</div>"
-      );
-    }).join("");
   }
 
   /* 서재 */
@@ -438,7 +421,6 @@
     renderPoints();
     renderBriefings();
     renderCompare();
-    renderIndicators();
     renderLibrary();
     renderAllWeekly();
     renderCalendar();

@@ -80,11 +80,10 @@ const UI = {
     heading: { ko: "INDICATOR DASHBOARD", en: "INDICATOR DASHBOARD" },
     title: { ko: "경제지표를 한 화면에", en: "Macro indicators at a glance" },
     sub: {
-      ko: "브리핑과 연결된 경제지표 대시보드. 아래는 샘플 카드이며, 전체 지표와 과거 스냅샷은 유료 구독자에게 제공됩니다.",
-      en: "An indicator dashboard connected to the briefing. Cards below are samples; the full set and historical snapshots are for paid members.",
+      ko: "금리↔주가, 달러↔KOSPI, 구리↔금리처럼 함께 움직이거나 반대로 가는 지표를 이중축으로 겹쳐 봅니다. 공개 데이터로 자동 갱신되는 무료 대시보드입니다.",
+      en: "See indicators that move together — or opposite — overlaid on a dual axis: rates↔index, dollar↔KOSPI, copper↔rates. A free dashboard, auto-updated from public data.",
     },
-    sampleNote: { ko: "샘플 데이터 · 실시간 아님", en: "Sample data · not real-time" },
-    locked: { ko: "유료", en: "Paid" },
+    cta: { ko: "대시보드 열기", en: "Open the dashboard" },
   },
   library: {
     heading: { ko: "PERSONAL LIBRARY", en: "PERSONAL LIBRARY" },
@@ -297,16 +296,6 @@ const UI = {
     rights: { ko: "© 2026 Briefing Signal Lab. All rights reserved.", en: "© 2026 Briefing Signal Lab. All rights reserved." },
   },
 };
-
-/* ── 대시보드 티저 지표 카드 (샘플 데이터) ─────────────── */
-const INDICATORS = [
-  { key: "kospi", label: { ko: "KOSPI", en: "KOSPI" }, value: "2,7xx.x", change: "+0.6%", dir: "up", locked: false },
-  { key: "us-fut", label: { ko: "미국 선물", en: "US Futures" }, value: "+0.3%", change: "야간", dir: "up", locked: false },
-  { key: "us10y", label: { ko: "미국 10년 금리", en: "US 10Y" }, value: "4.xx%", change: "-2bp", dir: "down", locked: false },
-  { key: "gold", label: { ko: "금", en: "Gold" }, value: "$2,xxx", change: "+0.4%", dir: "up", locked: true },
-  { key: "btc", label: { ko: "비트코인", en: "Bitcoin" }, value: "$xx,xxx", change: "-1.1%", dir: "down", locked: true },
-  { key: "foreign", label: { ko: "외국인 수급", en: "Foreign flow" }, value: "순매수", change: "샘플", dir: "up", locked: true },
-];
 
 /* ── 서재 티저 글 ──────────────────────────────────────── */
 const LIBRARY = [
