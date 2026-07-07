@@ -292,7 +292,20 @@ ul { margin: 0; padding: 0; list-style: none; }
 .samples-nav a:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
 /* ── 지표 대시보드 (dashboard.html) ────────────────────── */
-.dash-toolbar { display: flex; justify-content: flex-end; margin-top: var(--s-md); }
+.dash-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--s-md); margin-top: var(--s-md); flex-wrap: wrap; }
+.dash-right { flex: 1; min-width: 0; }
+.dash-select { font-size: 0.8125rem; font-weight: 600; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; }
+.dash-select select { font-family: var(--font); font-size: 0.875rem; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 10px; cursor: pointer; }
+.vc-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s-md); box-shadow: var(--e-raised); }
+.vc-card__label { font-size: 0.8125rem; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.vc-card .card__spark { height: 34px; margin: 8px 0; }
+.vc-card .card__spark path { fill: none; stroke: var(--primary); stroke-width: 2; }
+.vc-card__val { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.vc-card__chg { font-size: 0.8125rem; font-weight: 600; margin-top: 2px; }
+.vc-card__chg span { color: var(--muted); font-weight: 400; }
+.vc-up { color: var(--success); }
+.vc-down { color: var(--danger); }
+.vc-tag { font-size: 0.625rem; font-weight: 700; color: var(--warning); background: #FBF3E4; border: 1px solid #EBD9B4; padding: 1px 6px; border-radius: 999px; }
 .dash-chart { margin-top: var(--s-md); min-height: 360px; width: 100%; }
 .dash-chart .uplot { font-family: var(--font); width: 100% !important; }
 .dash-chart .u-title { font-weight: 650; }

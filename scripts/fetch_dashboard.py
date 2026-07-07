@@ -12,6 +12,7 @@ RANGE = "3y"
 
 # 시계열 정의: key -> (이름, 단위, Yahoo 심볼)  (TGA/바스켓은 별도 처리)
 YAHOO = {
+    # 관계 페어용 매크로·시장
     "tnx":    ("미 10년물 금리", "%",  "%5ETNX"),
     "gspc":   ("S&P 500",       "pt", "%5EGSPC"),
     "ks11":   ("KOSPI",         "pt", "%5EKS11"),
@@ -19,19 +20,35 @@ YAHOO = {
     "gold":   ("금",            "$",  "GC=F"),
     "copper": ("구리",          "$",  "HG=F"),
     "ewy":    ("MSCI 한국(EWY)", "$",  "EWY"),
+    # 반도체 개별주(페어5 드롭다운 옵션)
+    "samsung": ("삼성전자",       "원", "005930.KS"),
+    "hynix":   ("SK하이닉스",     "원", "000660.KS"),
+    "hanmi":   ("한미반도체",     "원", "042700.KS"),
+    "joosung": ("주성엔지니어링", "원", "036930.KQ"),
+    "leeno":   ("리노공업",       "원", "058470.KQ"),
+    # 밸류체인 자동 프록시(P2)
+    "soxx": ("미 반도체 ETF (SOXX)", "$",  "SOXX"),
+    "smh":  ("반도체 ETF (SMH)",     "$",  "SMH"),
+    "mu":   ("마이크론 (MU)",        "$",  "MU"),
+    "tsm":  ("TSMC (TSM)",          "$",  "TSM"),
+    "sox":  ("필라델피아 반도체지수",  "pt", "%5ESOX"),
 }
-# 반도체 밸류체인 바스켓(동일가중, 리베이스100 평균). 티커는 자유 교체.
-BASKET = {
-    "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "한미반도체": "042700.KS",
-    "주성엔지니어링": "036930.KQ", "리노공업": "058470.KQ",
-}
+# 반도체 바스켓(동일가중, 리베이스100). 개별주는 위 YAHOO에서 이미 수집됨.
+BASKET = {"삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "한미반도체": "042700.KS",
+          "주성엔지니어링": "036930.KQ", "리노공업": "058470.KQ"}
+# 페어5 우축 드롭다운 옵션 [series_key, 표시명] (기본=맨 앞=삼성전자)
+KRSEMI_OPTIONS = [["samsung", "삼성전자"], ["hynix", "SK하이닉스"], ["hanmi", "한미반도체"],
+                  ["joosung", "주성엔지니어링"], ["leeno", "리노공업"], ["krsemi", "반도체 바스켓(동일가중)"]]
+# 밸류체인 지표(자동 프록시) — 카드로 표시
+VALUECHAIN = ["soxx", "smh", "mu", "tsm", "sox"]
 # 관계 페어(좌축 ↔ 우축)
 PAIRS = [
     {"id": "rate-index",   "label": "금리 ↔ 주가지수",           "left": "tnx",    "right": "gspc"},
     {"id": "tga-index",    "label": "TGA 잔고 ↔ 주가지수",        "left": "tga",    "right": "gspc"},
     {"id": "dollar-kospi", "label": "달러 ↔ KOSPI",              "left": "dxy",    "right": "ks11"},
     {"id": "metal-rate",   "label": "구리 ↔ 금리",               "left": "copper", "right": "tnx"},
-    {"id": "ewy-krsemi",   "label": "미 야간(EWY) ↔ 반도체 바스켓", "left": "ewy",    "right": "krsemi"},
+    {"id": "ewy-krsemi",   "label": "미 야간(EWY) ↔ 한국 반도체",  "left": "ewy",    "right": "samsung",
+     "rightOptions": KRSEMI_OPTIONS},
 ]
 
 
@@ -157,13 +174,22 @@ def main():
         series["krsemi"] = {"name": "반도체 바스켓(동일가중)", "unit": "=100", "t": bt, "v": bv}
         print("krsemi: %d pts" % len(bv))
 
-    # 좌/우 시계열이 모두 있는 페어만 노출
-    pairs = [p for p in PAIRS if p["left"] in series and p["right"] in series]
+    # 좌/우 시계열이 모두 있는 페어만 노출. rightOptions는 수집된 것만.
+    pairs = []
+    for p in PAIRS:
+        if p["left"] not in series or p["right"] not in series:
+            continue
+        q = dict(p)
+        if "rightOptions" in q:
+            q["rightOptions"] = [o for o in q["rightOptions"] if o[0] in series]
+        pairs.append(q)
+    valuechain = [k for k in VALUECHAIN if k in series]
     out = {
         "updated": time.strftime("%Y-%m-%d"),
         "note": "공개 출처 실데이터(Yahoo Finance · 미 재무부). 정보 제공이며 투자 조언 아님.",
         "series": series,
         "pairs": pairs,
+        "valuechain": valuechain,
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

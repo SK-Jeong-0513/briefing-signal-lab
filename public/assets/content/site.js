@@ -221,8 +221,13 @@ const UI = {
     pairsHeading: { ko: "관계 오버레이", en: "Relationship overlays" },
     pairsLabel: { ko: "관계 페어 선택", en: "Choose a pair" },
     readNote: {
-      ko: "이중 Y축은 좌·우 눈금이 다릅니다. 절대 수준보다 '같이/반대로 움직이는 방향'을 보세요. 상관계수·산업 밸류체인 지표는 순차 추가 예정.",
-      en: "The two Y-axes use different scales. Read the direction (moving together vs opposite), not absolute levels. Correlation and value-chain indicators are coming next.",
+      ko: "이중 Y축은 좌·우 눈금이 다릅니다. 절대 수준보다 '같이/반대로 움직이는 방향'을 보세요. 페어에 따라 우축 종목을 드롭다운으로 바꿀 수 있습니다. 상관계수는 향후 추가 예정.",
+      en: "The two Y-axes use different scales. Read the direction (together vs opposite), not absolute levels. For some pairs you can switch the right-axis name via the dropdown. Correlation is coming next.",
+    },
+    vcHeading: { ko: "산업 밸류체인 지표", en: "Value-chain indicators" },
+    vcIntro: {
+      ko: "반도체 밸류체인을 주가·ETF로 근사한 자동 프록시 + 무료 API가 없는 핵심 지표(수동). 각 카드는 최근 추세와 약 1개월 변화를 보여줍니다. 정보 제공이며 투자 조언이 아닙니다.",
+      en: "Auto proxies (ETFs/names) approximating the semi value chain, plus key indicators with no free API (manual). Each card shows the recent trend and ~1-month change. Information only, not investment advice.",
     },
   },
   calendarPage: {
