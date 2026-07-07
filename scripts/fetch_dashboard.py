@@ -187,7 +187,7 @@ def customs_export():
     agg = {}
     for it in items:
         d = {c.tag: (c.text or "") for c in list(it)}
-        # priodMon=YYYYMM, priodDt="01~10"/"11~20"/"21~31" → 구간 대표일(05/15/25)
+        # priodMon=YYYYMM. 월당 10일 3구간을 합산 → 월별 수출 총액.
         m = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
         if len(m) != 6:
             y = "".join(ch for ch in (d.get("priodYear") or "") if ch.isdigit())
@@ -195,9 +195,7 @@ def customs_export():
             m = (y + mm[-2:]) if (len(y) == 4 and len(mm) >= 2) else ""
         if len(m) != 6:
             continue
-        pd = (d.get("priodDt") or "").strip()
-        day = "05" if pd.startswith("01") else ("15" if pd.startswith("11") else "25")
-        ds = m + day
+        ds = m + "15"   # 월 대표일
         val = (d.get("itemUsdAmt00") or "").replace(",", "").strip()
         if not val:  # 00(총계) 없으면 01~10 합산
             s, ok = 0.0, False
@@ -210,7 +208,7 @@ def customs_export():
                         pass
             val = s if ok else ""
         try:
-            agg[ds] = float(val)
+            agg[ds] = agg.get(ds, 0.0) + float(val)   # 월 합계(10일 3구간)
         except Exception:
             continue
     out_t, out_v = [], []
@@ -219,7 +217,7 @@ def customs_export():
             out_t.append(int(time.mktime(time.strptime(ds, "%Y%m%d")))); out_v.append(round(agg[ds], 1))
         except Exception:
             continue
-    print("[수출] → %d 기간" % len(out_v))
+    print("[수출] → %d 개월" % len(out_v))
     return out_t, out_v
 
 
@@ -249,7 +247,7 @@ def main():
     try:
         et, ev = customs_export()
         if ev:
-            series["exports"] = {"name": "수출(주요국 합계, 10일)", "unit": "천$", "t": et, "v": ev}
+            series["exports"] = {"name": "수출 총액(월별)", "unit": "천$", "t": et, "v": ev}
             print("exports: %d pts" % len(ev))
     except Exception as e:
         print("[WARN] 수출 실패: %s" % e)
