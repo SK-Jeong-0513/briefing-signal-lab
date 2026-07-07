@@ -225,11 +225,16 @@ def customs_export():
 
 def _prev_series(key):
     """직전 dashboard.json에서 series[key] 반환(수집 실패 시 보존용)."""
+    return (_prev_all() or {}).get(key)
+
+
+def _prev_all():
+    """직전 dashboard.json의 series 전체 dict."""
     try:
         with open(OUT, encoding="utf-8") as f:
-            return json.load(f).get("series", {}).get(key)
+            return json.load(f).get("series", {})
     except Exception:
-        return None
+        return {}
 
 
 def main():
@@ -267,6 +272,12 @@ def main():
                 print("[수출] 수집 실패 → 직전 데이터 보존(%d pts)" % len(prev["v"]))
     except Exception as e:
         print("[WARN] 수출 실패: %s" % e)
+
+    # 이번 수집에서 빠진 시리즈는 직전 dashboard.json에서 보존(일시 실패로 페어가 사라지는 것 방지)
+    for k, s in _prev_all().items():
+        if k not in series and isinstance(s, dict) and s.get("v"):
+            series[k] = s
+            print("[보존] %s 이번 수집 없음 → 직전 데이터 유지(%d pts)" % (k, len(s["v"])))
 
     # 좌/우 시계열이 모두 있는 페어만 노출. rightOptions는 수집된 것만.
     pairs = []
