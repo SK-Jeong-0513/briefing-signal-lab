@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Briefing Signal Lab — 대시보드 데이터 수집기.
-무키 공개 API만 사용: Yahoo Finance v8 chart + 미 재무부 Fiscal Data(DTS).
+공개 API: Yahoo Finance v8 chart + 미 재무부 Fiscal Data(DTS) + 관세청 수출(키 필요, 선택).
 출력: public/assets/data/dashboard.json  (관계 페어 오버레이용 시계열).
 stdlib만 사용(Actions에서 pip 불필요). 실패한 시계열은 건너뛰고 로그.
 """
-import json, os, sys, time, urllib.request, urllib.error
+import json, os, sys, time, urllib.request, urllib.parse, urllib.error
+import xml.etree.ElementTree as ET
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BriefingSignalLab/1.0"
 OUT = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "dashboard.json")
@@ -150,6 +151,79 @@ def rebase_basket(members):
     return out_t, out_v
 
 
+EXP_BASE = "http://apis.data.go.kr/1220000/cntyMmUtPrviExpAcrs"  # 관세청 수출 주요국가별 10일 잠정치
+
+
+def customs_export():
+    """관세청 수출(10일 잠정치) — 기간별 총 수출액. 키(DATA_GO_KR_KEY) 필요.
+    오퍼레이션/필드명 미확정 → 후보 URL을 시도하고 XML 구조를 로그로 남긴다."""
+    key = os.environ.get("DATA_GO_KR_KEY", "").strip()
+    if not key:
+        print("[수출] DATA_GO_KR_KEY 시크릿 없음 — 건너뜀")
+        return [], []
+    keyq = key if "%" in key else urllib.parse.quote(key, safe="")
+    tail = EXP_BASE.rsplit("/", 1)[-1]
+    ops = ["", "/get" + tail[0].upper() + tail[1:], "/" + tail, "/getList"]
+    params = "?serviceKey=%s&numOfRows=500&pageNo=1" % keyq
+    for op in ops:
+        url = EXP_BASE + op + params
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                body = r.read().decode("utf-8", "replace")
+        except Exception as e:
+            print("[수출] op='%s' 요청 실패: %s" % (op, e))
+            continue
+        print("[수출] op='%s' → 응답 head: %s" % (op, body[:220].replace("\n", " ")))
+        try:
+            root = ET.fromstring(body)
+        except Exception as e:
+            print("[수출] op='%s' XML 파싱 실패: %s" % (op, e))
+            continue
+        items = root.findall(".//item")
+        if not items:
+            print("[수출] op='%s' item 없음. 태그=%s" % (op, [c.tag for c in list(root.iter())][:12]))
+            continue
+        first = {c.tag: (c.text or "") for c in list(items[0])}
+        print("[수출] op='%s' item[0] 필드=%s" % (op, first))
+        # 날짜/수출액 필드 자동 탐색
+        dkey = next((k for k in first if any(s in k.lower() for s in ("ymd", "date", "prd", "기간", "기준"))), None)
+        vkey = next((k for k in first if "exp" in k.lower() and any(s in k.lower() for s in ("usd", "dlr", "amt", "val", "wt", "cnt"))), None)
+        if not vkey:
+            vkey = next((k for k in first if "exp" in k.lower()), None)
+        if not dkey or not vkey:
+            print("[수출] 날짜/수출액 필드 못 찾음 (dkey=%s vkey=%s)" % (dkey, vkey))
+            return [], []
+        # 기간별 합계(주요국 합산)
+        agg = {}
+        for it in items:
+            d = {c.tag: (c.text or "") for c in list(it)}
+            ds = (d.get(dkey) or "").strip()
+            vs = (d.get(vkey) or "").replace(",", "").strip()
+            if not ds or not vs:
+                continue
+            ds8 = "".join(ch for ch in ds if ch.isdigit())[:8]
+            if len(ds8) == 6:
+                ds8 += "01"
+            if len(ds8) != 8:
+                continue
+            try:
+                agg[ds8] = agg.get(ds8, 0.0) + float(vs)
+            except Exception:
+                continue
+        out_t, out_v = [], []
+        for ds8 in sorted(agg):
+            try:
+                ts = int(time.mktime(time.strptime(ds8, "%Y%m%d")))
+                out_t.append(ts); out_v.append(round(agg[ds8], 1))
+            except Exception:
+                continue
+        if out_v:
+            print("[수출] op='%s' 성공: %d 기간" % (op, len(out_v)))
+            return out_t, out_v
+    return [], []
+
+
 def main():
     series = {}
     for key, (name, unit, sym) in YAHOO.items():
@@ -173,6 +247,13 @@ def main():
     if bv:
         series["krsemi"] = {"name": "반도체 바스켓(동일가중)", "unit": "=100", "t": bt, "v": bv}
         print("krsemi: %d pts" % len(bv))
+    try:
+        et, ev = customs_export()
+        if ev:
+            series["exports"] = {"name": "수출(주요국 합계, 10일)", "unit": "천$", "t": et, "v": ev}
+            print("exports: %d pts" % len(ev))
+    except Exception as e:
+        print("[WARN] 수출 실패: %s" % e)
 
     # 좌/우 시계열이 모두 있는 페어만 노출. rightOptions는 수집된 것만.
     pairs = []
@@ -183,6 +264,9 @@ def main():
         if "rightOptions" in q:
             q["rightOptions"] = [o for o in q["rightOptions"] if o[0] in series]
         pairs.append(q)
+    if "exports" in series and "samsung" in series:
+        pairs.append({"id": "export-krsemi", "label": "수출 ↔ 반도체 종목", "left": "exports", "right": "samsung",
+                      "rightOptions": [o for o in KRSEMI_OPTIONS if o[0] in series]})
     valuechain = [k for k in VALUECHAIN if k in series]
     out = {
         "updated": time.strftime("%Y-%m-%d"),
