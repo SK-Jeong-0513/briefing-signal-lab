@@ -162,6 +162,8 @@ def customs_export():
     if not key:
         print("[수출] DATA_GO_KR_KEY 시크릿 없음 — 건너뜀")
         return [], []
+    hexish = all(c in "0123456789abcdefABCDEF" for c in key)
+    print("[수출] key 진단: len=%d has_percent=%s hexish=%s (내용 비노출)" % (len(key), "%" in key, hexish))
     keyq = key if "%" in key else urllib.parse.quote(key, safe="")
     ym = time.strftime("%Y%m")   # 현재 년월 (strtYymm/endYymm은 YYYYMM 6자리)
     url = (EXP_BASE + "/getCntyMmUtPrviExpAcrs?serviceKey=" + keyq +
