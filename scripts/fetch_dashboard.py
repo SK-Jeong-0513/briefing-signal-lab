@@ -187,17 +187,17 @@ def customs_export():
     agg = {}
     for it in items:
         d = {c.tag: (c.text or "") for c in list(it)}
-        ds = "".join(ch for ch in (d.get("priodDt") or "") if ch.isdigit())
-        if len(ds) < 8:
+        # priodMon=YYYYMM, priodDt="01~10"/"11~20"/"21~31" → 구간 대표일(05/15/25)
+        m = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
+        if len(m) != 6:
             y = "".join(ch for ch in (d.get("priodYear") or "") if ch.isdigit())
-            m = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
-            if len(m) == 6:
-                ds = m + "01"
-            elif len(y) == 4 and len(m) >= 2:
-                ds = y + m[-2:] + "01"
-        ds = ds[:8]
-        if len(ds) != 8:
+            mm = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
+            m = (y + mm[-2:]) if (len(y) == 4 and len(mm) >= 2) else ""
+        if len(m) != 6:
             continue
+        pd = (d.get("priodDt") or "").strip()
+        day = "05" if pd.startswith("01") else ("15" if pd.startswith("11") else "25")
+        ds = m + day
         val = (d.get("itemUsdAmt00") or "").replace(",", "").strip()
         if not val:  # 00(총계) 없으면 01~10 합산
             s, ok = 0.0, False
