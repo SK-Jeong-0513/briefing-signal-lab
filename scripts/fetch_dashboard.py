@@ -63,17 +63,23 @@ def treasury_tga():
             "&filter=record_date:gte:2023-01-01&sort=record_date&page[size]=10000")
     j = get(base)
     rows = j.get("data", [])
-    out_t, out_v = [], []
+    if not rows:
+        print("  [TGA] data 없음. keys=%s" % list(j.keys()))
+        return [], []
+    kinds = sorted(set((r.get("account_type") or "") for r in rows))
+    print("  [TGA] account_type 종류: %s" % kinds)
+    KEYS = ("TGA", "Treasury General Account", "Federal Reserve Account")
+    seen, out_t, out_v = set(), [], []
     for row in rows:
         acct = (row.get("account_type") or "")
-        if "TGA" not in acct and "General Account" not in acct:
+        if not any(k in acct for k in KEYS):
             continue
         d = row.get("record_date"); bal = row.get("close_today_bal")
-        if not d or bal in (None, "", "null"):
+        if not d or bal in (None, "", "null") or d in seen:
             continue
         try:
             ts = int(time.mktime(time.strptime(d, "%Y-%m-%d")))
-            out_t.append(ts); out_v.append(round(float(bal), 1))
+            out_t.append(ts); out_v.append(round(float(bal), 1)); seen.add(d)
         except Exception:
             continue
     return out_t, out_v
