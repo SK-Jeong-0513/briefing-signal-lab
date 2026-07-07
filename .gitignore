@@ -8,5 +8,6 @@ agents/
 *.bak
 .env
 .env.*
+.handoff/
 .DS_Store
 Thumbs.db
