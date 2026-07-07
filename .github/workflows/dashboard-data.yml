@@ -20,6 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Fetch dashboard data (stdlib only)
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
         run: python3 scripts/fetch_dashboard.py
       - name: Commit, push & deploy if changed
         env:
