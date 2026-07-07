@@ -320,40 +320,6 @@ const LIBRARY = [
   },
 ];
 
-/* 유료 키워드 예시 칩 (카테고리별). 새 키워드는 해당 배열에 추가 */
-const TOPICS = {
-  tech: [
-    { ko: "CPO", en: "CPO" },
-    { ko: "Glass Substrate", en: "Glass Substrate" },
-    { ko: "우주", en: "Space" },
-    { ko: "메모리", en: "Memory" },
-    { ko: "HBM", en: "HBM" },
-    { ko: "이차전지", en: "Battery" },
-    { ko: "로봇", en: "Robotics" },
-    { ko: "양자", en: "Quantum" },
-  ],
-  finance: [
-    { ko: "반도체", en: "Semis" },
-    { ko: "AI 테마", en: "AI theme" },
-    { ko: "배당주", en: "Dividends" },
-    { ko: "실적 시즌", en: "Earnings" },
-    { ko: "환율", en: "FX" },
-    { ko: "금리", en: "Rates" },
-    { ko: "원자재", en: "Commodities" },
-    { ko: "밸류업", en: "Value-up" },
-  ],
-  economy: [
-    { ko: "금리", en: "Rates" },
-    { ko: "환율", en: "FX" },
-    { ko: "물가", en: "Inflation" },
-    { ko: "고용", en: "Jobs" },
-    { ko: "성장률", en: "GDP" },
-    { ko: "유가", en: "Oil" },
-    { ko: "원자재", en: "Commodities" },
-    { ko: "무역수지", en: "Trade" },
-  ],
-};
-
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
 const LINKS = {
   freeForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EB%AC%B4%EB%A3%8C+%EC%83%98%ED%94%8C+%EA%B5%AC%EB%8F%85",
