@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # 데이터 갱신 후 배포 워크플로 트리거용
 
 concurrency:
   group: dashboard-data
@@ -20,7 +21,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Fetch dashboard data (stdlib only)
         run: python3 scripts/fetch_dashboard.py
-      - name: Commit & push if changed
+      - name: Commit, push & deploy if changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -31,4 +34,6 @@ jobs:
             git commit -m "chore(data): 대시보드 지표 자동 갱신"
             git pull --rebase origin main
             git push origin HEAD:main
+            # GITHUB_TOKEN 푸시는 배포를 자동 트리거하지 않으므로 명시적으로 배포 실행
+            gh workflow run deploy-pages.yml
           fi
