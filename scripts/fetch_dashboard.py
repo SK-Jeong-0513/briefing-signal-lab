@@ -151,7 +151,7 @@ def rebase_basket(members):
     return out_t, out_v
 
 
-EXP_BASE = "http://apis.data.go.kr/1220000/cntyMmUtPrviExpAcrs"  # 관세청 수출 주요국가별 10일 잠정치
+EXP_BASE = "https://apis.data.go.kr/1220000/cntyMmUtPrviExpAcrs"  # 관세청 수출 주요국가별 10일 잠정치
 
 
 def customs_export():
@@ -163,89 +163,63 @@ def customs_export():
         print("[수출] DATA_GO_KR_KEY 시크릿 없음 — 건너뜀")
         return [], []
     keyq = key if "%" in key else urllib.parse.quote(key, safe="")
-    op = "/getCntyMmUtPrviExpAcrs"
-
-    def call(param):
-        url = EXP_BASE + op + "?serviceKey=" + keyq + "&numOfRows=1000&pageNo=1&" + param
-        try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=25) as r:
-                return r.read().decode("utf-8", "replace")
-        except Exception as e:
-            print("[수출] '%s' 요청 실패: %s" % (param, e))
-            return ""
-
-    def accum(body, agg):
-        try:
-            root = ET.fromstring(body)
-        except Exception:
-            return 0
-        n = 0
-        for it in root.findall(".//item"):
-            d = {c.tag: (c.text or "") for c in list(it)}
-            ds = "".join(ch for ch in (d.get("priodDt") or "") if ch.isdigit())
-            if len(ds) < 8:
-                y = "".join(ch for ch in (d.get("priodYear") or "") if ch.isdigit())
-                m = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
-                if len(m) == 6:
-                    ds = m + "01"
-                elif len(y) == 4 and len(m) >= 2:
-                    ds = y + m[-2:] + "01"
-            ds = ds[:8]
-            if len(ds) != 8:
-                continue
-            val = (d.get("itemUsdAmt00") or "").replace(",", "").strip()
-            if not val:  # 00(총계) 없으면 01~10 합산
-                s, ok = 0.0, False
-                for i in range(1, 11):
-                    x = (d.get("itemUsdAmt%02d" % i) or "").replace(",", "").strip()
-                    if x:
-                        try:
-                            s += float(x); ok = True
-                        except Exception:
-                            pass
-                val = s if ok else ""
-            try:
-                agg[ds] = float(val)
-            except Exception:
-                continue
-            n += 1
-        return n
-
-    # 필수 요청 파라미터 탐색(값은 최근값)
-    probes = [("priodYear", "2026"), ("priodMon", "202606"), ("priodDt", "20260620"),
-              ("strtYmd", "20260101&endYmd=20261231")]
-    hit = None
-    for name, val in probes:
-        b = call("%s=%s" % (name, val))
-        code = b.split("<resultCode>")[-1].split("</resultCode>")[0].strip() if "<resultCode>" in b else "?"
-        msg = b.split("<resultMsg>")[-1].split("</resultMsg>")[0] if "<resultMsg>" in b else ""
-        ni = b.count("<item>")
-        print("[수출] %s=%s → code=%s items=%d msg=%s" % (name, val, code, ni, msg[:30]))
-        if ni > 0:
-            hit = name
-            break
-    if not hit:
-        print("[수출] 필수 파라미터 못 찾음 — 요청변수표 필요")
+    today = time.strftime("%Y%m%d")
+    url = (EXP_BASE + "/getCntyMmUtPrviExpAcrs?serviceKey=" + keyq +
+           "&numOfRows=2000&pageNo=1&strtYymm=20210101&endYymm=" + today)
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=30) as r:
+            body = r.read().decode("utf-8", "replace")
+    except Exception as e:
+        print("[수출] 요청 실패: %s" % e)
         return [], []
-
+    code = body.split("<resultCode>")[-1].split("</resultCode>")[0].strip() if "<resultCode>" in body else "?"
+    try:
+        root = ET.fromstring(body)
+    except Exception as e:
+        print("[수출] XML 파싱 실패: %s | head=%s" % (e, body[:160].replace("\n", " ")))
+        return [], []
+    items = root.findall(".//item")
+    print("[수출] code=%s items=%d" % (code, len(items)))
+    if not items:
+        print("[수출] head=%s" % body[:220].replace("\n", " "))
+        return [], []
+    print("[수출] item[0]=%s" % {c.tag: (c.text or "") for c in list(items[0])})
     agg = {}
-    if hit == "priodYear":
-        for y in ["2021", "2022", "2023", "2024", "2025", "2026"]:
-            accum(call("priodYear=%s" % y), agg)
-    elif hit == "priodMon":
-        accum(call("priodMon=202606"), agg)
-    elif hit == "priodDt":
-        accum(call("priodDt=20260620"), agg)
-    else:
-        accum(call("strtYmd=20210101&endYmd=20261231"), agg)
-
+    for it in items:
+        d = {c.tag: (c.text or "") for c in list(it)}
+        ds = "".join(ch for ch in (d.get("priodDt") or "") if ch.isdigit())
+        if len(ds) < 8:
+            y = "".join(ch for ch in (d.get("priodYear") or "") if ch.isdigit())
+            m = "".join(ch for ch in (d.get("priodMon") or "") if ch.isdigit())
+            if len(m) == 6:
+                ds = m + "01"
+            elif len(y) == 4 and len(m) >= 2:
+                ds = y + m[-2:] + "01"
+        ds = ds[:8]
+        if len(ds) != 8:
+            continue
+        val = (d.get("itemUsdAmt00") or "").replace(",", "").strip()
+        if not val:  # 00(총계) 없으면 01~10 합산
+            s, ok = 0.0, False
+            for i in range(1, 11):
+                x = (d.get("itemUsdAmt%02d" % i) or "").replace(",", "").strip()
+                if x:
+                    try:
+                        s += float(x); ok = True
+                    except Exception:
+                        pass
+            val = s if ok else ""
+        try:
+            agg[ds] = float(val)
+        except Exception:
+            continue
     out_t, out_v = [], []
     for ds in sorted(agg):
         try:
             out_t.append(int(time.mktime(time.strptime(ds, "%Y%m%d")))); out_v.append(round(agg[ds], 1))
         except Exception:
             continue
-    print("[수출] hit=%s → %d 기간" % (hit, len(out_v)))
+    print("[수출] → %d 기간" % len(out_v))
     return out_t, out_v
 
 
