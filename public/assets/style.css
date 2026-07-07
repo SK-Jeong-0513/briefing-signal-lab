@@ -291,6 +291,15 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .samples-nav a:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 
+/* ── 지표 대시보드 (dashboard.html) ────────────────────── */
+.dash-toolbar { display: flex; justify-content: flex-end; margin-top: var(--s-md); }
+.dash-chart { margin-top: var(--s-md); min-height: 360px; width: 100%; }
+.dash-chart .uplot { font-family: var(--font); width: 100% !important; }
+.dash-chart .u-title { font-weight: 650; }
+.dash-chart .u-legend { font-size: 0.8125rem; color: var(--muted); margin-top: 8px; }
+.dash-chart .u-legend .u-marker { width: 12px; height: 12px; }
+.dash-chart .u-axis { font-size: 0.75rem; }
+
 /* ── 경제 캘린더 ───────────────────────────────────────── */
 .cal-toolbar { display: flex; flex-wrap: wrap; gap: var(--s-md); align-items: center; justify-content: space-between; margin-top: var(--s-lg); }
 .cal-nav { display: flex; align-items: center; gap: var(--s-sm); }

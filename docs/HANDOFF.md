@@ -31,6 +31,16 @@
 
 **완료(2026-07-06 추가분):** tech 헤드라이너 배지 "샘플"→"무료 공개"(techPage.freeBadge), 푸터 면책 마지막 문장을 tech=공개출처 관찰/그 외=샘플로 정확화, 푸터 이메일(paun.jeong@gmail.com) 5개 페이지 mailto 링크화. 금융/경제/대시보드는 tech 수요 검증 후 진행(사용자 확인). 1호 내용은 사용자가 "충분히 좋음"으로 승인(에디터 검증 완료).
 
+## 지표 대시보드 (2026-07-07 P1 완성)
+
+**조직 원리:** 관계·상관 오버레이(태그 클릭→두 지표 이중Y축 겹침) + 산업 밸류체인 지표. investing.com과 차별화=데이터 폭이 아니라 선별된 관계. **전부 무료(미끼), 수익화는 브리핑 구독.**
+- **dashboard.html** + `assets/dashboard.js`(uPlot 이중축 렌더) + `assets/vendor/uPlot.*`(self-host, 50KB). nav "대시보드"를 dashboard.html로 재지정(전 페이지).
+- **데이터: 자동 실데이터 파이프라인** — `scripts/fetch_dashboard.py`(무키: Yahoo v8 chart + 미 재무부 DTS) → `public/assets/data/dashboard.json`. `.github/workflows/dashboard-data.yml`(평일 21:30 UTC 크론, 커밋·푸시). stdlib만(pip 불필요).
+- **P1 페어 4개(실데이터):** 금리(^TNX)↔S&P(^GSPC), 달러(DX-Y.NYB)↔KOSPI(^KS11), 구리(HG=F)↔금리, EWY↔반도체 바스켓(삼성·하이닉스·한미·주성·리노 동일가중, rebase100). 정렬=UTC 일 버킷.
+- **TGA↔지수 페어:** 코드 있으나 재무부 API가 로컬 샌드박스에서 차단돼 미수집 → **Actions 첫 실행 때 채워질 예정(account_type 필터 확인 필요).**
+- **차트:** 이중 Y축(좌 primary, 우 warning), 6M/1Y/3Y 토글. 상관계수 없음(향후).
+- **남은 것:** ① 반도체 바스켓 정확 티커 확정(현재 기본값) ② TGA Actions 실동작 확인 ③ P2=밸류체인 자동 프록시(SOXX/SMH/MU/TSM)+수동 핵심(HBM가) ④ P3=수출 데이터 ⑤ 랜딩 #dashboard 티저(옛 6카드)를 dashboard.html로 연결/정리.
+
 ## 주간 발행 파이프라인 (2026-07-06 확정안)
 
 별도 상시 서버 불필요 — GitHub Actions 크론 러너 + 구글시트(캘린더의 CSV 패턴 재사용). **사람 선별(④)이 유일한 발행 스위치.**

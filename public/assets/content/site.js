@@ -211,6 +211,20 @@ const UI = {
       en: "Information only, not investment advice. Indicators/assets are named as observation targets; no buy/sell recommendation. Current content is sample.",
     },
   },
+  dashboardPage: {
+    eyebrow: { ko: "INDICATOR DASHBOARD", en: "INDICATOR DASHBOARD" },
+    title: { ko: "관계로 읽는 지표 대시보드", en: "A dashboard that reads relationships" },
+    intro: {
+      ko: "숫자 나열이 아니라 '무엇이 무엇과 함께, 또는 반대로 움직이나'를 봅니다. 두 지표를 이중축으로 겹쳐 관계를 읽는 대시보드입니다 — 금리↔지수, 달러↔KOSPI, 구리↔금리 등. 공개 출처 실데이터로 자동 갱신됩니다. 정보 제공이며 투자 조언이 아닙니다.",
+      en: "Not a wall of numbers — this reads what moves together, or opposite. Two indicators overlaid on a dual axis: rates↔index, dollar↔KOSPI, copper↔rates, and more. Auto-updated from public data. Information only, not investment advice.",
+    },
+    pairsHeading: { ko: "관계 오버레이", en: "Relationship overlays" },
+    pairsLabel: { ko: "관계 페어 선택", en: "Choose a pair" },
+    readNote: {
+      ko: "이중 Y축은 좌·우 눈금이 다릅니다. 절대 수준보다 '같이/반대로 움직이는 방향'을 보세요. 상관계수·산업 밸류체인 지표는 순차 추가 예정.",
+      en: "The two Y-axes use different scales. Read the direction (moving together vs opposite), not absolute levels. Correlation and value-chain indicators are coming next.",
+    },
+  },
   calendarPage: {
     backHome: { ko: "← 홈", en: "← Home" },
     eyebrow: { ko: "ECONOMIC CALENDAR", en: "ECONOMIC CALENDAR" },

@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>금융 브리핑 — Briefing Signal Lab</title>
-  <meta name="description" content="시장·실적·수급 신호를 매일 선별해 요약하는 금융 브리핑. 무료 공개 요약 + 유료 키워드 맞춤 이메일 브리핑. 정보 제공이며 투자 조언이 아닙니다." />
+  <title>지표 대시보드 — Briefing Signal Lab</title>
+  <meta name="description" content="관계·상관 중심 지표 대시보드 — 금리↔지수, 달러↔KOSPI, 구리↔금리 등 두 지표를 이중축으로 겹쳐 봅니다. 공개 출처 실데이터, 정보 제공(투자 조언 아님)." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="assets/vendor/uPlot.min.css" />
   <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
@@ -49,32 +50,24 @@
     <section class="band">
       <div class="wrap page-intro reveal">
         <a class="nav__link" href="index.html" data-i18n="techPage.backHome" style="display:inline-block;margin-bottom:16px;"></a>
-        <p class="eyebrow" data-i18n="financePage.eyebrow"></p>
-        <h1 class="page-intro__title" data-i18n="financePage.title"></h1>
-        <p class="section-sub" data-i18n="financePage.intro"></p>
+        <p class="eyebrow" data-i18n="dashboardPage.eyebrow"></p>
+        <h1 class="page-intro__title" data-i18n="dashboardPage.title"></h1>
+        <p class="section-sub" data-i18n="dashboardPage.intro"></p>
       </div>
     </section>
 
-    <!-- ── 자산군 선택 + 이번 주 브리핑 ── -->
-    <section class="band band--surface" id="feed">
-      <div class="wrap">
-        <h2 class="section-title reveal" data-i18n="financePage.feedHeading"></h2>
-        <p class="tech-menu-label" data-i18n="financePage.menuLabel"></p>
-        <div class="tech-menu" data-finance-menu></div>
-        <div data-finance-weekly></div>
-      </div>
-    </section>
-
-    <!-- ── 유료 자산군 구독 섹션 ── -->
-    <section class="band">
-      <div class="wrap reveal">
-        <p class="eyebrow" data-i18n="financePage.paidEyebrow"></p>
-        <h2 class="section-title" data-i18n="financePage.paidTitle"></h2>
-        <p class="section-sub" data-i18n="financePage.paidBody"></p>
-        <div style="margin-top:28px;">
-          <a class="btn btn--primary" data-link="paidForm" target="_blank" rel="noopener" data-i18n="financePage.paidCta"></a>
+    <!-- ── 관계 오버레이 ── -->
+    <section class="band band--surface" id="dashboard">
+      <div class="wrap" data-dash>
+        <h2 class="section-title reveal" data-i18n="dashboardPage.pairsHeading"></h2>
+        <p class="tech-menu-label" data-i18n="dashboardPage.pairsLabel"></p>
+        <div class="tech-menu" data-dash-pairs></div>
+        <div class="dash-toolbar">
+          <div class="cal-viewtoggle" data-dash-range></div>
         </div>
-        <p class="footer__disc" data-i18n="financePage.paidNote" style="margin-top:16px;"></p>
+        <div id="dash-chart" class="dash-chart"></div>
+        <p class="sample-note" data-dash-updated></p>
+        <p class="section-sub" data-i18n="dashboardPage.readNote" style="margin-top:var(--s-md);"></p>
       </div>
     </section>
 
@@ -103,9 +96,10 @@
     </div>
   </footer>
 
-  <!-- 금융 데이터 → 공통 콘텐츠(site.js) → 렌더 스크립트 -->
-  <script src="assets/content/finance.js"></script>
+  <!-- 공통 콘텐츠 → 렌더 → uPlot → 대시보드 -->
   <script src="assets/content/site.js"></script>
   <script src="assets/script.js"></script>
+  <script src="assets/vendor/uPlot.iife.min.js"></script>
+  <script src="assets/dashboard.js"></script>
 </body>
 </html>
