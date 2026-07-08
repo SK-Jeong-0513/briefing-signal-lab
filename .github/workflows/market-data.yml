@@ -19,4 +19,4 @@ jobs:
           MARKET_CONFIG_CSV: ${{ secrets.MARKET_CONFIG_CSV }}   # 종목설정 published CSV (없으면 시드)
           MARKET_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}   # 없으면 dry-run
           MARKET_WEBAPP_TOKEN: ${{ secrets.MARKET_WEBAPP_TOKEN }}
-        run: python3 scripts/fetch_market.py --dry --limit=2
+        run: python3 scripts/fetch_market.py --limit=2
