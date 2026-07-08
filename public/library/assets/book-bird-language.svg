@@ -1,0 +1,108 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Nanum+Myeongjo:wght@400;700;800&display=swap');
+        .noto { font-family: 'Noto Sans KR', sans-serif; }
+        .myeongjo { font-family: 'Nanum Myeongjo', serif; }
+    </style>
+    
+    <!-- 배경 -->
+    <rect width="1200" height="630" fill="#f3f4f6"/>
+
+    <!-- 왼쪽 표지 섹션 -->
+    <g transform="translate(50, 50)">
+        <defs>
+            <linearGradient id="coverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#0f5132;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#198754;stop-opacity:1" />
+            </linearGradient>
+            <pattern id="leaves" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                <path d="M10,50 Q20,30 30,50 T50,50 M60,20 Q70,0 80,20 T100,20" fill="none" stroke="#20c997" stroke-width="1.5" opacity="0.3"/>
+                <circle cx="20" cy="70" r="3" fill="#ffc107" opacity="0.4"/>
+                <circle cx="80" cy="80" r="2" fill="#ffc107" opacity="0.4"/>
+            </pattern>
+        </defs>
+        
+        <!-- 표지 배경 -->
+        <rect width="400" height="533" fill="url(#coverGrad)" rx="8"/>
+        <rect width="400" height="533" fill="url(#leaves)" rx="8"/>
+        
+        <!-- 태양/빛 -->
+        <circle cx="300" cy="150" r="80" fill="#ffc107" opacity="0.8" />
+        <circle cx="300" cy="150" r="120" fill="#ffc107" opacity="0.3" />
+        
+        <!-- 나뭇가지 -->
+        <path d="M -50 400 Q 150 450 350 350" fill="none" stroke="#5c4033" stroke-width="12" stroke-linecap="round"/>
+        <path d="M 100 420 Q 150 380 180 370" fill="none" stroke="#5c4033" stroke-width="6" stroke-linecap="round"/>
+        
+        <!-- 박새 -->
+        <g transform="translate(180, 270) scale(1.2)">
+            <path d="M 0 50 L -40 80 L -30 90 Z" fill="#333"/>
+            <ellipse cx="20" cy="40" rx="35" ry="25" fill="#f8f9fa" transform="rotate(-15 20 40)"/>
+            <path d="M -10 30 C 10 50 40 60 50 35 C 30 10 0 20 -10 30" fill="#ffd166"/>
+            <path d="M -5 35 C 10 20 30 25 35 45 C 20 50 -5 50 -5 35" fill="#457b9d"/>
+            <circle cx="45" cy="15" r="18" fill="#333" />
+            <circle cx="50" cy="15" r="14" fill="#f8f9fa" />
+            <path d="M 40 0 C 50 -5 60 5 60 15 L 40 15 Z" fill="#333"/>
+            <circle cx="52" cy="12" r="2.5" fill="#111" />
+            <path d="M 60 15 L 75 20 L 60 25 Z" fill="#333"/>
+            <path d="M 15 63 L 10 80 M 25 60 L 30 75" fill="none" stroke="#333" stroke-width="2"/>
+        </g>
+        
+        <!-- 말풍선 물결 -->
+        <path d="M 285 295 Q 310 280 305 310" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+        <path d="M 295 285 Q 330 260 320 320" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+        <path d="M 305 275 Q 350 240 335 330" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        
+        <!-- 표지 텍스트 -->
+        <text x="30" y="80" class="noto" font-weight="900" font-size="38" fill="#fff" letter-spacing="-1">나에게는</text>
+        <text x="30" y="130" class="noto" font-weight="900" font-size="44" fill="#fff" letter-spacing="-1">새의 말이</text>
+        <text x="30" y="180" class="noto" font-weight="900" font-size="44" fill="#fff" letter-spacing="-1">들린다</text>
+        
+        <text x="30" y="220" class="noto" font-weight="500" font-size="14" fill="#e9ecef" opacity="0.9">인간의 오만을 깨는 숲속의 발견</text>
+        
+        <text x="30" y="480" class="noto" font-weight="700" font-size="16" fill="#ffc107">스즈키 도시타카</text>
+        <text x="145" y="480" class="noto" font-weight="400" font-size="14" fill="#fff">지음</text>
+        <text x="30" y="505" class="noto" font-weight="400" font-size="14" fill="#e9ecef">김소연 옮김</text>
+        
+        <text x="300" y="505" class="noto" font-weight="700" font-size="16" fill="#fff">오팬하우스</text>
+    </g>
+
+    <!-- 오른쪽 갈무리 섹션 -->
+    <g transform="translate(500, 50)">
+        <text x="0" y="40" class="noto" font-weight="900" font-size="36" fill="#111827">도서 표지 시안 & 갈무리</text>
+        <text x="0" y="80" class="noto" font-weight="400" font-size="18" fill="#4b5563">스즈키 도시타카 저, 『나에게는 새의 말이 들린다』 (오팬하우스)</text>
+        <text x="0" y="110" class="noto" font-weight="400" font-size="18" fill="#4b5563">웹 게시용 SVG 표지 시안 3종과 추천 갈무리입니다.</text>
+        
+        <!-- 갈무리 박스 -->
+        <g transform="translate(0, 160)">
+            <rect width="650" height="260" fill="#ffffff" rx="16" filter="drop-shadow(0 10px 8px rgb(0 0 0 / 0.04)) drop-shadow(0 4px 3px rgb(0 0 0 / 0.1))"/>
+            <rect width="8" height="260" fill="#10b981" rx="4"/>
+            
+            <!-- 인용구 아이콘 -->
+            <g transform="translate(580, 20) scale(0.8)" opacity="0.2">
+                <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" fill="#111827"/>
+            </g>
+            
+            <!-- 추천 갈무리 제목 -->
+            <g transform="translate(32, 32)">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                </svg>
+                <text x="32" y="18" class="noto" font-weight="700" font-size="20" fill="#1f2937">추천 갈무리 (Quote)</text>
+            </g>
+            
+            <!-- 갈무리 본문 -->
+            <g transform="translate(32, 80)">
+                <text class="myeongjo" font-size="18" fill="#374151" font-style="italic">
+                    <tspan x="0" y="0">"인간에게는 인간의 언어가 있듯 새에게는 새들의 언어가 있다.</tspan>
+                    <tspan x="0" y="30">인간의 언어는 동물 언어들 중 하나에 불과한 것이다. 대부분의</tspan>
+                    <tspan x="0" y="60">현대인은 자연을 올바르게 보는 눈을 잃었지만 새들은 다른 동물의</tspan>
+                    <tspan x="0" y="90">언어까지 제대로 이해하며 살고 있다."</tspan>
+                </text>
+            </g>
+            
+            <!-- 갈무리 출처 -->
+            <text x="618" y="230" class="noto" font-weight="500" font-size="14" fill="#6b7280" text-anchor="end">— 나에게는 새의 말이 들린다 (스즈키 도시타카)</text>
+        </g>
+    </g>
+</svg>

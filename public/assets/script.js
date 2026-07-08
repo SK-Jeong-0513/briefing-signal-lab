@@ -1,6 +1,6 @@
 /* Briefing Signal Lab — script.js
  * i18n(KO/EN) 토글 · 동적 렌더링 · 스파크라인 · 절제된 모션.
- * 의존: content.js (UI, BRIEFINGS, LIBRARY, LINKS)
+ * 의존: content.js (UI, BRIEFINGS, LINKS) · 서재/리포트는 library.json(manifest)
  */
 (function () {
   "use strict";
@@ -128,22 +128,85 @@
     host.innerHTML = plan("free") + plan("paid");
   }
 
-  /* 서재 */
+  /* ── 서재(Library): manifest 기반 목록 ─────────────────── */
+  var libState = { items: [], filter: "all", loaded: false };
+
+  function catLabel(cat) {
+    var m = UI.libraryPage.cats[cat];
+    return m ? t(m) : (cat || "");
+  }
+  function libCard(it) {
+    var tags = (it.tags || []).map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+    var top = it.type === "note" ? ""
+      : '<div class="lib-card__top"><span class="lib-card__cat">' + catLabel(it.category) +
+        '</span><span class="lib-card__date">' + (it.date || "") + "</span></div>";
+    return (
+      '<a class="lib-card reveal is-in" href="read.html?r=' + encodeURIComponent(it.id) + '">' +
+        top +
+        '<h3 class="lib-card__title">' + it.title + "</h3>" +
+        (it.abstract ? '<p class="lib-card__abstract">' + it.abstract + "</p>" : "") +
+        (tags ? '<div class="card__meta">' + tags + "</div>" : "") +
+        '<span class="lib__more">' + t(it.type === "note" ? UI.libraryPage.noteRead : UI.libraryPage.read) + "</span>" +
+      "</a>"
+    );
+  }
+
+  /* 랜딩 티저: 최근 리포트 3개 */
   function renderLibrary() {
     var host = document.getElementById("library-list");
     if (!host) return;
-    var m = UI.library.readMore;
-    host.innerHTML = LIBRARY.map(function (n) {
-      var tags = n.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
-      return (
-        '<article class="lib reveal">' +
-          '<h3 class="lib__title">' + n.title[lang] + "</h3>" +
-          '<p class="lib__sum">' + n.summary[lang] + "</p>" +
-          '<div class="card__meta">' + tags + "</div>" +
-          '<span class="lib__more">' + t(m) + " →</span>" +
-        "</article>"
-      );
-    }).join("");
+    var reports = libState.items.filter(function (x) { return x.type === "report"; }).slice(0, 3);
+    host.innerHTML = reports.length ? reports.map(libCard).join("")
+      : '<p class="section-sub">' + t(UI.library.empty) + "</p>";
+  }
+
+  /* 서재 페이지(library.html): 필터 칩 + 리포트 그리드 + 노트 스트립 */
+  function renderLibraryPage() {
+    var repHost = document.querySelector("[data-lib-reports]");
+    if (!repHost) return;
+    var LP = UI.libraryPage;
+    var reports = libState.items.filter(function (x) { return x.type === "report"; });
+    var cats = [];
+    reports.forEach(function (r) { if (r.category && cats.indexOf(r.category) < 0) cats.push(r.category); });
+    var chipHost = document.querySelector("[data-lib-filter]");
+    if (chipHost) {
+      var chips = [["all", t(LP.filterAll)]].concat(cats.map(function (c) { return [c, catLabel(c)]; }));
+      chipHost.innerHTML = chips.map(function (c) {
+        return '<button class="tech-chip" type="button" data-filter="' + c[0] + '" aria-pressed="' + (c[0] === libState.filter) + '">' + c[1] + "</button>";
+      }).join("");
+    }
+    var shown = libState.filter === "all" ? reports : reports.filter(function (r) { return r.category === libState.filter; });
+    repHost.innerHTML = shown.length ? shown.map(libCard).join("") : '<p class="section-sub">' + t(LP.emptyReports) + "</p>";
+    var noteHost = document.querySelector("[data-lib-notes]");
+    if (noteHost) {
+      var notes = libState.items.filter(function (x) { return x.type === "note"; });
+      noteHost.innerHTML = notes.length ? notes.map(libCard).join("") : '<p class="section-sub">' + t(LP.emptyNotes) + "</p>";
+    }
+  }
+
+  /* 카테고리 페이지(tech/finance/economy) 하단 "이 분야 심층 리포트" 스트립 */
+  function renderLibraryStrip() {
+    document.querySelectorAll("[data-lib-strip]").forEach(function (host) {
+      var cat = host.getAttribute("data-lib-strip");
+      var reports = libState.items.filter(function (x) {
+        return x.type === "report" && (!cat || x.category === cat);
+      }).slice(0, 3);
+      host.innerHTML = reports.map(libCard).join("");
+      var sec = host.closest("[data-lib-strip-section]");
+      if (sec) sec.style.display = reports.length ? "" : "none";
+    });
+  }
+
+  function loadLibrary() {
+    if (!document.getElementById("library-list") && !document.querySelector("[data-lib-reports]") &&
+        !document.querySelector("[data-lib-strip]")) return;
+    fetch("assets/data/library.json?cb=" + Date.now()).then(function (r) { return r.json(); }).then(function (j) {
+      libState.items = j.items || [];
+      libState.loaded = true;
+      renderLibrary();
+      renderLibraryPage();
+      renderLibraryStrip();
+    }).catch(function () {});
   }
 
   /* ── 경제 캘린더 (calendar.html) ── */
@@ -416,14 +479,72 @@
   }
   function renderAllWeekly() { weeklyCfgs().forEach(function (cfg) { renderWeekly(cfg); }); }
 
+  /* ── 서재: 리포트 읽기(read.html) ─────────────────────── */
+  var readState = { item: null, bodyHtml: null, error: null };
+
+  function stripFrontMatter(md) {
+    return md.replace(/^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  }
+  function renderMarkdown(md) {
+    var body = stripFrontMatter(md).replace(/^\s*#\s+.*(\r?\n|$)/, ""); // 선두 H1 제거(페이지 헤더가 제목 표시)
+    if (typeof marked !== "undefined" && marked.parse) return marked.parse(body);
+    return '<pre class="read__raw">' + body.replace(/[&<>]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
+    }) + "</pre>";
+  }
+  function renderReport() {
+    var host = document.querySelector("[data-read]");
+    if (!host) return;
+    var R = UI.readPage;
+    if (readState.error) {
+      host.innerHTML = '<p class="section-sub">' + t(readState.error === "notFound" ? R.notFound : R.error) + "</p>";
+      return;
+    }
+    if (!readState.item) { host.innerHTML = '<p class="section-sub">' + t(R.loading) + "</p>"; return; }
+    var it = readState.item;
+    var meta = [it.date, it.category].filter(Boolean).join(" · ");
+    var tags = (it.tags || []).map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+    var enNote = lang === "en" ? '<p class="read__langnote">' + discSvg() + "<span>" + t(R.koOnly) + "</span></p>" : "";
+    host.innerHTML =
+      '<article class="read">' +
+        '<a class="nav__link read__back" href="library.html">' + t(R.back) + "</a>" +
+        (it.category ? '<p class="eyebrow">' + it.category + "</p>" : "") +
+        '<h1 class="read__title">' + it.title + "</h1>" +
+        '<p class="read__meta">' + meta + "</p>" +
+        (tags ? '<div class="card__meta read__tags">' + tags + "</div>" : "") +
+        (it.abstract ? '<p class="read__abstract">' + it.abstract + "</p>" : "") +
+        '<p class="read__disc">' + discSvg() + "<span>" + t(R.disclaimer) + "</span></p>" +
+        enNote +
+        '<div class="read__body">' + (readState.bodyHtml || "") + "</div>" +
+      "</article>";
+  }
+  function loadReport() {
+    if (!document.querySelector("[data-read]")) return;
+    var id = new URLSearchParams(location.search).get("r");
+    if (!id) { readState.error = "notFound"; renderReport(); return; }
+    fetch("assets/data/library.json?cb=" + Date.now()).then(function (r) { return r.json(); }).then(function (j) {
+      var it = (j.items || []).filter(function (x) { return x.id === id; })[0];
+      if (!it) { readState.error = "notFound"; renderReport(); return; }
+      readState.item = it;
+      document.title = it.title + " — Briefing Signal Lab";
+      return fetch(it.file + "?cb=" + Date.now()).then(function (r) { return r.text(); }).then(function (md) {
+        readState.bodyHtml = renderMarkdown(md);
+        renderReport();
+      });
+    }).catch(function () { readState.error = "error"; renderReport(); });
+  }
+
   function renderAll() {
     applyStaticI18n();
     renderPoints();
     renderBriefings();
     renderCompare();
     renderLibrary();
+    renderLibraryPage();
+    renderLibraryStrip();
     renderAllWeekly();
     renderCalendar();
+    renderReport();
     observeReveals();
   }
 
@@ -474,9 +595,18 @@
     applyLinks();
     setLang(lang);
     if (document.getElementById("calendar")) loadCalSheet();
+    loadReport();
+    loadLibrary();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });
+    });
+    var libFilter = document.querySelector("[data-lib-filter]");
+    if (libFilter) libFilter.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-filter]");
+      if (!b) return;
+      libState.filter = b.getAttribute("data-filter");
+      renderLibraryPage();
     });
   }
 

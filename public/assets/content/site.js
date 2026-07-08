@@ -86,13 +86,55 @@ const UI = {
     cta: { ko: "대시보드 열기", en: "Open the dashboard" },
   },
   library: {
-    heading: { ko: "PERSONAL LIBRARY", en: "PERSONAL LIBRARY" },
-    title: { ko: "누가, 왜 만드는가", en: "Who builds this, and why" },
+    heading: { ko: "LIBRARY", en: "LIBRARY" },
+    title: { ko: "서재 — 심층 리포트", en: "Library — deep-dive reports" },
     sub: {
-      ko: "운영자의 관점과 자동화 구축 기록입니다. 상품이 아니라, 이 플랫폼을 누가 운영하는지 보여주는 신뢰 보강 글입니다.",
-      en: "Notes from the operator on building the automation behind this. Not a product — context on who runs this platform.",
+      ko: "기술·금융·경제 밸류체인을 다룬 심층 리서치. 최근 리포트를 미리 봅니다.",
+      en: "In-depth research across the tech, finance, and macro value chains. A preview of the latest reports.",
     },
-    readMore: { ko: "읽기", en: "Read" },
+    readMore: { ko: "리포트 읽기 →", en: "Read →" },
+    cta: { ko: "서재 전체 보기 →", en: "Browse the library →" },
+    empty: { ko: "리포트를 준비 중입니다.", en: "Reports coming soon." },
+  },
+  libraryPage: {
+    backHome: { ko: "← 홈으로", en: "← Home" },
+    eyebrow: { ko: "LIBRARY", en: "LIBRARY" },
+    title: { ko: "서재", en: "Library" },
+    sub: {
+      ko: "기술·금융·경제 밸류체인을 다룬 심층 리서치 리포트와 운영자의 관심 노트. 전부 무료 공개이며, 정보 제공이지 투자 조언이 아닙니다.",
+      en: "In-depth research reports across the tech, finance, and macro value chains, plus the operator's personal notes. All free — information only, not investment advice.",
+    },
+    filterAll: { ko: "전체", en: "All" },
+    notesHeading: { ko: "운영자의 서가", en: "The operator's shelf" },
+    notesSub: {
+      ko: "이 플랫폼을 누가·어떤 관심으로 운영하는지 보여주는 개인 노트.",
+      en: "Personal notes on who runs this and what they're into.",
+    },
+    emptyReports: { ko: "리포트를 준비 중입니다.", en: "Reports coming soon." },
+    emptyNotes: { ko: "노트를 준비 중입니다.", en: "Notes coming soon." },
+    read: { ko: "리포트 읽기 →", en: "Read →" },
+    noteRead: { ko: "열어보기 →", en: "Open →" },
+    cats: {
+      "기술": { ko: "기술", en: "Tech" },
+      "금융": { ko: "금융", en: "Finance" },
+      "경제": { ko: "경제", en: "Economy" },
+    },
+  },
+  libraryStrip: {
+    eyebrow: { ko: "LIBRARY", en: "LIBRARY" },
+    title: { ko: "이 분야 심층 리포트", en: "Deep-dive reports in this field" },
+    cta: { ko: "서재에서 더 보기 →", en: "More in the library →" },
+  },
+  readPage: {
+    loading: { ko: "불러오는 중…", en: "Loading…" },
+    back: { ko: "← 서재로", en: "← Back to library" },
+    error: { ko: "리포트를 불러오지 못했습니다.", en: "Could not load this report." },
+    notFound: { ko: "요청한 리포트를 찾을 수 없습니다.", en: "Report not found." },
+    koOnly: { ko: "본문은 한국어로 제공됩니다.", en: "The full text is provided in Korean." },
+    disclaimer: {
+      ko: "정보 제공을 위한 리서치이며 투자 조언이 아닙니다. 밸류체인 기업 언급은 관찰이며 매수·매도·목표가 판단이 아닙니다.",
+      en: "Research for information only, not investment advice. Company mentions are observations, not buy/sell/target calls.",
+    },
   },
   cta: {
     title: { ko: "매일 아침, 신호를 놓치지 마세요", en: "Don't miss the morning signal" },
@@ -296,37 +338,6 @@ const UI = {
     rights: { ko: "© 2026 Briefing Signal Lab. All rights reserved.", en: "© 2026 Briefing Signal Lab. All rights reserved." },
   },
 };
-
-/* ── 서재 티저 글 ──────────────────────────────────────── */
-const LIBRARY = [
-  {
-    id: "lib-1",
-    title: { ko: "브리핑 엔진을 GitHub Actions로 매일 돌리기", en: "Running a briefing engine daily on GitHub Actions" },
-    summary: {
-      ko: "뉴스 수집·요약·발송을 무인으로 굴리며 마주친 크론 안정성과 비용 이야기.",
-      en: "Lessons on cron reliability and cost from running unattended collect–summarize–send.",
-    },
-    tags: ["자동화", "인프라"],
-  },
-  {
-    id: "lib-2",
-    title: { ko: "LLM 요약 체인: 무엇을 신뢰하고 무엇을 검수하는가", en: "LLM summary chains: what to trust, what to review" },
-    summary: {
-      ko: "Gemini·Claude 폴백 구조에서 품질을 지키기 위한 검수 단계 설계.",
-      en: "Designing a review step to keep quality in a Gemini/Claude fallback chain.",
-    },
-    tags: ["LLM", "품질"],
-  },
-  {
-    id: "lib-3",
-    title: { ko: "지표를 신호로 바꾸는 대시보드 설계 노트", en: "Turning indicators into signals: a dashboard note" },
-    summary: {
-      ko: "수십 개 지표 중 매일 무엇을 앞에 둘지 고르는 기준에 대하여.",
-      en: "On choosing which of dozens of indicators deserves the front row each day.",
-    },
-    tags: ["대시보드", "설계"],
-  },
-];
 
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
 const LINKS = {

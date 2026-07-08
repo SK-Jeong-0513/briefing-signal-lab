@@ -58,12 +58,16 @@ abstract_en:            # 예약
 
 신규:
 - `public/library.html`, `public/read.html`
-- `public/assets/library.js`, `public/assets/read.js`
-- `public/assets/vendor/marked.min.js` (self-host)
 - `public/library/reports/*.md`, `public/library/notes/*.md`, `public/library/assets/*`
 - `public/assets/data/library.json` (Action 생성)
 - `.github/workflows/library-manifest.yml`
 - `scripts/build_library_manifest.py`
+
+**구현 편차(2026-07-08, 확정 스펙 대비):**
+- 별도 `library.js`/`read.js` 대신 **`assets/script.js`에 통합**(캘린더와 동일 패턴 — i18n `t`/`lang`/`UI`가 script.js IIFE 안에 있어 접근하려면 통합이 필요). 함수: `renderLibrary`(랜딩 티저)·`renderLibraryPage`(목록)·`renderLibraryStrip`(카테고리 페이지)·`renderReport`/`loadReport`(read).
+- 마크다운 lib = **marked CDN**(`cdn.jsdelivr.net/npm/marked@12.0.2`, Pretendard와 동일 jsdelivr). self-host 대신 CDN(소싱 비용). marked 미로드 시 `<pre>` 폴백.
+- read 렌더러: 프런트매터 + **선두 H1 제거**(페이지 헤더가 제목 표시 → 중복 방지) 후 marked. 헤더에 **인라인 면책** 표시. 본문 KO, EN 모드 시 "본문 한국어" 안내.
+- §6: 시드 리포트 2건의 투자판단 표현(비중 확대·베팅·매수세 등)을 관찰/메커니즘형으로 **최소 완화** 완료.
 
 수정:
 - 6개 페이지(index/tech/finance/economy/dashboard/calendar) nav "서재": `#library` → `library.html`
