@@ -65,6 +65,7 @@ def load_config():
             active = (r[ia] if (0 <= ia < len(r)) else "1").strip()
             if tk and nm and active not in ("0", "false", "FALSE", "N", "n"):
                 out.append((tk, nm))
+        print("[cfg] 종목설정 CSV %d개 로드" % len(out))
         return out or SEED
     except Exception as e:
         print("[cfg] 실패 %s. 시드 사용" % e)
@@ -72,12 +73,18 @@ def load_config():
 
 
 def news(name, n=3):
-    """Google News RSS 헤드라인 [(title, link)]."""
+    """Google News RSS 헤드라인 [(title, link)]. 503/차단 대비 재시도."""
     url = "https://news.google.com/rss/search?q=%s&hl=ko&gl=KR&ceid=KR:ko" % urllib.parse.quote(name)
-    try:
-        root = ET.fromstring(get(url))
-    except Exception as e:
-        print("[news] %s 실패: %s" % (name, e))
+    root = None
+    for attempt in range(3):
+        try:
+            root = ET.fromstring(get(url))
+            break
+        except Exception as e:
+            print("[news] %s 시도%d: %s" % (name, attempt + 1, e))
+            if attempt < 2:
+                time.sleep(3 + attempt * 3)
+    if root is None:
         return []
     out = []
     for it in root.findall(".//item")[:n]:
@@ -147,7 +154,9 @@ def main():
         cfg = cfg[:limit]
     print("[market] 종목 %d개 처리" % len(cfg))
     rows = []
-    for tk, nm in cfg:
+    for i, (tk, nm) in enumerate(cfg):
+        if i:
+            time.sleep(2)  # 버스트 방지(뉴스 소스 rate-limit 완화)
         r = brief_one(tk, nm)
         if r:
             rows.append(r)
