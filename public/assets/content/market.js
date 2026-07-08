@@ -5,5 +5,5 @@
  * 시장-일일 탭 컬럼:  날짜 · 제목 · 한줄 · 출처URL · access
  * 시장-종목 탭 컬럼:  날짜 · 티커 · 이름 · 요약 · 근거 · 출처URL · access
  */
-const MARKET_DAILY_CSV = "";    // 시장-일일 탭 published CSV URL
-const MARKET_TICKERS_CSV = "";  // 시장-종목 탭 published CSV URL
+const MARKET_DAILY_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZFl78TiUcCCKApDu7dD_4rkGF8tlYWpyV2dzaTQg6WFtd9DJoNMyjyPa-dn21JzQ1ivAVKPd31/pub?gid=0&single=true&output=csv";
+const MARKET_TICKERS_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZFl78TiUcCCKApDu7dD_4rkGF8tlYWpyV2dzaTQg6WFtd9DJoNMyjyPa-dn21JzQ1ivAVKPd31/pub?gid=2102188761&single=true&output=csv";
