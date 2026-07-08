@@ -269,6 +269,68 @@
     }).catch(function () { /* 실패 시 샘플 유지 */ });
   }
 
+  /* ── 시장(주식) 탭: 구글 시트(CSV) — 캘린더 파서 재사용 ─── */
+  var marketState = { daily: [], tickers: [] };
+
+  function mktRows(text) {
+    var rows = calParseCSV(text);
+    if (rows.length < 2) return [];
+    var H = rows[0].map(function (h) { return h.trim().toLowerCase(); });
+    var out = [];
+    for (var r = 1; r < rows.length; r++) {
+      var o = {};
+      for (var c = 0; c < H.length; c++) o[H[c]] = (rows[r][c] || "").trim();
+      out.push(o);
+    }
+    return out;
+  }
+  function mktCol(o, names) { for (var i = 0; i < names.length; i++) if (o[names[i]]) return o[names[i]]; return ""; }
+
+  function renderMarket() {
+    if (!document.querySelector("[data-market]")) return;
+    var M = UI.marketPage;
+    var dh = document.querySelector("[data-market-daily]");
+    if (dh) {
+      var d = marketState.daily.filter(function (o) { return mktCol(o, ["제목", "title"]); });
+      dh.innerHTML = d.length ? d.map(function (o) {
+        var src = mktCol(o, ["출처url", "출처", "source"]);
+        var srcLink = src ? ' · <a href="' + src + '" target="_blank" rel="noopener">' + t(M.source) + "</a>" : "";
+        return '<article class="mkt-sig">' +
+          '<h3 class="mkt-sig__title">' + mktCol(o, ["제목", "title"]) + "</h3>" +
+          '<p class="mkt-sig__line">' + mktCol(o, ["한줄", "요약", "summary"]) + "</p>" +
+          '<div class="mkt-sig__meta">' + mktCol(o, ["날짜", "date"]) + srcLink + "</div>" +
+        "</article>";
+      }).join("") : '<p class="section-sub">' + t(M.empty) + "</p>";
+    }
+    var th = document.querySelector("[data-market-tickers]");
+    if (th) {
+      var tk = marketState.tickers.filter(function (o) { return mktCol(o, ["이름", "name", "티커", "ticker"]); });
+      th.innerHTML = tk.length ? tk.map(function (o) {
+        var src = mktCol(o, ["출처url", "출처", "source"]);
+        var srcLink = src ? '<a class="lib__more" href="' + src + '" target="_blank" rel="noopener">' + t(M.source) + " →</a>" : "";
+        var basis = mktCol(o, ["근거"]);
+        return '<div class="lib-card">' +
+          '<div class="lib-card__top"><span class="lib-card__cat">' + mktCol(o, ["티커", "ticker"]) + '</span><span class="lib-card__date">' + mktCol(o, ["날짜", "date"]) + "</span></div>" +
+          '<h3 class="lib-card__title">' + mktCol(o, ["이름", "name"]) + "</h3>" +
+          '<p class="lib-card__abstract">' + mktCol(o, ["요약", "summary"]) + "</p>" +
+          (basis ? '<p class="section-sub">' + basis + "</p>" : "") +
+          srcLink +
+        "</div>";
+      }).join("") : '<p class="section-sub">' + t(M.empty) + "</p>";
+    }
+  }
+
+  function loadMarket() {
+    if (!document.querySelector("[data-market]")) return;
+    renderMarket();
+    if (typeof MARKET_DAILY_CSV === "string" && MARKET_DAILY_CSV) {
+      fetch(MARKET_DAILY_CSV).then(function (r) { return r.text(); }).then(function (txt) { marketState.daily = mktRows(txt); renderMarket(); }).catch(function () {});
+    }
+    if (typeof MARKET_TICKERS_CSV === "string" && MARKET_TICKERS_CSV) {
+      fetch(MARKET_TICKERS_CSV).then(function (r) { return r.text(); }).then(function (txt) { marketState.tickers = mktRows(txt); renderMarket(); }).catch(function () {});
+    }
+  }
+
   function calYmd(d) {
     var mm = ("0" + (d.getMonth() + 1)).slice(-2), dd = ("0" + d.getDate()).slice(-2);
     return d.getFullYear() + "-" + mm + "-" + dd;
@@ -545,6 +607,7 @@
     renderAllWeekly();
     renderCalendar();
     renderReport();
+    renderMarket();
     observeReveals();
   }
 
@@ -597,6 +660,7 @@
     if (document.getElementById("calendar")) loadCalSheet();
     loadReport();
     loadLibrary();
+    loadMarket();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });

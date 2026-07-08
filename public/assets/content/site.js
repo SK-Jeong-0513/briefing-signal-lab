@@ -13,6 +13,7 @@ const UI = {
     tech: { ko: "기술", en: "Tech" },
     finance: { ko: "금융", en: "Finance" },
     economy: { ko: "경제", en: "Economy" },
+    market: { ko: "시장", en: "Market" },
     dashboard: { ko: "대시보드", en: "Dashboard" },
     library: { ko: "서재", en: "Library" },
     calendar: { ko: "경제 캘린더", en: "Calendar" },
@@ -135,6 +136,23 @@ const UI = {
       ko: "정보 제공을 위한 리서치이며 투자 조언이 아닙니다. 밸류체인 기업 언급은 관찰이며 매수·매도·목표가 판단이 아닙니다.",
       en: "Research for information only, not investment advice. Company mentions are observations, not buy/sell/target calls.",
     },
+  },
+  marketPage: {
+    backHome: { ko: "← 홈으로", en: "← Home" },
+    eyebrow: { ko: "MARKET", en: "MARKET" },
+    title: { ko: "시장(주식)", en: "Market" },
+    sub: {
+      ko: "뉴스에 잘 안 나오는 일일 시장 신호와, 설정한 종목 위주의 브리핑. AI가 자동 생성하며 정보 제공이지 투자 조언이 아닙니다.",
+      en: "Daily market signals beyond the headlines, plus briefings on your configured tickers. AI-generated, information only, not investment advice.",
+    },
+    aiLabel: {
+      ko: "AI 자동 생성 · 정보 제공, 투자 조언 아님",
+      en: "AI-generated · information only, not investment advice",
+    },
+    dailyHeading: { ko: "오늘의 시장 신호", en: "Today's market signals" },
+    tickersHeading: { ko: "설정 종목 브리핑", en: "Configured-ticker briefings" },
+    empty: { ko: "시장 브리핑을 준비 중입니다.", en: "Market briefings coming soon." },
+    source: { ko: "출처", en: "Source" },
   },
   cta: {
     title: { ko: "매일 아침, 신호를 놓치지 마세요", en: "Don't miss the morning signal" },

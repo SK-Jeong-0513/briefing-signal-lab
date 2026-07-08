@@ -243,6 +243,16 @@ ul { margin: 0; padding: 0; list-style: none; }
 .read__body th { background: var(--surface); font-weight: 700; }
 .read__raw { white-space: pre-wrap; font-family: inherit; font-size: 0.9rem; }
 
+/* ── 시장(주식) 탭 ─────────────────────────────────────── */
+.mkt-ailabel { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; margin-top: var(--s-md); }
+.mkt-ailabel svg { flex: none; }
+.mkt-daily { display: flex; flex-direction: column; gap: var(--s-md); }
+.mkt-sig { border-left: 3px solid var(--primary); padding: 2px 0 2px var(--s-md); }
+.mkt-sig__title { font-size: 1.0625rem; font-weight: 700; line-height: 1.35; letter-spacing: -0.01em; }
+.mkt-sig__line { color: var(--muted); font-size: 0.9375rem; line-height: 1.5; margin-top: 4px; }
+.mkt-sig__meta { font-size: 0.8125rem; color: var(--muted); margin-top: 6px; }
+.mkt-sig__meta a { color: var(--primary); }
+
 /* ── 기술 페이지: 인트로 + 유료 키워드 칩 ─────────────── */
 .page-intro { max-width: 62ch; }
 .page-intro__title { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; }
