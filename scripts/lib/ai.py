@@ -52,7 +52,7 @@ def chat(system, user, max_tokens=700, temperature=0.3):
     for name, base, model, keyvar in ENGINES:
         key = os.environ.get(keyvar, "").strip()
         if not key:
-            print("[ai] %s 키(%s) 없음 — 건너뜀" % (name, keyvar))
+            print("[ai] %s 키(%s) 없음. 건너뜀" % (name, keyvar))
             continue
         try:
             j = _post(base + "/chat/completions", key, {
@@ -63,7 +63,7 @@ def chat(system, user, max_tokens=700, temperature=0.3):
             if text:
                 print("[ai] %s(%s) 응답 %d자" % (name, model, len(text)))
                 return text, name
-            print("[ai] %s 빈 응답 — 폴백" % name)
+            print("[ai] %s 빈 응답. 폴백" % name)
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")[:200]
             print("[ai] %s HTTP %s: %s" % (name, e.code, body))
