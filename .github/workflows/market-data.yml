@@ -1,0 +1,22 @@
+name: Market data (tickers)
+
+# 현재 dry-run(출력만) — 쓰기 경로(MARKET_WEBAPP_URL) 준비되면 --dry 제거 + cron 활성화.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 22 * * 1-5"   # 평일, KST 07:00
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Collect ticker briefings (dry-run)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DATA_GO_DEEPSEEK }}
+          GEMINI_API_KEY: ${{ secrets.DATA_GO_GEMINI }}
+          MARKET_CONFIG_CSV: ${{ secrets.MARKET_CONFIG_CSV }}   # 종목설정 published CSV (없으면 시드)
+          MARKET_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}   # 없으면 dry-run
+          MARKET_WEBAPP_TOKEN: ${{ secrets.MARKET_WEBAPP_TOKEN }}
+        run: python3 scripts/fetch_market.py --dry --limit=2
