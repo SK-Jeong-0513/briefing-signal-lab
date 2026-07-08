@@ -294,6 +294,7 @@
       var d = marketState.daily.filter(function (o) { return mktCol(o, ["제목", "title"]); });
       dh.innerHTML = d.length ? d.map(function (o) {
         var src = mktCol(o, ["출처url", "출처", "source"]);
+        if (src && !/^https?:\/\//i.test(src)) src = "";
         var srcLink = src ? ' · <a href="' + src + '" target="_blank" rel="noopener">' + t(M.source) + "</a>" : "";
         return '<article class="mkt-sig">' +
           '<h3 class="mkt-sig__title">' + mktCol(o, ["제목", "title"]) + "</h3>" +
@@ -307,6 +308,7 @@
       var tk = marketState.tickers.filter(function (o) { return mktCol(o, ["이름", "name", "티커", "ticker"]); });
       th.innerHTML = tk.length ? tk.map(function (o) {
         var src = mktCol(o, ["출처url", "출처", "source"]);
+        if (src && !/^https?:\/\//i.test(src)) src = "";
         var srcLink = src ? '<a class="lib__more" href="' + src + '" target="_blank" rel="noopener">' + t(M.source) + " →</a>" : "";
         var basis = mktCol(o, ["근거"]);
         return '<div class="lib-card">' +
