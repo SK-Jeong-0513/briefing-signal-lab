@@ -1,0 +1,18 @@
+name: Market AI test
+
+# 수동 실행 전용 — AI 키(DeepSeek/Gemini) + 엔진 + §6 린트가 붙는지 검증.
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run AI engine test (stdlib only)
+        env:
+          # 사용자 시크릿 이름 → 코드가 읽는 내부 이름으로 매핑
+          DEEPSEEK_API_KEY: ${{ secrets.DATA_GO_DEEPSEEK }}
+          GEMINI_API_KEY: ${{ secrets.DATA_GO_GEMINI }}
+        run: python3 scripts/lib/ai.py --test
