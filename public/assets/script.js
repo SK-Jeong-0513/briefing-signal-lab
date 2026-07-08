@@ -306,6 +306,11 @@
     var th = document.querySelector("[data-market-tickers]");
     if (th) {
       var tk = marketState.tickers.filter(function (o) { return mktCol(o, ["이름", "name", "티커", "ticker"]); });
+      var byT = {};  // 종목별 최신 1건만(마지막 등장=최신)
+      tk.forEach(function (o) { byT[mktCol(o, ["티커", "ticker"])] = o; });
+      tk = Object.keys(byT).map(function (k) { return byT[k]; }).sort(function (a, b) {
+        return (mktCol(b, ["날짜", "date"]) || "").localeCompare(mktCol(a, ["날짜", "date"]) || "");
+      });
       th.innerHTML = tk.length ? tk.map(function (o) {
         var src = mktCol(o, ["출처url", "출처", "source"]);
         if (src && !/^https?:\/\//i.test(src)) src = "";
