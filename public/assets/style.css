@@ -252,6 +252,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .mkt-sig__line { color: var(--muted); font-size: 0.9375rem; line-height: 1.5; margin-top: 4px; }
 .mkt-sig__meta { font-size: 0.8125rem; color: var(--muted); margin-top: 6px; }
 .mkt-sig__meta a { color: var(--primary); }
+.mkt-cattabs { display: flex; flex-wrap: wrap; gap: var(--s-sm); }
 
 /* ── 기술 페이지: 인트로 + 유료 키워드 칩 ─────────────── */
 .page-intro { max-width: 62ch; }

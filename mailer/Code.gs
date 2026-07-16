@@ -8,6 +8,11 @@
  *   CFG의 SALT 교체·탭 이름 확인 → 웹앱 배포→WEBAPP_URL → sendWeekly 실행(TEST_MODE=true=나에게만).
  * [발송] sendWeekly(). [매주] 각 CATS[].issues만 갱신(사이트 content/*.js 무료 부분과 동일).
  * [개인정보] 이메일은 링크에 넣지 않음(해시 토큰만). 수신거부 필수.
+ *
+ * [일일 시황 메일 — Stage 4] sendDailyMarket(): 텔레그램 파이프가 '시장' 스프레드시트의
+ *   시장-일일 탭에 적재한 그날 경제/금융/기술 시황을 동의한 전체 구독자에게 아침 1회 발송.
+ *   시장 데이터는 별도 스프레드시트라 CFG.MARKET_SHEET_ID로 openById 읽기.
+ *   설치: CFG.MARKET_SHEET_ID 채우기 → createDailyTrigger() 1회 실행(매일 08:00 KST).
  */
 
 // ===== CONFIG — 여기만 수정 =====
@@ -25,6 +30,12 @@ const CFG = {
   RESP_COL: { email: "이메일 주소", consent: "메일 수신 동의", keywords: "관심 키워드" },
   PREF_COL: { email: "이메일", domains: "관심 분야", status: "상태", updated: "갱신" },
   CONSENT_TRUE_INCLUDES: "동의",
+  // 일일 시황 메일(Stage 4) — '시장' 스프레드시트는 구독자 시트와 다름
+  MARKET_SHEET_ID: "",              // '시장' 스프레드시트 ID(시트 URL의 /d/<여기>/edit)
+  MARKET_TAB: "시장-일일",
+  MARKET_BODY_TAB: "시장-본문",       // 텔레그램 상세 요약(날짜·시간대·본문)
+  DAILY_CATS: ["경제", "금융", "기술"],   // 메일에 담을 순서
+  DAILY_SUBJECT: "[일일 시황]",       // 뒤에 날짜가 붙음
 };
 
 // ===== 카테고리 정의 + 이번 주 무료 콘텐츠(KO). 매주 issues만 교체. =====
@@ -273,6 +284,174 @@ function plain_(perCat, kw) {
   return lines.join("\n");
 }
 function esc_(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+// ===== 일일 시황 메일 (Stage 4) =====
+// '시장' 스프레드시트(구독자 시트와 별개)의 시장-일일 탭을 openById로 읽는다.
+function ymd_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, "Asia/Seoul", "yyyy-MM-dd");
+  return String(v || "").trim().slice(0, 10);
+}
+function marketRows_() {
+  if (!CFG.MARKET_SHEET_ID) throw new Error("CFG.MARKET_SHEET_ID를 채우세요('시장' 스프레드시트 ID).");
+  var sh = SpreadsheetApp.openById(CFG.MARKET_SHEET_ID).getSheetByName(CFG.MARKET_TAB);
+  if (!sh) throw new Error("시장 탭 '" + CFG.MARKET_TAB + "'을(를) 찾을 수 없습니다.");
+  var values = sh.getDataRange().getValues();
+  var H = (values[0] || []).map(function (h) { return String(h).trim(); });
+  var iDt = H.indexOf("날짜"), iCat = H.indexOf("분류"), iTi = H.indexOf("제목"), iLn = H.indexOf("한줄"), iSrc = H.indexOf("출처URL");
+  if (iTi < 0 || iLn < 0) throw new Error("시장-일일 헤더에 '제목'/'한줄'이 필요합니다.");
+  var out = [];
+  for (var r = 1; r < values.length; r++) {
+    var c = values[r];
+    out.push({
+      date: ymd_(c[iDt]),
+      cat: iCat >= 0 ? String(c[iCat] || "").trim() : "",
+      title: String(c[iTi] || "").trim(),
+      line: String(c[iLn] || "").trim(),
+      src: iSrc >= 0 ? String(c[iSrc] || "").trim() : "",
+    });
+  }
+  return out;
+}
+// 그날 시장-일일 행을 경제/금융/기술 순으로 그룹핑. 없으면 [].
+function dailyGroups_() {
+  var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+  var rows = marketRows_().filter(function (o) { return o.date === today && o.title; });
+  var groups = [];
+  CFG.DAILY_CATS.forEach(function (cat) {
+    var items = rows.filter(function (o) { return o.cat === cat; });
+    if (items.length) groups.push({ label: cat, items: items });
+  });
+  // 분류가 하나도 안 채워진 레거시 시트면 카테고리 없이 전체를 한 그룹으로.
+  if (!groups.length && rows.length) groups.push({ label: "", items: rows });
+  return { today: today, groups: groups };
+}
+// 그날 '장전' 상세 본문(텔레그램 요약, §6 마스킹됨). 없으면 "".
+function marketBody_() {
+  if (!CFG.MARKET_SHEET_ID) return "";
+  var sh = SpreadsheetApp.openById(CFG.MARKET_SHEET_ID).getSheetByName(CFG.MARKET_BODY_TAB);
+  if (!sh) return "";
+  var values = sh.getDataRange().getValues();
+  var H = (values[0] || []).map(function (h) { return String(h).trim(); });
+  var iDt = H.indexOf("날짜"), iPd = H.indexOf("시간대"), iBd = H.indexOf("본문");
+  if (iBd < 0) return "";
+  var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+  var body = "";
+  for (var r = 1; r < values.length; r++) {
+    var c = values[r];
+    if (ymd_(c[iDt]) === today && (iPd < 0 || String(c[iPd]).trim() === "장전")) {
+      body = String(c[iBd] || "");  // 마지막(최신) 장전 본문
+    }
+  }
+  return body;
+}
+function boldMd_(s) { return s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>"); }
+// 마크다운풍 상세 본문 → 이메일 HTML(헤더/볼드/줄바꿈).
+function renderBody_(text) {
+  if (!text || !text.trim()) return "";
+  var lines = text.split(/\r?\n/).map(function (raw) {
+    var line = raw.trim();
+    if (!line || line === "---") return '<div style="height:6px"></div>';
+    if (/^#{1,6}\s/.test(line)) {
+      return '<div style="font-size:13px;font-weight:700;color:' + C.text + ';margin:14px 0 4px">' +
+        boldMd_(esc_(line.replace(/^#{1,6}\s*/, ""))) + "</div>";
+    }
+    return '<div style="font-size:13px;color:' + C.text + ';line-height:1.6;margin:2px 0">' + boldMd_(esc_(line)) + "</div>";
+  }).join("");
+  return '<div style="margin-top:8px;padding-top:16px;border-top:1px solid ' + C.border + '">' +
+    '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.muted + ';padding-left:8px;margin:0 0 10px">상세 브리핑</div>' +
+    lines + "</div>";
+}
+// 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.
+function unsubSet_() {
+  var set = {};
+  CATS.forEach(function (c) {
+    var m = prefMap_(c.prefSheet);
+    Object.keys(m).forEach(function (em) { if (m[em].status === "수신거부") set[em] = 1; });
+  });
+  return set;
+}
+function sendDailyMarket() {
+  var dg = dailyGroups_();
+  if (!dg.groups.length) { Logger.log("[일일] " + dg.today + " 시장-일일 행 없음 — 발송 생략"); return; }
+
+  var rt = tableOf_(CFG.RESP_SHEET);
+  var iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent);
+  if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
+  var unsub = unsubSet_();
+  var subject = CFG.DAILY_SUBJECT + " " + dg.today;
+  var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
+
+  var sent = 0, skipped = 0, failed = 0, seen = {};
+  for (var i = 0; i < rt.rows.length; i++) {
+    var cells = rt.rows[i].cells;
+    var email = String(cells[iE] || "").trim().toLowerCase();
+    if (!email || email.indexOf("@") < 0) { skipped++; continue; }
+    if (seen[email]) continue; seen[email] = 1;
+    if (!consented_(cells[iC]) || unsub[email]) { skipped++; continue; }
+
+    var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
+    try {
+      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail) });
+      sent++;
+      if (CFG.TEST_MODE) break;
+    } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
+  }
+  Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "[일일 " + dg.today + "] 발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
+}
+// 매일 08:00 KST 트리거(장전 파이프가 07:00 시트 기록 후). 1회 실행하면 됨.
+function createDailyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (tr) {
+    if (tr.getHandlerFunction() === "sendDailyMarket") ScriptApp.deleteTrigger(tr);
+  });
+  ScriptApp.newTrigger("sendDailyMarket").timeBased().atHour(8).everyDays(1).inTimezone("Asia/Seoul").create();
+  Logger.log("일일 트리거 생성: 매일 08:00 KST sendDailyMarket");
+}
+function dailyHtml_(email, dg, detail) {
+  var tok = token_(email);
+  var body = dg.groups.map(function (g) {
+    var sigs = g.items.map(function (o) {
+      var srcLink = /^https?:\/\//i.test(o.src) ? ' <a href="' + o.src + '" style="color:' + C.primary + ';text-decoration:none">출처</a>' : "";
+      return '<tr><td style="padding:8px 0;border-top:1px solid ' + C.border + '"><div style="font-size:14px;font-weight:600;color:' + C.text + '">' + esc_(o.title) + "</div>" +
+        '<div style="font-size:13px;color:' + C.muted + ';margin-top:2px">' + esc_(o.line) + srcLink + "</div></td></tr>";
+    }).join("");
+    var head = g.label ? '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.primary + ';padding-left:8px;margin:4px 0 8px">' + esc_(g.label) + " 시황</div>" : "";
+    return '<div style="margin:0 0 16px">' + head + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + sigs + "</table></div>";
+  }).join("");
+  var unsubLink = CFG.WEBAPP_URL ? link_(tok, "unsubscribe", "", "", "수신거부") : '<a href="mailto:' + CFG.OPERATOR_EMAIL + '?subject=' + encodeURIComponent("브리핑 수신거부") + '" style="color:' + C.muted + '">수신거부</a>';
+
+  return [
+    '<div style="margin:0;padding:0;background:' + C.canvas + '">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.canvas + '"><tr><td align="center" style="padding:24px 12px">',
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:' + C.surface + ';border:1px solid ' + C.border + ';border-radius:12px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:' + C.text + '">',
+    '<tr><td style="padding:20px 24px;border-bottom:1px solid ' + C.border + '">',
+      '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.primary + '">BRIEFING SIGNAL LAB · ' + esc_(dg.today) + " 장전</div>",
+      '<div style="font-size:20px;font-weight:700;margin-top:4px">일일 시황</div>',
+    "</td></tr>",
+    '<tr><td style="padding:20px 24px">', body, renderBody_(detail),
+      '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 4px"><tr><td style="border-radius:8px;background:' + C.primary + '">',
+        '<a href="' + CFG.BASE + 'market.html" style="display:inline-block;padding:12px 20px;font-size:14px;font-weight:600;color:#fff;text-decoration:none">시장 탭에서 전체 보기 →</a>',
+      "</td></tr></table>",
+    "</td></tr>",
+    '<tr><td style="padding:16px 24px;border-top:1px solid ' + C.border + ';font-size:12px;color:' + C.muted + ';line-height:1.6">',
+      "AI 자동 생성 · 정보 제공이지 투자 조언이 아닙니다. 종목·자산은 공개 출처 기반 관찰로만 명시하며 매수·매도·목표가를 권유하지 않습니다.<br>",
+      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a> &nbsp;·&nbsp; ' + unsubLink,
+    "</td></tr>",
+    "</table></td></tr></table></div>",
+  ].join("");
+}
+function dailyPlain_(dg, detail) {
+  var lines = ["일일 시황 (" + dg.today + " 장전)", ""];
+  dg.groups.forEach(function (g) {
+    if (g.label) lines.push("[" + g.label + "]");
+    g.items.forEach(function (o) { lines.push("- " + o.title + " : " + o.line); });
+    lines.push("");
+  });
+  if (detail && detail.trim()) {
+    lines.push("── 상세 브리핑 ──", "", detail.trim(), "");
+  }
+  lines.push("시장 탭: " + CFG.BASE + "market.html", "AI 자동 생성 · 정보 제공, 투자 조언 아님.");
+  return lines.join("\n");
+}
 
 // ===== 링크 처리(웹앱) — 카테고리별 선호도 시트에 반영 =====
 function doGet(e) {

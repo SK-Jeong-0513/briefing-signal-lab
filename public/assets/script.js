@@ -270,7 +270,7 @@
   }
 
   /* ── 시장(주식) 탭: 구글 시트(CSV) — 캘린더 파서 재사용 ─── */
-  var marketState = { daily: [], tickers: [] };
+  var marketState = { daily: [], tickers: [], cat: "경제", bound: false };
 
   function mktRows(text) {
     var rows = calParseCSV(text);
@@ -289,9 +289,36 @@
   function renderMarket() {
     if (!document.querySelector("[data-market]")) return;
     var M = UI.marketPage;
+    // 일일 시황 카테고리 탭(경제/금융/기술) — 분류 컬럼으로 필터
+    var CATS = [
+      { key: "경제", label: M.catEcon },
+      { key: "금융", label: M.catFin },
+      { key: "기술", label: M.catTech },
+    ];
+    var ct = document.querySelector("[data-market-cattabs]");
+    if (ct) {
+      ct.innerHTML = CATS.map(function (c) {
+        return '<button type="button" class="tech-chip" data-market-cat="' + c.key +
+          '" aria-pressed="' + (marketState.cat === c.key) + '">' + t(c.label) + "</button>";
+      }).join("");
+      if (!marketState.bound) {
+        marketState.bound = true;
+        ct.addEventListener("click", function (e) {
+          var el = e.target.closest("[data-market-cat]");
+          if (!el || !ct.contains(el)) return;
+          marketState.cat = el.getAttribute("data-market-cat");
+          renderMarket();
+        });
+      }
+    }
     var dh = document.querySelector("[data-market-daily]");
     if (dh) {
-      var d = marketState.daily.filter(function (o) { return mktCol(o, ["제목", "title"]); });
+      var all = marketState.daily.filter(function (o) { return mktCol(o, ["제목", "title"]); });
+      // 분류 컬럼이 있으면 활성 카테고리로 필터, 없으면(레거시 행) 전부 표시
+      var hasCat = all.some(function (o) { return mktCol(o, ["분류", "category"]); });
+      var d = (hasCat ? all.filter(function (o) { return mktCol(o, ["분류", "category"]) === marketState.cat; }) : all)
+        .sort(function (a, b) { return (mktCol(b, ["날짜", "date"]) || "").localeCompare(mktCol(a, ["날짜", "date"]) || ""); })
+        .slice(0, 15);  // 최신순 + 상위 15개(무한 누적 방지)
       dh.innerHTML = d.length ? d.map(function (o) {
         var src = mktCol(o, ["출처url", "출처", "source"]);
         if (src && !/^https?:\/\//i.test(src)) src = "";
@@ -454,6 +481,7 @@
 
   /* ── 주간 브리핑 렌더 — tech/finance=분야 모델, economy=단일 다이제스트. 공용. ── */
   var weeklyState = {};
+  var weeklySheet = {};  /* ⑤: 도메인id -> {week, signals[]} (approved 시트행). 비면 정적(TECH_WEEKLY) 유지 */
   function weeklyCfgs() {
     var cfgs = [];
     if (typeof TECH_DOMAINS !== "undefined")
@@ -467,6 +495,16 @@
   function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
   function weeklyFirstLive(cfg) { var d = (cfg.domains || []).filter(function (x) { return x.status === "live"; })[0]; return d ? d.id : null; }
   function weeklyIssueOf(cfg, id) { return (cfg.weekly || []).filter(function (w) { return w.domain === id; })[0] || null; }
+  /* ⑤: 정적 이슈(헤드라이너 보유)를 base로, approved 시트 신호가 있으면 signals·week만 교체.
+   *    시트 비었거나 해당 도메인 승인행 없으면 정적 그대로(폴백). base가 없으면 override 안 함. */
+  function weeklyResolveIssue(cfg, id) {
+    var base = weeklyIssueOf(cfg, id), sh = weeklySheet[id];
+    if (!base || !sh || !sh.signals || !sh.signals.length) return base;
+    var merged = {}; for (var k in base) merged[k] = base[k];
+    merged.signals = sh.signals;
+    merged.week = { ko: sh.week, en: sh.week };
+    return merged;
+  }
   function weeklyMenuHtml(cfg) {
     var st = weeklyState[cfg.key], ui = cfg.ui;
     return cfg.domains.map(function (d) {
@@ -483,7 +521,7 @@
       return '<li class="sig"><div class="sig__main">' +
         '<span class="sig__title">' + sig.title[lang] + "</span>" +
         '<span class="sig__lede">' + sig.lede[lang] + "</span></div>" +
-        '<span class="tag">#' + sig.tag + "</span></li>";
+        (sig.tag ? '<span class="tag">#' + sig.tag + "</span>" : "") + "</li>";
     }).join("");
     var digest =
       '<h3 class="tech-sub">' + t(ui.digestHeading) + " · " + issue.signals.length + "</h3>" +
@@ -528,7 +566,7 @@
     if (st.domain === null) st.domain = weeklyFirstLive(cfg);
     var menu = document.querySelector(cfg.menuSel);
     if (menu) menu.innerHTML = weeklyMenuHtml(cfg);
-    var dom = weeklyDomainById(cfg, st.domain), issue = weeklyIssueOf(cfg, st.domain);
+    var dom = weeklyDomainById(cfg, st.domain), issue = weeklyResolveIssue(cfg, st.domain);
     host.innerHTML = (dom && issue)
       ? weeklyIssueHtml(cfg, issue, t(dom.label), t(dom.tagline))
       : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
@@ -539,7 +577,7 @@
         if (!el || !menu.contains(el)) return;
         st.domain = el.getAttribute("data-weekly-domain");
         menu.innerHTML = weeklyMenuHtml(cfg);
-        var d2 = weeklyDomainById(cfg, st.domain), i2 = weeklyIssueOf(cfg, st.domain);
+        var d2 = weeklyDomainById(cfg, st.domain), i2 = weeklyResolveIssue(cfg, st.domain);
         host.innerHTML = (d2 && i2)
           ? weeklyIssueHtml(cfg, i2, t(d2.label), t(d2.tagline))
           : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
@@ -547,6 +585,36 @@
     }
   }
   function renderAllWeekly() { weeklyCfgs().forEach(function (cfg) { renderWeekly(cfg); }); }
+  /* ⑤: '주간-초안' 시트 CSV에서 approved·signal 행만 읽어 도메인별 최신 발행주 신호 목록 구성.
+   *    mktRows(헤더 소문자 매핑) 재사용. 실패/공백이면 정적 유지. tag 컬럼 없음 → 칩 생략. */
+  function loadWeeklySheet() {
+    if (typeof WEEKLY_SHEET_CSV !== "string" || !WEEKLY_SHEET_CSV) return;
+    fetch(WEEKLY_SHEET_CSV).then(function (r) { return r.text(); }).then(function (txt) {
+      var rows = mktRows(txt), byDom = {};
+      rows.forEach(function (o) {
+        if ((o["status"] || "").toLowerCase() !== "approved") return;
+        if ((o["유형"] || o["type"] || "").toLowerCase() !== "signal") return;
+        var dom = (o["분야"] || o["domain"] || "").trim(); if (!dom) return;
+        var titleKo = (o["제목ko"] || "").trim(); if (!titleKo) return;
+        var week = (o["발행주"] || o["week"] || "").trim();
+        var sig = {
+          title: { ko: titleKo, en: (o["제목en"] || titleKo).trim() },
+          lede: { ko: (o["한줄ko"] || "").trim(), en: (o["한줄en"] || o["한줄ko"] || "").trim() },
+          tag: ""
+        };
+        (byDom[dom] = byDom[dom] || {})[week] = (byDom[dom][week] || []);
+        byDom[dom][week].push(sig);
+      });
+      var out = {};
+      Object.keys(byDom).forEach(function (dom) {
+        var weeks = Object.keys(byDom[dom]).sort();  // ISO주 문자열 정렬=시간순
+        var latest = weeks[weeks.length - 1];
+        out[dom] = { week: latest, signals: byDom[dom][latest] };
+      });
+      weeklySheet = out;
+      renderAllWeekly();
+    }).catch(function () { /* 실패 시 정적 유지 */ });
+  }
 
   /* ── 서재: 리포트 읽기(read.html) ─────────────────────── */
   var readState = { item: null, bodyHtml: null, error: null };
@@ -668,6 +736,7 @@
     loadReport();
     loadLibrary();
     loadMarket();
+    loadWeeklySheet();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });
