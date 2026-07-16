@@ -502,7 +502,9 @@
     if (!base || !sh || !sh.signals || !sh.signals.length) return base;
     var merged = {}; for (var k in base) merged[k] = base[k];
     merged.signals = sh.signals;
-    merged.week = { ko: sh.week, en: sh.week };
+    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");  // "2026-W29" → 보기 좋게
+    merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
+                     : { ko: sh.week, en: sh.week };
     return merged;
   }
   function weeklyMenuHtml(cfg) {
