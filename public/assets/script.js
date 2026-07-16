@@ -495,6 +495,19 @@
   function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
   function weeklyFirstLive(cfg) { var d = (cfg.domains || []).filter(function (x) { return x.status === "live"; })[0]; return d ? d.id : null; }
   function weeklyIssueOf(cfg, id) { return (cfg.weekly || []).filter(function (w) { return w.domain === id; })[0] || null; }
+  /* ISO 발행주 "2026-W29" → {ko:"2026년 29주 (7월 13일)", en:"2026 · Week 29 (Jul 13)"}.
+   *   괄호 안 날짜 = 그 ISO주의 월요일. 매칭 안 되면 원문 유지. */
+  function weeklyWeekLabel(w) {
+    var mw = /^(\d{4})-W(\d{2})$/.exec(w || "");
+    if (!mw) return { ko: w, en: w };
+    var y = parseInt(mw[1], 10), wk = parseInt(mw[2], 10);
+    var jan4 = new Date(Date.UTC(y, 0, 4)), dow = jan4.getUTCDay() || 7;  // 일=0→7
+    var mon = new Date(jan4);
+    mon.setUTCDate(jan4.getUTCDate() - (dow - 1) + (wk - 1) * 7);          // 해당 주 월요일
+    var d = mon.getUTCDate(), m = mon.getUTCMonth() + 1;
+    var en = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][mon.getUTCMonth()];
+    return { ko: y + "년 " + wk + "주 (" + m + "월 " + d + "일)", en: y + " · Week " + wk + " (" + en + " " + d + ")" };
+  }
   /* ⑤: 이슈 결정 우선순위 —
    *   시트 approved 신호 있으면: (정적 base 복제 or 새 이슈) + 시트 signals·week, 헤드라이너는 시트>정적.
    *   시트 없으면 정적 그대로(폴백). 둘 다 없으면 null(→ renderWeekly가 "준비 중" 표시). */
@@ -506,9 +519,7 @@
     merged.domain = id;
     merged.signals = sh.signals;
     if (sh.headliner) merged.headliner = sh.headliner;  // 시트 헤드라이너 우선(없으면 base 것 유지, base도 없으면 undefined=신호만)
-    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");   // "2026-W29" → 보기 좋게
-    merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
-                     : { ko: sh.week, en: sh.week };
+    merged.week = weeklyWeekLabel(sh.week);
     return merged;
   }
   /* single 모드(경제): 정적 단일 이슈에 cfg.sheetDomain(예: "macro") 승인 신호가 있으면 교체. */
@@ -518,9 +529,7 @@
     var merged = {}; for (var k in base) merged[k] = base[k];
     merged.signals = sh.signals;
     if (sh.headliner) merged.headliner = sh.headliner;
-    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");
-    merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
-                     : { ko: sh.week, en: sh.week };
+    merged.week = weeklyWeekLabel(sh.week);
     return merged;
   }
   function weeklyMenuHtml(cfg) {

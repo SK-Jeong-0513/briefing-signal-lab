@@ -118,6 +118,26 @@ DOMAINS = [
             ("gnews", "AI capex 반도체 데이터센터 수혜"),
         ],
     },
+    {
+        "id": "bond",
+        "label": {"ko": "채권·금리 시장", "en": "Rates & Credit"},
+        "hint": "국채 금리·크레딧 스프레드·수익률곡선 등 채권·금리 시장의 국면 변화를 시사하는 항목",
+        "feeds": [
+            ("gnews", "국고채 금리 수익률 채권시장"),
+            ("gnews", "미국 국채 장단기 금리 스프레드"),
+            ("gnews", "회사채 크레딧 신용 스프레드"),
+        ],
+    },
+    {
+        "id": "commodity",
+        "label": {"ko": "원자재·대체", "en": "Commodities & Alts"},
+        "hint": "에너지·금속·원자재 가격·수급 등 원자재/대체자산의 국면 변화를 시사하는 항목",
+        "feeds": [
+            ("gnews", "국제유가 원유 에너지 가격"),
+            ("gnews", "구리 금 은 금속 원자재 가격"),
+            ("gnews", "천연가스 LNG 원자재 수급"),
+        ],
+    },
     # ── 경제(economy) — 단일 매크로 다이제스트. 분야 id="macro"(site.js economy sheetDomain) ──
     {
         "id": "macro",
