@@ -495,14 +495,18 @@
   function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
   function weeklyFirstLive(cfg) { var d = (cfg.domains || []).filter(function (x) { return x.status === "live"; })[0]; return d ? d.id : null; }
   function weeklyIssueOf(cfg, id) { return (cfg.weekly || []).filter(function (w) { return w.domain === id; })[0] || null; }
-  /* ⑤: 정적 이슈(헤드라이너 보유)를 base로, approved 시트 신호가 있으면 signals·week만 교체.
-   *    시트 비었거나 해당 도메인 승인행 없으면 정적 그대로(폴백). base가 없으면 override 안 함. */
+  /* ⑤: 이슈 결정 우선순위 —
+   *   시트 approved 신호 있으면: (정적 base 복제 or 새 이슈) + 시트 signals·week, 헤드라이너는 시트>정적.
+   *   시트 없으면 정적 그대로(폴백). 둘 다 없으면 null(→ renderWeekly가 "준비 중" 표시). */
   function weeklyResolveIssue(cfg, id) {
     var base = weeklyIssueOf(cfg, id), sh = weeklySheet[id];
-    if (!base || !sh || !sh.signals || !sh.signals.length) return base;
-    var merged = {}; for (var k in base) merged[k] = base[k];
+    var hasSheet = sh && sh.signals && sh.signals.length;
+    if (!hasSheet) return base;                       // 시트 없음 → 정적(또는 null)
+    var merged = {}; if (base) for (var k in base) merged[k] = base[k];
+    merged.domain = id;
     merged.signals = sh.signals;
-    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");  // "2026-W29" → 보기 좋게
+    if (sh.headliner) merged.headliner = sh.headliner;  // 시트 헤드라이너 우선(없으면 base 것 유지, base도 없으면 undefined=신호만)
+    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");   // "2026-W29" → 보기 좋게
     merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
                      : { ko: sh.week, en: sh.week };
     return merged;
@@ -529,31 +533,42 @@
       '<h3 class="tech-sub">' + t(ui.digestHeading) + " · " + issue.signals.length + "</h3>" +
       '<ul class="sig-list">' + sigs + "</ul>" +
       '<div class="card__locked">' + lockSvg() + t(ui.signalLock) + "</div>";
-    var h = issue.headliner;
-    var summary = h.summary[lang].map(function (l) { return "<li>" + l + "</li>"; }).join("");
-    var tags = h.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
-    var srcNames = h.sources.map(function (x) { return x.name; }).join(" · ");
-    var head =
-      '<article class="card headliner">' +
-        '<div class="card__top"><span class="badge-head">' + t(ui.headBadge) + "</span>" +
-          '<span class="badge-sample">' + t(cfg.badge) + "</span></div>" +
-        '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' +
-        '<h3 class="card__title">' + h.title[lang] + "</h3>" +
-        '<ul class="card__summary">' + summary + "</ul>" +
-        '<span class="disclaimer-inline">' + discSvg() + (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>" +
-        '<div class="card__meta">' + tags + "</div>" +
-        '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
-        '<div class="deep-lock">' +
-          '<div class="deep-lock__head">' + lockSvg() + t(ui.deepLockTitle) + "</div>" +
-          '<div class="deep-row"><span class="deep-row__k">' + t(ui.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" +
-          '<div class="deep-row"><span class="deep-row__k">' + t(ui.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" +
-          '<p class="deep-lock__desc">' + t(ui.deepLockDesc) + "</p>" +
-        "</div>" +
-      "</article>";
+    var h = issue.headliner, head = "";
+    if (h) {
+      var summary = ((h.summary && h.summary[lang]) || []).map(function (l) { return "<li>" + l + "</li>"; }).join("");
+      var tags = (h.tags || []).map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
+      var srcNames = (h.sources || []).map(function (x) { return x.name; }).join(" · ");
+      var sparkHtml = h.spark ? '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' : "";
+      var watchHtml = (h.watch && h.watch[lang]) ? '<div class="deep-row"><span class="deep-row__k">' + t(ui.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" : "";
+      var vcHtml = (h.valueChain && h.valueChain[lang]) ? '<div class="deep-row"><span class="deep-row__k">' + t(ui.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" : "";
+      head =
+        '<article class="card headliner">' +
+          '<div class="card__top"><span class="badge-head">' + t(ui.headBadge) + "</span>" +
+            '<span class="badge-sample">' + t(cfg.badge) + "</span></div>" +
+          sparkHtml +
+          '<h3 class="card__title">' + h.title[lang] + "</h3>" +
+          '<ul class="card__summary">' + summary + "</ul>" +
+          '<span class="disclaimer-inline">' + discSvg() + (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>" +
+          (tags ? '<div class="card__meta">' + tags + "</div>" : "") +
+          (srcNames ? '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" : "") +
+          '<div class="deep-lock">' +
+            '<div class="deep-lock__head">' + lockSvg() + t(ui.deepLockTitle) + "</div>" +
+            vcHtml + watchHtml +
+            '<p class="deep-lock__desc">' + t(ui.deepLockDesc) + "</p>" +
+          "</div>" +
+        "</article>";
+    }
     var head2 = '<div class="tech-issue__head"><span class="chip">' + headLabel + "</span>" +
       '<span class="tech-issue__week">' + t(issue.week) + " " + t(ui.weekSuffix) + "</span></div>";
     var tl = tagline ? '<p class="tech-tagline section-sub">' + tagline + "</p>" : "";
     return '<div class="tech-issue">' + head2 + tl + digest + head + "</div>";
+  }
+  /* 선택 도메인에 이슈가 없을 때: live면 "준비 중"(개방됐으나 승인 신호 없음), 그 외 soonBody */
+  function weeklyEmptyHtml(cfg, dom) {
+    var msg = (dom && dom.status === "live")
+      ? (lang === "ko" ? "이번 주 신호를 준비 중입니다." : "This week's signals are coming soon.")
+      : t(cfg.ui.soonBody);
+    return '<p class="section-sub" style="margin-top:var(--s-xl)">' + msg + "</p>";
   }
   function renderWeekly(cfg) {
     var host = document.querySelector(cfg.hostSel);
@@ -571,7 +586,7 @@
     var dom = weeklyDomainById(cfg, st.domain), issue = weeklyResolveIssue(cfg, st.domain);
     host.innerHTML = (dom && issue)
       ? weeklyIssueHtml(cfg, issue, t(dom.label), t(dom.tagline))
-      : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
+      : weeklyEmptyHtml(cfg, dom);
     if (menu && !st.bound) {
       st.bound = true;
       menu.addEventListener("click", function (e) {
@@ -582,7 +597,7 @@
         var d2 = weeklyDomainById(cfg, st.domain), i2 = weeklyResolveIssue(cfg, st.domain);
         host.innerHTML = (d2 && i2)
           ? weeklyIssueHtml(cfg, i2, t(d2.label), t(d2.tagline))
-          : '<p class="section-sub" style="margin-top:var(--s-xl)">' + t(cfg.ui.soonBody) + "</p>";
+          : weeklyEmptyHtml(cfg, d2);
       });
     }
   }
@@ -595,23 +610,28 @@
       var rows = mktRows(txt), byDom = {};
       rows.forEach(function (o) {
         if ((o["status"] || "").toLowerCase() !== "approved") return;
-        if ((o["유형"] || o["type"] || "").toLowerCase() !== "signal") return;
         var dom = (o["분야"] || o["domain"] || "").trim(); if (!dom) return;
         var titleKo = (o["제목ko"] || "").trim(); if (!titleKo) return;
         var week = (o["발행주"] || o["week"] || "").trim();
-        var sig = {
-          title: { ko: titleKo, en: (o["제목en"] || titleKo).trim() },
-          lede: { ko: (o["한줄ko"] || "").trim(), en: (o["한줄en"] || o["한줄ko"] || "").trim() },
-          tag: ""
-        };
-        (byDom[dom] = byDom[dom] || {})[week] = (byDom[dom][week] || []);
-        byDom[dom][week].push(sig);
+        var titleEn = (o["제목en"] || titleKo).trim();
+        var lineKo = (o["한줄ko"] || "").trim(), lineEn = (o["한줄en"] || o["한줄ko"] || "").trim();
+        var bucket = (byDom[dom] = byDom[dom] || {})[week] = (byDom[dom][week] || { signals: [], headliner: null });
+        if ((o["유형"] || o["type"] || "").toLowerCase() === "headliner") {
+          // 시트 헤드라이너(간소): 제목·요약(한줄)·밸류체인만. spark/watch/sources 없음.
+          if (!bucket.headliner) bucket.headliner = {
+            title: { ko: titleKo, en: titleEn },
+            summary: { ko: [lineKo], en: [lineEn] },
+            valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() },
+          };
+        } else {  // 기본 = signal
+          bucket.signals.push({ title: { ko: titleKo, en: titleEn }, lede: { ko: lineKo, en: lineEn }, tag: "" });
+        }
       });
       var out = {};
       Object.keys(byDom).forEach(function (dom) {
         var weeks = Object.keys(byDom[dom]).sort();  // ISO주 문자열 정렬=시간순
-        var latest = weeks[weeks.length - 1];
-        out[dom] = { week: latest, signals: byDom[dom][latest] };
+        var b = byDom[dom][weeks[weeks.length - 1]];
+        out[dom] = { week: weeks[weeks.length - 1], signals: b.signals, headliner: b.headliner };
       });
       weeklySheet = out;
       renderAllWeekly();
