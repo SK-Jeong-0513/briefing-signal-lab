@@ -69,6 +69,34 @@ DOMAINS = [
             ("gnews", "HBM SK하이닉스 삼성 마이크론 공급"),
         ],
     },
+    {
+        "id": "power",
+        "label": {"ko": "전력·에너지", "en": "Power & Energy"},
+        "feeds": [
+            ("gnews", "AI 데이터센터 전력 수요 전력망"),
+            ("gnews", "SMR 소형모듈원전 원전 전력"),
+            ("gnews", "데이터센터 냉각 액침냉각"),
+            ("gnews", "전력 인프라 송전 변압기 그리드"),
+        ],
+    },
+    {
+        "id": "space",
+        "label": {"ko": "우주·방산", "en": "Space & Defense"},
+        "feeds": [
+            ("gnews", "저궤도 위성통신 LEO 위성"),
+            ("gnews", "우주 발사체 로켓 발사"),
+            ("gnews", "방산 전자 레이더 무기체계 수출"),
+        ],
+    },
+    {
+        "id": "bio",
+        "label": {"ko": "바이오", "en": "Bio"},
+        "feeds": [
+            ("gnews", "바이오 임상시험 신약 개발"),
+            ("gnews", "AI 신약개발 디지털치료제"),
+            ("gnews", "바이오시밀러 CDMO 위탁생산"),
+        ],
+    },
 ]
 
 

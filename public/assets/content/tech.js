@@ -39,19 +39,19 @@ const TECH_DOMAINS = [
   {
     id: "power",
     label: { ko: "전력·에너지", en: "Power & Energy" },
-    status: "soon",
+    status: "live",
     tagline: { ko: "AI 전력수요·원전·SMR·전력망·냉각", en: "AI power demand, nuclear, SMR, grid, cooling" },
   },
   {
     id: "space",
     label: { ko: "우주·방산", en: "Space & Defense" },
-    status: "soon",
+    status: "live",
     tagline: { ko: "LEO 위성통신·발사·방산 전자", en: "LEO comms, launch, defense electronics" },
   },
   {
     id: "bio",
     label: { ko: "바이오", en: "Bio" },
-    status: "soon",
+    status: "live",
     tagline: { ko: "임상·플랫폼·헬스테크", en: "Clinical, platforms, healthtech" },
   },
 ];
