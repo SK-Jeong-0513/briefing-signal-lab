@@ -6,6 +6,8 @@ agents/
 .review/
 .gstack/
 *.bak
+__pycache__/
+*.pyc
 .env
 .env.*
 .handoff/
