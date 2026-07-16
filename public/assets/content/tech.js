@@ -10,6 +10,12 @@
  * 탭 작업 = TECH_WEEKLY에 분야별 최신 이슈 추가/교체. 랜딩 티저는 헤드라이너에서 자동 파생.
  */
 
+/* ⑤ 발행: '주간-초안' 탭의 "웹에 게시(CSV)" URL. 비우면 정적(아래 TECH_WEEKLY) 유지.
+ * 채우면 status=approved · 유형=signal 행이 도메인별 최신 발행주로 '이번 주 신호' 목록을 대체.
+ * 헤드라이너 딥다이브는 그대로 정적(TECH_WEEKLY)에서 사람이 유지. (Phase 1: 시트 선별은 임시,
+ * 웹서비스 이전 시 관리자 화면으로 대체될 별개 작업.) */
+const WEEKLY_SHEET_CSV = "";
+
 /* ── 분야(밸류체인 테마) 메뉴: live=가동, soon=곧 공개(로드맵) ── */
 const TECH_DOMAINS = [
   {
@@ -55,42 +61,42 @@ const TECH_DOMAINS = [
  */
 const TECH_WEEKLY = [
   {
-    id: "ai-infra-2026-W27",
+    id: "ai-infra-2026-W29",
     domain: "ai-infra",
-    week: { ko: "2026년 7월 1주", en: "Jul, Week 1 · 2026" },
-    date: "2026-07-02",
+    week: { ko: "2026년 7월 3주", en: "Jul, Week 3 · 2026" },
+    date: "2026-07-16",
     signals: [
       {
-        title: { ko: "하이퍼스케일러 capex 상향, '부품 가격'을 명시", en: "Hyperscaler capex revised up — 'component pricing' cited" },
+        title: { ko: "삼성, 데이터센터 '빛 전쟁' 참전 — 실리콘 포토닉스 파운드리 공식화", en: "Samsung enters the datacenter 'light war' — silicon-photonics foundry formalized" },
         lede: {
-          ko: "메타가 2026 capex 가이던스를 상향하며 부품 가격·데이터센터 비용을 이유로 들었다. 총액보다 이 코멘트가 밸류체인 압력 신호.",
-          en: "Meta raised 2026 capex guidance citing component pricing and datacenter costs — a value-chain pressure signal beyond the headline total.",
+          ko: "실리콘 포토닉스 파운드리 공식화는 AI 데이터센터 광연결 병목 해소를 겨눈 밸류체인 이동 신호.",
+          en: "A formal silicon-photonics foundry signals a value-chain shift toward easing optical-interconnect bottlenecks in AI datacenters.",
         },
-        tag: "capex",
+        tag: "실리콘포토닉스",
       },
       {
-        title: { ko: "CPO(광집적), 상용화 검증 국면 진입", en: "Co-packaged optics enters commercial validation" },
+        title: { ko: "GPU보다 전력이 부족하다 — AI 데이터센터 전력 확보 4대 전선", en: "Power scarcer than GPUs — four fronts in the AI-datacenter power race" },
         lede: {
-          ko: "엔비디아 실리콘 포토닉스 스위치와 브로드컴 Bailly가 2026–27 첫 대규모 검증에 들어간다. 전력 효율이 채택을 가른다.",
-          en: "Nvidia's silicon-photonics switches and Broadcom's Bailly enter first large-scale validation in 2026–27; power efficiency decides adoption.",
-        },
-        tag: "CPO",
-      },
-      {
-        title: { ko: "병목은 칩이 아니라 전력·냉각으로", en: "The bottleneck shifts from chips to power and cooling" },
-        lede: {
-          ko: "capex는 급증하지만 전력·냉각이 실제 제약으로 지목되며 AI 인프라 밸류체인이 전력 쪽으로 확장된다.",
-          en: "Even as capex surges, power and cooling are cited as the real constraint, extending the value chain toward power.",
+          ko: "전력 부족이 GPU 공급을 제치고 AI 인프라의 실제 병목으로 부상, 전력 확보 경쟁이 심화된다.",
+          en: "Power shortage overtakes GPU supply as the real AI-infra bottleneck, intensifying the scramble for power.",
         },
         tag: "전력",
       },
       {
-        title: { ko: "하이퍼스케일러 자체 칩(ASIC) 가속", en: "Hyperscaler custom silicon accelerates" },
+        title: { ko: "ARM 기반 CPU, 2029년 AI ASIC 서버 90% 전망 — x86 구도 흔들리나", en: "ARM CPUs projected to 90% of AI ASIC servers by 2029 — x86 dominance in question" },
         lede: {
-          ko: "아마존 자체 칩 사업이 연매출 런레이트 규모로 올라서며 범용 가속기 외 자체 실리콘 축이 커진다.",
-          en: "Amazon's in-house chip business scales to a multibillion revenue run-rate, growing the custom-silicon axis alongside merchant accelerators.",
+          ko: "ARM CPU의 AI 서버 점유 급증 전망은 x86 대비 아키텍처 전환 구조 변화 관찰.",
+          en: "A projected surge in ARM's AI-server share points to an architectural shift away from x86.",
         },
         tag: "자체칩",
+      },
+      {
+        title: { ko: "포토니솔, 광 아이솔레이터 칩 개발 — 실리콘 포토닉스 부품 병목 겨냥", en: "Photonisol develops an optical-isolator chip — targeting a silicon-photonics component bottleneck" },
+        lede: {
+          ko: "광 아이솔레이터 칩 개발은 실리콘 포토닉스 내 핵심 부품 병목 해소 관찰.",
+          en: "An optical-isolator chip is observed as easing a key component bottleneck within silicon photonics.",
+        },
+        tag: "광부품",
       },
     ],
     headliner: {
@@ -128,42 +134,42 @@ const TECH_WEEKLY = [
     },
   },
   {
-    id: "semicon-2026-W27",
+    id: "semicon-2026-W29",
     domain: "semicon",
-    week: { ko: "2026년 7월 1주", en: "Jul, Week 1 · 2026" },
-    date: "2026-07-01",
+    week: { ko: "2026년 7월 3주", en: "Jul, Week 3 · 2026" },
+    date: "2026-07-15",
     signals: [
       {
-        title: { ko: "HBM4, 본딩 방식이 세대 경쟁축으로", en: "HBM4: the bonding method becomes the competitive axis" },
+        title: { ko: "차세대 HBM 게임체인저 — K-패키징, '하이브리드 본딩'에 소매 걷다", en: "Next-gen HBM game-changer — Korean packaging leaders move on hybrid bonding" },
         lede: {
-          ko: "삼성은 하이브리드 본딩(범프리스 Cu-Cu)을 앞세우고, SK하이닉스는 MR-MUF 16단에 TSMC 로직 다이를 결합한다.",
-          en: "Samsung leads with hybrid bonding (bumpless Cu-Cu); SK hynix pairs MR-MUF 16-high with a TSMC logic die.",
+          ko: "HBM4에 도입될 하이브리드 본딩에 국내 패키징 업체들이 본격 진출, 기존 TC 본딩 대비 공정 전환 관찰.",
+          en: "Domestic packagers move into hybrid bonding for HBM4 — a process shift away from TC bonding.",
         },
         tag: "HBM4",
       },
       {
-        title: { ko: "SK하이닉스, 첫 미국 후공정 투자", en: "SK hynix's first U.S. back-end investment" },
+        title: { ko: "유리기판, TSMC CoWoS를 대체하나 — 기판 재료 전환 조짐", en: "Could glass substrates replace TSMC CoWoS? — signs of a substrate-material shift" },
         lede: {
-          ko: "미국 내 2.5D 패키징 라인 투자로 후공정 지역 밸류체인이 재편되는 신호.",
-          en: "A 2.5D packaging line in the U.S. signals a reshaping of the back-end regional value chain.",
-        },
-        tag: "후공정",
-      },
-      {
-        title: { ko: "유리기판, 소규모 상업 출하 진입", en: "Glass substrate reaches small-volume commercial shipment" },
-        lede: {
-          ko: "SK Absolics 양산 목표와 인텔 EMIB+글래스 코어 샘플, TSMC CoWoS-G 미니라인이 겹치며 상용화 관문에 접근.",
-          en: "SK Absolics' production target, Intel's EMIB+glass-core sample, and TSMC's CoWoS-G mini line converge toward commercialization.",
+          ko: "유리기판이 CoWoS를 대체할 잠재적 구조 변화로 지목되며 기판 재료 전환이 관찰됨.",
+          en: "Glass substrates are cited as a potential structural replacement for CoWoS, signaling a material transition.",
         },
         tag: "유리기판",
       },
       {
-        title: { ko: "선단 패키징·CoWoS 캐파, 구조적 병목", en: "Advanced packaging / CoWoS capacity: a structural bottleneck" },
+        title: { ko: "SPHBM4 등장에 흔들리는 HBM 패키징 판 — TSMC CoWoS 의존 재편 조짐", en: "SPHBM4 shakes the HBM packaging landscape — TSMC CoWoS dependence in question" },
         lede: {
-          ko: "선단 패키징과 HBM 수요가 캐파를 앞서며 2027까지 리드타임·가격 압력이 이어질 전망.",
-          en: "Advanced-packaging and HBM demand outrun capacity, implying lead-time and pricing pressure into 2027.",
+          ko: "SPHBM4 도입으로 HBM 패키징 구조 변화 가능성, CoWoS 독점 체제 재편이 관찰됨.",
+          en: "SPHBM4 may reshape HBM packaging, with the CoWoS-centric structure potentially loosening.",
         },
-        tag: "캐파",
+        tag: "패키징",
+      },
+      {
+        title: { ko: "'80년대 영광 되찾자' — 日 반도체, 공급망 재편 틈타 전방위 공세", en: "Japan's semis go on the offensive amid a supply-chain reshuffle" },
+        lede: {
+          ko: "일본이 공급망 재편을 활용해 설계·제조·패키징 전방위 투자 확대, 글로벌 밸류체인 재편 관찰.",
+          en: "Japan expands across design, manufacturing and packaging, reshaping the global value chain.",
+        },
+        tag: "공급망",
       },
     ],
     headliner: {
