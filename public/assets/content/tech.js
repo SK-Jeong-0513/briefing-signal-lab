@@ -10,11 +10,7 @@
  * 탭 작업 = TECH_WEEKLY에 분야별 최신 이슈 추가/교체. 랜딩 티저는 헤드라이너에서 자동 파생.
  */
 
-/* ⑤ 발행: '주간-초안' 탭의 "웹에 게시(CSV)" URL. 비우면 정적(아래 TECH_WEEKLY) 유지.
- * 채우면 status=approved · 유형=signal 행이 도메인별 최신 발행주로 '이번 주 신호' 목록을 대체.
- * 헤드라이너 딥다이브는 그대로 정적(TECH_WEEKLY)에서 사람이 유지. (Phase 1: 시트 선별은 임시,
- * 웹서비스 이전 시 관리자 화면으로 대체될 별개 작업.) */
-const WEEKLY_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZFl78TiUcCCKApDu7dD_4rkGF8tlYWpyV2dzaTQg6WFtd9DJoNMyjyPa-dn21JzQ1ivAVKPd31/pub?gid=530467230&single=true&output=csv";
+/* ⑤ 발행 시트 CSV(WEEKLY_SHEET_CSV)는 site.js에 정의(tech/finance/economy 공용). */
 
 /* ── 분야(밸류체인 테마) 메뉴: live=가동, soon=곧 공개(로드맵) ── */
 const TECH_DOMAINS = [

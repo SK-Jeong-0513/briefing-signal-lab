@@ -366,6 +366,12 @@ const LINKS = {
   paidForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EC%9C%A0%EB%A3%8C+%EC%A0%84%EC%B2%B4+%EB%B8%8C%EB%A6%AC%ED%95%91+%EB%AC%B8%EC%9D%98",
 };
 
+/* ⑤ 발행: '주간-초안' 탭 게시 CSV. 비우면 정적(각 카테고리 *_WEEKLY) 유지.
+ * approved 행이 도메인별(분야) 최신 발행주 신호 목록을 대체 — tech/finance/economy 공용.
+ * 분야 id: tech=ai-infra·semicon·power·space(·bio) / finance=kr-equity·us-equity / economy=macro.
+ * (Phase 1: 시트 선별은 임시, 웹서비스 이전 시 관리자 화면으로 대체될 별개 작업.) */
+const WEEKLY_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZFl78TiUcCCKApDu7dD_4rkGF8tlYWpyV2dzaTQg6WFtd9DJoNMyjyPa-dn21JzQ1ivAVKPd31/pub?gid=530467230&single=true&output=csv";
+
 /* ── 브리핑 합치기 — 카테고리 파일들을 하나의 BRIEFINGS로 (없는 카테고리는 안전하게 건너뜀) ── */
 const BRIEFINGS = [].concat(
   typeof BRIEFINGS_TECH !== "undefined" ? BRIEFINGS_TECH : [],

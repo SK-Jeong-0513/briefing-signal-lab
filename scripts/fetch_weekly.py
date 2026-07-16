@@ -97,6 +97,36 @@ DOMAINS = [
             ("gnews", "바이오시밀러 CDMO 위탁생산"),
         ],
     },
+    # ── 금융(finance) — 분야 id는 finance.js FINANCE_DOMAINS와 일치 ──
+    {
+        "id": "kr-equity",
+        "label": {"ko": "국내 증시", "en": "KR Equities"},
+        "feeds": [
+            ("gnews", "코스피 외국인 기관 수급 증시"),
+            ("gnews", "국내 증시 실적 시즌 반도체 주도주"),
+            ("gnews", "코스피 밸류업 배당 자사주"),
+        ],
+    },
+    {
+        "id": "us-equity",
+        "label": {"ko": "미국 증시", "en": "US Equities"},
+        "feeds": [
+            ("gnews", "미국 증시 빅테크 실적 S&P 나스닥"),
+            ("gnews", "성장주 밸류에이션 금리 민감"),
+            ("gnews", "AI capex 반도체 데이터센터 수혜"),
+        ],
+    },
+    # ── 경제(economy) — 단일 매크로 다이제스트. 분야 id="macro"(site.js economy sheetDomain) ──
+    {
+        "id": "macro",
+        "label": {"ko": "경제 매크로", "en": "Macro"},
+        "feeds": [
+            ("gnews", "한국은행 기준금리 통화정책"),
+            ("gnews", "미국 CPI 물가 연준 금리"),
+            ("gnews", "고용 지표 경기 성장률"),
+            ("gnews", "환율 무역수지 달러 원화"),
+        ],
+    },
 ]
 
 

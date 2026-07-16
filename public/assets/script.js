@@ -489,7 +489,7 @@
     if (typeof FINANCE_DOMAINS !== "undefined")
       cfgs.push({ key: "finance", ui: UI.financePage, mode: "domains", domains: FINANCE_DOMAINS, weekly: FINANCE_WEEKLY, badge: UI.samples.sampleBadge, menuSel: "[data-finance-menu]", hostSel: "[data-finance-weekly]" });
     if (typeof ECONOMY_WEEKLY !== "undefined")
-      cfgs.push({ key: "economy", ui: UI.economyPage, mode: "single", single: ECONOMY_WEEKLY, badge: UI.samples.sampleBadge, hostSel: "[data-economy-weekly]" });
+      cfgs.push({ key: "economy", ui: UI.economyPage, mode: "single", single: ECONOMY_WEEKLY, sheetDomain: "macro", badge: UI.samples.sampleBadge, hostSel: "[data-economy-weekly]" });
     return cfgs;
   }
   function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
@@ -507,6 +507,18 @@
     merged.signals = sh.signals;
     if (sh.headliner) merged.headliner = sh.headliner;  // 시트 헤드라이너 우선(없으면 base 것 유지, base도 없으면 undefined=신호만)
     var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");   // "2026-W29" → 보기 좋게
+    merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
+                     : { ko: sh.week, en: sh.week };
+    return merged;
+  }
+  /* single 모드(경제): 정적 단일 이슈에 cfg.sheetDomain(예: "macro") 승인 신호가 있으면 교체. */
+  function weeklyResolveSingle(cfg) {
+    var base = cfg.single, sh = weeklySheet[cfg.sheetDomain];
+    if (!sh || !sh.signals || !sh.signals.length) return base;
+    var merged = {}; for (var k in base) merged[k] = base[k];
+    merged.signals = sh.signals;
+    if (sh.headliner) merged.headliner = sh.headliner;
+    var mw = /^(\d{4})-W(\d{2})$/.exec(sh.week || "");
     merged.week = mw ? { ko: mw[1] + "년 " + parseInt(mw[2], 10) + "주", en: mw[1] + " · Week " + parseInt(mw[2], 10) }
                      : { ko: sh.week, en: sh.week };
     return merged;
@@ -576,7 +588,7 @@
     if (!weeklyState[cfg.key]) weeklyState[cfg.key] = { domain: null, bound: false };
     var st = weeklyState[cfg.key];
     if (cfg.mode === "single") {
-      var iss = cfg.single;
+      var iss = weeklyResolveSingle(cfg);
       host.innerHTML = weeklyIssueHtml(cfg, iss, t(iss.label), iss.tagline ? t(iss.tagline) : "");
       return;
     }
