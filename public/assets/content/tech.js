@@ -51,7 +51,7 @@ const TECH_DOMAINS = [
   {
     id: "bio",
     label: { ko: "바이오", en: "Bio" },
-    status: "live",
+    status: "soon",  // 로봇이 아직 bio 선행 신호 0건 → 콘텐츠 쌓이면 live로. (robot DOMAINS엔 유지=계속 시도)
     tagline: { ko: "임상·플랫폼·헬스테크", en: "Clinical, platforms, healthtech" },
   },
 ];
