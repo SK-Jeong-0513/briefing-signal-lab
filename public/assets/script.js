@@ -544,13 +544,21 @@
     var en = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][mon.getUTCMonth()];
     return { ko: y + "년 " + wk + "주 (" + m + "월 " + d + "일)", en: y + " · Week " + wk + " (" + en + " " + d + ")" };
   }
-  /* ⑤: 이슈 결정 우선순위 —
-   *   시트 approved 신호 있으면: (정적 base 복제 or 새 이슈) + 시트 signals·week, 헤드라이너는 시트>정적.
-   *   시트 없으면 정적 그대로(폴백). 둘 다 없으면 null(→ renderWeekly가 "준비 중" 표시). */
+  /* 카테고리의 "이번 호 주(issue week)" = 그 카테고리 도메인들 중 시트 승인된 최신 발행주(max). 없으면 null.
+   *   전 도메인을 이 한 주로 정렬해 발행주 혼재(도메인별 다른 주 표시)를 원천 차단한다. */
+  function categoryIssueWeek(cfg) {
+    var weeks = [];
+    (cfg.domains || []).forEach(function (d) { var sh = weeklySheet[d.id]; if (sh && sh.week) weeks.push(sh.week); });
+    weeks.sort();
+    return weeks.length ? weeks[weeks.length - 1] : null;
+  }
+  /* ⑤ + 이번 호 주 정렬: 이 도메인이 '이번 호 주'로 승인돼 있으면 시트 이슈, 아니면
+   *   카테고리에 시트 콘텐츠가 전무하면 정적 폴백, 그 외엔 null(→ "준비 중"). 옛 주 콘텐츠는 섞어 보이지 않음. */
   function weeklyResolveIssue(cfg, id) {
     var base = weeklyIssueOf(cfg, id), sh = weeklySheet[id];
-    var hasSheet = sh && sh.signals && sh.signals.length;
-    if (!hasSheet) return base;                       // 시트 없음 → 정적(또는 null)
+    var issueWk = categoryIssueWeek(cfg);
+    if (!issueWk) return base;                                                          // 시트 콘텐츠 전무 → 정적 폴백
+    if (!sh || !sh.signals || !sh.signals.length || sh.week !== issueWk) return null;   // 이번 호 주 미승인 → 준비 중
     var merged = {}; if (base) for (var k in base) merged[k] = base[k];
     merged.domain = id;
     merged.signals = sh.signals;
@@ -627,17 +635,23 @@
       : t(cfg.ui.soonBody);
     return '<p class="section-sub" style="margin-top:var(--s-xl)">' + msg + "</p>";
   }
+  /* 기본 선택 도메인 = 이번 호 주 콘텐츠가 있는 첫 live 도메인(없으면 첫 live) — 기본 탭이 "준비 중"으로 뜨지 않게. */
+  function weeklyBestDomain(cfg) {
+    var live = (cfg.domains || []).filter(function (d) { return d.status === "live"; });
+    return live.filter(function (d) { return weeklyResolveIssue(cfg, d.id); })[0] || live[0] || null;
+  }
   function renderWeekly(cfg) {
     var host = document.querySelector(cfg.hostSel);
     if (!host) return;
-    if (!weeklyState[cfg.key]) weeklyState[cfg.key] = { domain: null, bound: false };
+    if (!weeklyState[cfg.key]) weeklyState[cfg.key] = { domain: null, bound: false, userSelected: false };
     var st = weeklyState[cfg.key];
     if (cfg.mode === "single") {
       var iss = weeklyResolveSingle(cfg);
       host.innerHTML = weeklyIssueHtml(cfg, iss, t(iss.label), iss.tagline ? t(iss.tagline) : "");
       return;
     }
-    if (st.domain === null) st.domain = weeklyFirstLive(cfg);
+    if (!st.userSelected) { var best = weeklyBestDomain(cfg); if (best) st.domain = best.id; }  // 사용자 클릭 전엔 최적 기본
+    else if (st.domain === null) st.domain = weeklyFirstLive(cfg);
     var menu = document.querySelector(cfg.menuSel);
     if (menu) menu.innerHTML = weeklyMenuHtml(cfg);
     var dom = weeklyDomainById(cfg, st.domain), issue = weeklyResolveIssue(cfg, st.domain);
@@ -649,6 +663,7 @@
       menu.addEventListener("click", function (e) {
         var el = e.target.closest("[data-weekly-domain]");
         if (!el || !menu.contains(el)) return;
+        st.userSelected = true;
         st.domain = el.getAttribute("data-weekly-domain");
         menu.innerHTML = weeklyMenuHtml(cfg);
         var d2 = weeklyDomainById(cfg, st.domain), i2 = weeklyResolveIssue(cfg, st.domain);
