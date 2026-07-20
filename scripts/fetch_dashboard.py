@@ -5,10 +5,12 @@
 stdlib만 사용(Actions에서 pip 불필요). 실패한 시계열은 건너뛰고 로그.
 """
 import json, os, sys, time, urllib.request, urllib.parse, urllib.error
+import csv, io, datetime
 import xml.etree.ElementTree as ET
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BriefingSignalLab/1.0"
 OUT = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "dashboard.json")
+OUT_MANUAL = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "valuechain_manual.json")
 RANGE = "3y"
 
 # 시계열 정의: key -> (이름, 단위, Yahoo 심볼)  (TGA/바스켓은 별도 처리)
@@ -237,6 +239,85 @@ def _prev_all():
         return {}
 
 
+def _get_text(url):
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=25) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _to_epoch(s):
+    """시각 셀 → epoch(초). 숫자면 그대로, 날짜(YYYY-MM-DD 등)면 UTC epoch로."""
+    s = str(s).strip()
+    if not s:
+        return 0
+    try:
+        return int(float(s))                       # 이미 epoch(초)
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m"):
+        try:
+            dt = datetime.datetime.strptime(s, fmt).replace(tzinfo=datetime.timezone.utc)
+            return int(dt.timestamp())
+        except ValueError:
+            continue
+    return 0
+
+
+def manual_from_sheet():
+    """'대시보드-수동' 탭 CSV(env DASH_MANUAL_CSV) → valuechain_manual.json 재생성.
+    관리자 콘솔이 시트에 점을 추가하면 이 크론이 JSON을 갱신(dashboard.js는 무변경).
+    env 미설정/네트워크 실패/빈 시트면 아무것도 안 함(기존 파일 보존 = fail-safe).
+    열: 카드키·라벨·단위·주기·출처·시각·값 (카드키로 그룹, 행 순서 = 시계열 순서)."""
+    url = os.environ.get("DASH_MANUAL_CSV", "").strip()
+    if not url:
+        print("[manual] DASH_MANUAL_CSV 미설정 → valuechain_manual.json 보존")
+        return
+    try:
+        rows = list(csv.reader(io.StringIO(_get_text(url))))
+    except Exception as e:
+        print("[manual] CSV 로드 실패 → 보존: %s" % e)
+        return
+    if len(rows) < 2:
+        print("[manual] 시트 데이터 없음 → 보존")
+        return
+    header = [c.strip() for c in rows[0]]
+    idx = {name: header.index(name) for name in header}
+
+    def cell(row, name):
+        i = idx.get(name)
+        return row[i].strip() if (i is not None and i < len(row)) else ""
+
+    order, groups = [], {}
+    for row in rows[1:]:
+        key = cell(row, "카드키")
+        raw = cell(row, "값")
+        if not key or raw == "":
+            continue
+        try:
+            v = round(float(raw), 6)
+        except ValueError:
+            print("[manual] 값 파싱 실패(건너뜀): %r" % raw)
+            continue
+        if key not in groups:
+            groups[key] = {"key": key, "label": cell(row, "라벨"), "unit": cell(row, "단위"),
+                           "manual": True, "period": cell(row, "주기"), "source": cell(row, "출처"),
+                           "t": [], "v": []}
+            order.append(key)
+        groups[key]["t"].append(_to_epoch(cell(row, "시각")))
+        groups[key]["v"].append(v)
+
+    items = [groups[k] for k in order if groups[k]["v"]]
+    if not items:
+        print("[manual] 유효 데이터 점 없음 → 보존")
+        return
+    out = {"updated": time.strftime("%Y-%m-%d"),
+           "note": "운영자 콘솔이 '대시보드-수동' 시트에 입력한 수동 지표. 정보 제공이며 투자 조언 아님.",
+           "items": items}
+    with open(OUT_MANUAL, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+    print("→ %s (%d cards)" % (os.path.abspath(OUT_MANUAL), len(items)))
+
+
 def main():
     series = {}
     for key, (name, unit, sym) in YAHOO.items():
@@ -303,6 +384,9 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     print("→ %s (%d series, %d pairs)" % (os.path.abspath(OUT), len(series), len(pairs)))
+
+    # 수동 카드(대시보드-수동 시트 → valuechain_manual.json). env 없으면 no-op(기존 보존).
+    manual_from_sheet()
     if len(pairs) < 3:
         print("[WARN] 페어 %d개 — 데이터 수집 확인 필요" % len(pairs))
 

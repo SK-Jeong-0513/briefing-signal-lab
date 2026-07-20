@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  /* DESIGN.md 토큰 — quiet, tool-first. 새 값 생성 금지. */
+  :root{
+    --canvas:#F7F8FA; --surface:#FFFFFF; --text:#17202A; --muted:#5F6B7A; --border:#D8DEE8;
+    --primary:#2454D6; --primary-hover:#1B43AD; --primary-soft:#E8EEFF;
+    --success:#12733E; --warning:#8A5300; --danger:#C9342F;
+    --sm:4px; --md:8px; --lg:12px;
+    --s-xs:4px; --s-sm:8px; --s-md:16px; --s-lg:24px; --s-xl:32px;
+    --raised:0 1px 3px rgba(23,32,42,.08), 0 1px 2px rgba(23,32,42,.04);
+    --font:Inter, Pretendard, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.55}
+  h1{font-size:1.25rem;font-weight:650;margin:0}
+  h2{font-size:1rem;font-weight:650;margin:0 0 var(--s-md)}
+  a{color:var(--primary)}
+  .muted{color:var(--muted)}
+  .small{font-size:.8125rem}
+  /* top bar */
+  .topbar{display:flex;align-items:center;gap:var(--s-md);padding:var(--s-md) var(--s-lg);
+    background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5}
+  .topbar .who{margin-left:auto;color:var(--muted);font-size:.8125rem}
+  /* toggle */
+  .toggle{border:1px solid var(--border);background:var(--surface);border-radius:var(--md);
+    padding:6px 12px;font-weight:600;font-size:.8125rem;cursor:pointer;white-space:nowrap}
+  .toggle[data-on="1"]{color:var(--success);border-color:var(--success)}
+  .toggle[data-on="0"]{color:var(--danger);border-color:var(--danger)}
+  .toggle[data-on=""]{color:var(--muted)}
+  /* tabs */
+  nav.tabs{display:flex;gap:2px;padding:0 var(--s-lg);background:var(--surface);border-bottom:1px solid var(--border)}
+  nav.tabs button{border:none;background:none;padding:10px 14px;font:inherit;font-weight:600;font-size:.875rem;
+    color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+  nav.tabs button.active{color:var(--primary);border-bottom-color:var(--primary)}
+  main{padding:var(--s-lg);max-width:1100px;margin:0 auto}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--md);
+    box-shadow:var(--raised);padding:var(--s-md);margin-bottom:var(--s-md)}
+  .row{display:flex;gap:var(--s-sm);flex-wrap:wrap;align-items:center}
+  .grow{flex:1 1 auto}
+  /* controls */
+  label.f{display:block;font-size:.8125rem;font-weight:600;margin:var(--s-sm) 0 2px;color:var(--text)}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--sm);
+    font:inherit;background:var(--surface);color:var(--text)}
+  textarea{min-height:88px;resize:vertical}
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:var(--md);
+    padding:8px 12px;font:inherit;font-weight:600;font-size:.8125rem;cursor:pointer}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover);border-color:var(--primary-hover)}
+  .btn.danger{color:var(--danger);border-color:var(--danger)}
+  .btn:disabled{opacity:.5;cursor:default}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:.8125rem}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{font-weight:600;color:var(--muted);white-space:nowrap}
+  tr.sel{background:var(--primary-soft)}
+  .badge{display:inline-block;padding:1px 7px;border-radius:var(--sm);font-size:.75rem;font-weight:600;color:#fff}
+  .badge.ok{background:var(--success)} .badge.draft{background:var(--warning)} .badge.head{background:var(--primary)}
+  .stat{display:inline-block;margin-right:var(--s-xl)}
+  .stat b{display:block;font-size:1.75rem;font-weight:700;line-height:1.1}
+  .stat span{color:var(--muted);font-size:.8125rem}
+  .bar{height:8px;background:var(--primary-soft);border-radius:var(--sm);overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--primary)}
+  /* toast */
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;
+    padding:10px 16px;border-radius:var(--md);font-size:.875rem;box-shadow:var(--raised);opacity:0;
+    transition:opacity .2s;pointer-events:none;max-width:80vw}
+  #toast.show{opacity:1}
+  #toast.err{background:var(--danger)}
+  .hidden{display:none}
+  .empty{color:var(--muted);padding:var(--s-md);text-align:center}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>BSL 운영자 콘솔</h1>
+    <button id="toggle" class="toggle" data-on="" onclick="onToggle()">파이프 상태 확인 중…</button>
+    <span class="who" id="who"></span>
+  </div>
+  <nav class="tabs">
+    <button data-tab="weekly" class="active" onclick="showTab('weekly')">① 주간 초안 승인</button>
+    <button data-tab="library" onclick="showTab('library')">③ 서재 업로드</button>
+    <button data-tab="visits" onclick="showTab('visits')">④ 방문 통계</button>
+    <button data-tab="dash" onclick="showTab('dash')">② 대시보드 수동</button>
+  </nav>
+  <main>
+    <!-- ① 주간 초안 승인 -->
+    <section id="tab-weekly">
+      <div class="panel">
+        <div class="row">
+          <div><label class="f">발행주</label><select id="w-week" onchange="renderWeekly()"></select></div>
+          <div><label class="f">상태</label>
+            <select id="w-status" onchange="renderWeekly()">
+              <option value="">전체</option><option value="draft">draft</option><option value="approved">approved</option>
+            </select></div>
+          <div class="grow"></div>
+          <div style="align-self:flex-end">
+            <button class="btn" onclick="loadWeekly()">새로고침</button>
+            <button class="btn danger" onclick="weeklyDeleteSelected()">선택 삭제</button>
+          </div>
+        </div>
+        <p class="small muted" style="margin:8px 0 0">한 주를 통으로 승인하고, 발행 후 옛 주 draft를 선택 삭제하세요. 사이트는 approved만 읽습니다.</p>
+      </div>
+      <div class="panel" id="w-table"><div class="empty">불러오는 중…</div></div>
+    </section>
+
+    <!-- ③ 서재 업로드 -->
+    <section id="tab-library" class="hidden">
+      <div class="panel">
+        <h2>리포트 / 노트 추가</h2>
+        <div class="row">
+          <div class="grow"><label class="f">id (고유·영문/숫자)</label><input id="l-id" placeholder="2026-07-ionq-energy"></div>
+          <div><label class="f">유형</label><select id="l-type"><option value="report">report</option><option value="note">note</option></select></div>
+          <div><label class="f">분류</label><select id="l-cat"><option>기술</option><option>금융</option><option>경제</option></select></div>
+          <div><label class="f">발행일</label><input id="l-date" type="date"></div>
+          <div><label class="f">access</label><select id="l-access"><option value="free">free</option><option value="paid">paid</option></select></div>
+        </div>
+        <label class="f">제목</label><input id="l-title" placeholder="IonQ의 에너지 어드밴티지">
+        <label class="f">요약 (무료 미끼·SEO)</label><textarea id="l-abstract" style="min-height:52px"></textarea>
+        <label class="f">태그 (쉼표 구분)</label><input id="l-tags" placeholder="우주·방산, SCM">
+        <label class="f">본문 (마크다운)</label><textarea id="l-body"></textarea>
+        <div class="row" style="margin-top:var(--s-md)">
+          <button class="btn primary" onclick="libraryAdd()">추가</button>
+          <span class="muted small">추가 후 사이트는 서재 시트 CSV를 다음 로드 시 반영합니다.</span>
+        </div>
+      </div>
+      <div class="panel"><h2>기존 항목</h2><div id="l-list"><div class="empty">불러오는 중…</div></div></div>
+    </section>
+
+    <!-- ④ 방문 통계 -->
+    <section id="tab-visits" class="hidden">
+      <div class="panel">
+        <div id="v-stats"><div class="empty">불러오는 중…</div></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div class="panel grow"><h2>날짜별</h2><div id="v-date"></div></div>
+        <div class="panel grow"><h2>페이지별</h2><div id="v-page"></div></div>
+      </div>
+    </section>
+
+    <!-- ② 대시보드 수동 -->
+    <section id="tab-dash" class="hidden">
+      <div class="panel">
+        <h2>수동 카드 데이터 점 추가</h2>
+        <p class="small muted" style="margin:0 0 8px">카드키로 그룹, 행 순서 = 시계열 순서. fetch_dashboard.py가 이 탭을 valuechain_manual.json으로 재생성합니다.</p>
+        <div class="row">
+          <div><label class="f">카드키</label><input id="d-key" placeholder="dram"></div>
+          <div class="grow"><label class="f">라벨</label><input id="d-label" placeholder="DRAM 계약가 지수 (Q4'25=100)"></div>
+          <div><label class="f">단위</label><input id="d-unit" placeholder=""></div>
+          <div><label class="f">주기</label><input id="d-period" placeholder="QoQ"></div>
+        </div>
+        <div class="row">
+          <div class="grow"><label class="f">출처 URL</label><input id="d-source" placeholder="https://www.trendforce.com/..."></div>
+          <div><label class="f">시각 (YYYY-MM-DD)</label><input id="d-date" type="date"></div>
+          <div><label class="f">값</label><input id="d-val" type="number" step="any" placeholder="307"></div>
+        </div>
+        <div class="row" style="margin-top:var(--s-md)">
+          <button class="btn primary" onclick="dashAdd()">점 추가</button>
+          <button class="btn" onclick="loadDash()">새로고침</button>
+          <button class="btn danger" onclick="dashDeleteSelected()">선택 삭제</button>
+        </div>
+      </div>
+      <div class="panel" id="d-table"><div class="empty">불러오는 중…</div></div>
+    </section>
+  </main>
+  <div id="toast"></div>
+
+<script>
+  // ── google.script.run → Promise ──
+  function call(name){
+    var args = Array.prototype.slice.call(arguments,1);
+    return new Promise(function(res,rej){
+      var r = google.script.run.withSuccessHandler(res).withFailureHandler(function(e){rej(e);});
+      r[name].apply(r,args);
+    });
+  }
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var _t;
+  function toast(msg,err){var t=document.getElementById('toast');t.textContent=msg;t.className='show'+(err?' err':'');
+    clearTimeout(_t);_t=setTimeout(function(){t.className='';},err?4000:2200);}
+  function fail(e){toast((e&&e.message)||String(e),true);}
+
+  function showTab(id){
+    ['weekly','library','visits','dash'].forEach(function(k){
+      document.getElementById('tab-'+k).classList.toggle('hidden',k!==id);
+    });
+    document.querySelectorAll('nav.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===id);});
+    if(id==='library'&&!_libLoaded)loadLibrary();
+    if(id==='visits'&&!_visLoaded)loadVisits();
+    if(id==='dash'&&!_dashLoaded)loadDash();
+  }
+
+  // ── 파이프 토글 ──
+  var _pipeOn=null;
+  function paintToggle(){
+    var b=document.getElementById('toggle');
+    if(_pipeOn===null){b.dataset.on='';b.textContent='파이프 상태 확인 중…';return;}
+    b.dataset.on=_pipeOn?'1':'0';
+    b.textContent=_pipeOn?'🟢 파이프 실행 중 (클릭=중지)':'🔴 파이프 중지됨 (클릭=재개)';
+  }
+  function loadToggle(){call('getPipelineEnabled').then(function(v){_pipeOn=!!v;paintToggle();}).catch(fail);}
+  function onToggle(){
+    if(_pipeOn===null)return;
+    var next=!_pipeOn;
+    if(!next&&!confirm('파이프를 중지하면 주간·시장 수집이 멈춥니다(사이트 표시는 유지). 진행할까요?'))return;
+    call('setPipelineEnabled',next).then(function(r){_pipeOn=r.enabled;paintToggle();
+      toast(next?'파이프 재개':'파이프 중지 — 다음 실행부터 적용');}).catch(fail);
+  }
+
+  // ── ① 주간 초안 ──
+  var _weekly={header:[],rows:[]};
+  function loadWeekly(){
+    document.getElementById('w-table').innerHTML='<div class="empty">불러오는 중…</div>';
+    call('weeklyList').then(function(d){_weekly=d;
+      var weeks=[];d.rows.forEach(function(r){var w=r['발행주'];if(w&&weeks.indexOf(w)<0)weeks.push(w);});
+      weeks.sort().reverse();
+      document.getElementById('w-week').innerHTML='<option value="">전체</option>'+weeks.map(function(w){return '<option>'+esc(w)+'</option>';}).join('');
+      renderWeekly();
+    }).catch(fail);
+  }
+  function renderWeekly(){
+    var fw=document.getElementById('w-week').value, fs=document.getElementById('w-status').value;
+    var rows=_weekly.rows.filter(function(r){
+      return (!fw||String(r['발행주'])===fw)&&(!fs||String(r['status']||'').trim()===fs);
+    });
+    if(!rows.length){document.getElementById('w-table').innerHTML='<div class="empty">해당 조건의 초안이 없습니다.</div>';return;}
+    var html='<table><thead><tr><th></th><th>발행주</th><th>분야</th><th>유형</th><th>제목(ko)</th><th>선행도</th><th>상태</th><th>액션</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var st=String(r['status']||'draft').trim(), ty=String(r['유형']||'').trim();
+      var stBadge=st==='approved'?'<span class="badge ok">approved</span>':'<span class="badge draft">'+esc(st||'draft')+'</span>';
+      var tyBadge=ty==='headliner'?'<span class="badge head">headliner</span>':esc(ty);
+      html+='<tr data-row="'+r._row+'">'+
+        '<td><input type="checkbox" class="w-ck" value="'+r._row+'"></td>'+
+        '<td>'+esc(r['발행주'])+'</td><td>'+esc(r['분야'])+'</td><td>'+tyBadge+'</td>'+
+        '<td>'+esc(r['제목ko'])+'</td><td>'+esc(r['선행도'])+'</td><td>'+stBadge+'</td>'+
+        '<td style="white-space:nowrap">'+
+          (st==='approved'
+            ? '<button class="btn" onclick="wStatus('+r._row+',\'draft\')">↩ draft</button>'
+            : '<button class="btn primary" onclick="wStatus('+r._row+',\'approved\')">✓ 승인</button>')+
+          ' <button class="btn" onclick="wType('+r._row+',\''+(ty==='headliner'?'signal':'headliner')+'\')">'+(ty==='headliner'?'signal로':'headliner')+'</button>'+
+        '</td></tr>';
+    });
+    html+='</tbody></table>';
+    document.getElementById('w-table').innerHTML=html;
+  }
+  function wStatus(row,st){call('weeklySetStatus',row,st).then(function(){
+    var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['status']=st;renderWeekly();toast('status → '+st);}).catch(fail);}
+  function wType(row,ty){call('weeklySetType',row,ty).then(function(){
+    var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['유형']=ty;renderWeekly();toast('유형 → '+ty);}).catch(fail);}
+  function weeklyDeleteSelected(){
+    var rows=[].slice.call(document.querySelectorAll('.w-ck:checked')).map(function(c){return parseInt(c.value,10);});
+    if(!rows.length){toast('삭제할 행을 선택하세요',true);return;}
+    if(!confirm(rows.length+'개 행을 삭제합니다. 되돌릴 수 없습니다.'))return;
+    call('weeklyDeleteRows',rows).then(function(r){toast(r.deleted+'행 삭제');loadWeekly();}).catch(fail);
+  }
+
+  // ── ③ 서재 ──
+  var _libLoaded=false;
+  function loadLibrary(){_libLoaded=true;
+    call('libraryList').then(function(d){
+      if(!d.rows.length){document.getElementById('l-list').innerHTML='<div class="empty">항목 없음</div>';return;}
+      var html='<table><thead><tr><th>발행일</th><th>유형</th><th>분류</th><th>제목</th></tr></thead><tbody>';
+      d.rows.slice().reverse().forEach(function(r){
+        html+='<tr><td>'+esc(r['발행일'])+'</td><td>'+esc(r['유형'])+'</td><td>'+esc(r['분류'])+'</td><td>'+esc(r['제목'])+'</td></tr>';});
+      document.getElementById('l-list').innerHTML=html+'</tbody></table>';
+    }).catch(function(e){_libLoaded=false;fail(e);});
+  }
+  function libraryAdd(){
+    var item={
+      'id':val('l-id'),'유형':val('l-type'),'분류':val('l-cat'),'발행일':val('l-date'),
+      '제목':val('l-title'),'요약':val('l-abstract'),'태그':val('l-tags'),
+      '본문':val('l-body'),'access':val('l-access')
+    };
+    if(!item['id']||!item['제목']){toast('id와 제목은 필수',true);return;}
+    call('libraryAdd',item).then(function(){toast('서재에 추가됨');
+      ['l-id','l-title','l-abstract','l-tags','l-body'].forEach(function(x){document.getElementById(x).value='';});
+      _libLoaded=false;loadLibrary();}).catch(fail);
+  }
+
+  // ── ④ 방문 통계 ──
+  var _visLoaded=false;
+  function loadVisits(){_visLoaded=true;
+    call('visitStats').then(function(s){
+      var html='<span class="stat"><b>'+s.views+'</b><span>페이지뷰</span></span>'+
+               '<span class="stat"><b>'+s.visitors+'</b><span>순방문(익명ID)</span></span>';
+      if(s.testRows&&s.testRows.length)
+        html+='<button class="btn danger" onclick="visitDelTest()">테스트 행 '+s.testRows.length+'개 삭제</button>';
+      document.getElementById('v-stats').innerHTML=html;
+      _testRows=s.testRows||[];
+      document.getElementById('v-date').innerHTML=miniTable(s.byDate,'date','count');
+      document.getElementById('v-page').innerHTML=miniTable(s.byPage,'page','count');
+    }).catch(function(e){_visLoaded=false;fail(e);});
+  }
+  var _testRows=[];
+  function visitDelTest(){
+    if(!_testRows.length)return;
+    if(!confirm('테스트 행 '+_testRows.length+'개를 삭제합니다.'))return;
+    call('visitDeleteRows',_testRows).then(function(r){toast(r.deleted+'행 삭제');_visLoaded=false;loadVisits();}).catch(fail);
+  }
+  function miniTable(arr,kk,vk){
+    if(!arr||!arr.length)return '<div class="empty">데이터 없음</div>';
+    var max=arr.reduce(function(m,x){return Math.max(m,x[vk]);},0)||1;
+    return '<table><tbody>'+arr.slice(0,30).map(function(x){
+      return '<tr><td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">'+esc(x[kk])+'</td>'+
+        '<td style="width:60px;text-align:right">'+x[vk]+'</td>'+
+        '<td style="width:120px"><div class="bar"><i style="width:'+Math.round(x[vk]/max*100)+'%"></i></div></td></tr>';
+    }).join('')+'</tbody></table>';
+  }
+
+  // ── ② 대시보드 수동 ──
+  var _dashLoaded=false;
+  function loadDash(){_dashLoaded=true;
+    document.getElementById('d-table').innerHTML='<div class="empty">불러오는 중…</div>';
+    call('dashList').then(function(d){
+      if(!d.rows.length){document.getElementById('d-table').innerHTML='<div class="empty">데이터 점 없음</div>';return;}
+      var html='<table><thead><tr><th></th><th>카드키</th><th>라벨</th><th>주기</th><th>시각</th><th>값</th></tr></thead><tbody>';
+      d.rows.forEach(function(r){
+        html+='<tr><td><input type="checkbox" class="d-ck" value="'+r._row+'"></td>'+
+          '<td>'+esc(r['카드키'])+'</td><td>'+esc(r['라벨'])+'</td><td>'+esc(r['주기'])+'</td>'+
+          '<td>'+esc(r['시각'])+'</td><td>'+esc(r['값'])+'</td></tr>';});
+      document.getElementById('d-table').innerHTML=html+'</tbody></table>';
+    }).catch(function(e){_dashLoaded=false;fail(e);});
+  }
+  function dashAdd(){
+    var p={'카드키':val('d-key'),'라벨':val('d-label'),'단위':val('d-unit'),'주기':val('d-period'),
+      '출처':val('d-source'),'시각':val('d-date'),'값':val('d-val')};
+    if(!p['카드키']||p['값']===''){toast('카드키와 값은 필수',true);return;}
+    call('dashAdd',p).then(function(){toast('점 추가됨');document.getElementById('d-val').value='';_dashLoaded=false;loadDash();}).catch(fail);
+  }
+  function dashDeleteSelected(){
+    var rows=[].slice.call(document.querySelectorAll('.d-ck:checked')).map(function(c){return parseInt(c.value,10);});
+    if(!rows.length){toast('삭제할 행을 선택하세요',true);return;}
+    if(!confirm(rows.length+'개 점을 삭제합니다.'))return;
+    call('dashDeleteRows',rows).then(function(r){toast(r.deleted+'행 삭제');_dashLoaded=false;loadDash();}).catch(fail);
+  }
+
+  function val(id){return (document.getElementById(id).value||'').trim();}
+
+  // ── init ──
+  call('getSession').then(function(s){
+    document.getElementById('who').textContent=s.email?('로그인: '+s.email):'로그인 계정 확인 불가';
+  }).catch(function(e){document.getElementById('who').textContent='세션 오류';fail(e);});
+  loadToggle();
+  loadWeekly();
+</script>
+</body>
+</html>
