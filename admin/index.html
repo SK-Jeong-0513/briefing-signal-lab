@@ -227,7 +227,7 @@
       return (!fw||String(r['발행주'])===fw)&&(!fs||String(r['status']||'').trim()===fs);
     });
     if(!rows.length){document.getElementById('w-table').innerHTML='<div class="empty">해당 조건의 초안이 없습니다.</div>';return;}
-    var html='<table><thead><tr><th></th><th>발행주</th><th>분야</th><th>유형</th><th>제목(ko)</th><th>선행도</th><th>상태</th><th>액션</th></tr></thead><tbody>';
+    var html='<table><thead><tr><th><input type="checkbox" title="이 목록 전체 선택/해제" onclick="wToggleAll(this)"></th><th>발행주</th><th>분야</th><th>유형</th><th>제목(ko)</th><th>선행도</th><th>상태</th><th>액션</th></tr></thead><tbody>';
     rows.forEach(function(r){
       var st=String(r['status']||'draft').trim(), ty=String(r['유형']||'').trim();
       var stBadge=st==='approved'?'<span class="badge ok">approved</span>':'<span class="badge draft">'+esc(st||'draft')+'</span>';
@@ -250,6 +250,9 @@
     var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['status']=st;renderWeekly();toast('status → '+st);}).catch(fail);}
   function wType(row,ty){call('weeklySetType',row,ty).then(function(){
     var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['유형']=ty;renderWeekly();toast('유형 → '+ty);}).catch(fail);}
+  function wToggleAll(cb){
+    [].slice.call(document.querySelectorAll('.w-ck')).forEach(function(c){c.checked=cb.checked;});
+  }
   function weeklyDeleteSelected(){
     var rows=[].slice.call(document.querySelectorAll('.w-ck:checked')).map(function(c){return parseInt(c.value,10);});
     if(!rows.length){toast('삭제할 행을 선택하세요',true);return;}
