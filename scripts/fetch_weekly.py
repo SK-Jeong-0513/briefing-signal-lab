@@ -339,7 +339,7 @@ def post_rows(rows):
 def main():
     dry = "--dry" in sys.argv
     if not dry and not toggle.pipeline_enabled():
-        print("[pipeline] paused — settings.pipeline_enabled=0, 이번 실행 건너뜀")
+        print("[pipeline] paused - settings.pipeline_enabled=0, 이번 실행 건너뜀")
         return
     limit = None
     for a in sys.argv:
