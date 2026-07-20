@@ -47,7 +47,7 @@ const TECH_DOMAINS = [
   {
     id: "bio",
     label: { ko: "바이오", en: "Bio" },
-    status: "soon",  // 로봇이 아직 bio 선행 신호 0건 → 콘텐츠 쌓이면 live로. (robot DOMAINS엔 유지=계속 시도)
+    status: "live",  // 2026-07-21 개방: W30 승인분 확보(운영자 콘솔 확인). 시트 approved 행을 렌더.
     tagline: { ko: "임상·플랫폼·헬스테크", en: "Clinical, platforms, healthtech" },
   },
 ];
