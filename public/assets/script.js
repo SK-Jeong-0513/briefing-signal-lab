@@ -759,6 +759,20 @@
     els.forEach(function (el) { io.observe(el); });
   }
 
+  /* 방문 기록 비콘: VISITS_WEBAPP_URL 설정 시 이미지 비콘(GET)으로 방문 1건 기록.
+   * 쿠키 없음·PII 없음. 방문자ID=localStorage 익명 난수(대략적 순방문 추정). 실패는 무시. */
+  function logVisit() {
+    if (typeof VISITS_WEBAPP_URL !== "string" || !VISITS_WEBAPP_URL) return;
+    try {
+      var id = localStorage.getItem("bsl-vid");
+      if (!id) { id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem("bsl-vid", id); }
+      var q = "?p=" + encodeURIComponent(location.pathname) +
+              "&r=" + encodeURIComponent((document.referrer || "").slice(0, 120)) +
+              "&id=" + encodeURIComponent(id) + "&t=" + Date.now();
+      new Image().src = VISITS_WEBAPP_URL + q;
+    } catch (e) { /* 무시 */ }
+  }
+
   /* 히어로 라인 draw-in: 실제 길이로 dasharray 설정 */
   function initSignalLine() {
     document.querySelectorAll(".hero__signal .signal-line").forEach(function (p) {
@@ -780,6 +794,7 @@
     loadLibrary();
     loadMarket();
     loadWeeklySheet();
+    logVisit();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });

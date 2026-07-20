@@ -138,6 +138,16 @@ DOMAINS = [
             ("gnews", "천연가스 LNG 원자재 수급"),
         ],
     },
+    {
+        "id": "flows",
+        "label": {"ko": "펀드·자금흐름", "en": "Funds & Flows"},
+        "hint": "ETF 자금유출입·기관 수급·패시브/액티브 포지셔닝 등 자금흐름의 국면 변화를 시사하는 항목",
+        "feeds": [
+            ("gnews", "ETF 자금 유입 유출 수급"),
+            ("gnews", "펀드 자금흐름 기관 포지셔닝"),
+            ("gnews", "외국인 수급 패시브 액티브 자금"),
+        ],
+    },
     # ── 경제(economy) — 단일 매크로 다이제스트. 분야 id="macro"(site.js economy sheetDomain) ──
     {
         "id": "macro",
