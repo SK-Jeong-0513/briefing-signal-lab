@@ -375,7 +375,7 @@ const WEEKLY_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZ
 /* 방문 기록 비콘: Apps Script 웹앱(analytics/Code.gs)의 /exec URL. 비우면 기록 안 함.
  * 이미지 비콘(GET)이라 CORS 없음. '방문로그' 탭에 [날짜시각·페이지·referrer·방문자ID] append.
  * 방문자ID=localStorage 익명 난수(쿠키·PII 아님, 대략적 순방문 추정용). */
-const VISITS_WEBAPP_URL = "";
+const VISITS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxjk9S4iX05szMJXP0f13rDA9eUQsho1jaURa2PNxsG_gETp65CsihFWjQ5WzRR2xeNXQ/exec";
 
 /* ── 브리핑 합치기 — 카테고리 파일들을 하나의 BRIEFINGS로 (없는 카테고리는 안전하게 건너뜀) ── */
 const BRIEFINGS = [].concat(
