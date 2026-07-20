@@ -36,6 +36,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 import ai      # noqa: E402
 import guard   # noqa: E402
+import toggle  # noqa: E402
 
 UA = "Mozilla/5.0 (BriefingSignalLab/1.0)"
 ATOM = {"a": "http://www.w3.org/2005/Atom"}
@@ -337,6 +338,9 @@ def post_rows(rows):
 
 def main():
     dry = "--dry" in sys.argv
+    if not dry and not toggle.pipeline_enabled():
+        print("[pipeline] paused - settings.pipeline_enabled=0, 이번 실행 건너뜀")
+        return
     limit = None
     for a in sys.argv:
         if a.startswith("--limit="):

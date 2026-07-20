@@ -19,11 +19,11 @@ public/assets/style.css    디자인 토큰 + 레이아웃
 public/assets/script.js    KO/EN 토글, 동적 렌더, 캘린더 모듈, 시트 로더
 public/assets/content/tech.js       기술: 주간·분야 모델(TECH_DOMAINS, TECH_WEEKLY) + 랜딩용 BRIEFINGS_TECH 파생
 public/assets/content/finance.js|economy.js   카테고리별 브리핑 데이터(BRIEFINGS_*, 일간 flat)
-public/assets/content/site.js       UI 카피·TOPICS·각 페이지 i18n·LINKS + BRIEFINGS 합치기
+public/assets/content/site.js       UI 카피·각 페이지 i18n·LINKS·시트 CSV URL(주간/서재/방문) + BRIEFINGS 합치기
 public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시트 URL(CAL_SHEET_URL)
 ```
 
-- 금융·경제 피드는 `data-feed-category`, 유료 칩은 `data-topics` → script.js 범용 렌더. 기술은 `data-tech-menu`(분야 칩)+`data-tech-weekly`(주간 이슈) → `renderTechWeekly`가 별도 렌더.
+- 기술·금융·경제 주간 이슈는 `renderWeekly(cfg)` 하나가 공용 렌더. 기술=`data-tech-menu`+`data-tech-weekly`, 금융=`data-finance-menu`+`data-finance-weekly`, 경제=`data-economy-weekly`(단일 매크로). 분야 칩 전환은 `data-weekly-domain`.
 - 경제 캘린더는 `CAL_SHEET_URL`(구글 시트 웹게시 CSV)이 있으면 시트가 소스, 없으면 `CAL_EVENTS` 샘플.
 
 콘텐츠 추가/수정과 브랜치→배포 절차는 [CONTRIBUTING.md](CONTRIBUTING.md) 참고.

@@ -22,6 +22,7 @@ jobs:
       - name: Fetch dashboard data (stdlib only)
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+          DASH_MANUAL_CSV: ${{ secrets.DASH_MANUAL_CSV }}   # '대시보드-수동' 탭 게시 CSV(선택; 없으면 기존 valuechain_manual.json 보존)
         run: python3 scripts/fetch_dashboard.py
       - name: Commit, push & deploy if changed
         env:
@@ -29,7 +30,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/assets/data/dashboard.json
+          git add public/assets/data/dashboard.json public/assets/data/valuechain_manual.json
           if git diff --cached --quiet; then
             echo "변경 없음 — 커밋 생략"
           else

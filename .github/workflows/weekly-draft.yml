@@ -27,5 +27,6 @@ jobs:
           # 없으면 dry-run. 별도 시트로 분리 시 이 두 줄을 WEEKLY_* 시크릿으로 교체.
           WEEKLY_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}
           WEEKLY_WEBAPP_TOKEN: ${{ secrets.MARKET_WEBAPP_TOKEN }}
+          SETTINGS_CSV: ${{ secrets.SETTINGS_CSV }}   # 'settings' 탭 게시 CSV(선택). pipeline_enabled=0이면 중지. 없으면 활성.
         # 수동 실행 dry=true(기본): --dry로 로그만. dry=false 또는 cron: 시트에 실제 write.
         run: python3 scripts/fetch_weekly.py ${{ inputs.dry && '--dry' || '' }}
