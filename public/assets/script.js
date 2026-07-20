@@ -726,6 +726,7 @@
     renderCalendar();
     renderReport();
     renderMarket();
+    renderVisits();
     observeReveals();
   }
 
@@ -773,6 +774,29 @@
     } catch (e) { /* 무시 */ }
   }
 
+  /* 방문 카운터(메인 페이지 푸터): visitCount를 현재 언어로 표시. lang 토글에도 반영. */
+  var visitCount = null;
+  function renderVisits() {
+    var el = document.querySelector("[data-visits]");
+    if (!el || visitCount == null) return;
+    el.hidden = false;
+    el.textContent = lang === "ko"
+      ? " · 누적 방문 " + visitCount.toLocaleString() + "회"
+      : " · " + visitCount.toLocaleString() + " visits";
+  }
+  /* 카운트 조회는 JSONP(Apps Script는 CORS로 fetch 불가). [data-visits] 있는 페이지에서만. */
+  function loadVisitCount() {
+    if (typeof VISITS_WEBAPP_URL !== "string" || !VISITS_WEBAPP_URL) return;
+    if (!document.querySelector("[data-visits]")) return;
+    window.__bslVisits = function (d) {
+      if (d && typeof d.views === "number") { visitCount = d.views; renderVisits(); }
+    };
+    var s = document.createElement("script");
+    s.src = VISITS_WEBAPP_URL + "?count=1&callback=__bslVisits&t=" + Date.now();
+    s.onerror = function () { /* 무시 */ };
+    (document.body || document.documentElement).appendChild(s);
+  }
+
   /* 히어로 라인 draw-in: 실제 길이로 dasharray 설정 */
   function initSignalLine() {
     document.querySelectorAll(".hero__signal .signal-line").forEach(function (p) {
@@ -795,6 +819,7 @@
     loadMarket();
     loadWeeklySheet();
     logVisit();
+    loadVisitCount();
     initSignalLine();
     document.querySelectorAll(".lang button").forEach(function (b) {
       b.addEventListener("click", function () { setLang(b.getAttribute("data-lang")); });
