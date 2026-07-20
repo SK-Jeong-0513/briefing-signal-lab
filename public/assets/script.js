@@ -197,11 +197,47 @@
     });
   }
 
+  /* 서재 시트(CSV) 행 → library 항목. 본문 md를 셀에 담아 인라인 렌더(.md 파일 불필요).
+   * 열: id · 유형 · 분류 · 발행일 · 제목 · 요약 · 태그 · 본문 · access (헤더 소문자 매핑=mktRows) */
+  function parseLibSheet(txt) {
+    var rows = mktRows(txt), out = [];
+    rows.forEach(function (o) {
+      var id = (o["id"] || "").trim(), title = (o["제목"] || o["title"] || "").trim();
+      if (!id || !title) return;
+      out.push({
+        id: id, title: title,
+        type: ((o["유형"] || o["type"] || "report").trim().toLowerCase() === "note") ? "note" : "report",
+        category: (o["분류"] || o["category"] || "").trim(),
+        tags: (o["태그"] || o["tags"] || "").split(/[,·]/).map(function (s) { return s.trim(); }).filter(Boolean),
+        date: (o["발행일"] || o["date"] || "").trim(),
+        abstract: (o["요약"] || o["abstract"] || "").trim(),
+        access: (o["access"] || "free").trim(),
+        body: (o["본문"] || o["body"] || "").trim()   // 인라인 md(있으면 .md 대신 이걸 렌더)
+      });
+    });
+    return out;
+  }
+  /* library.json(.md) + 서재 시트(CSV) 병합 → 발행일 내림차순. 같은 id는 시트 우선. */
+  function fetchLibraryItems() {
+    var base = fetch("assets/data/library.json?cb=" + Date.now())
+      .then(function (r) { return r.json(); }).then(function (j) { return j.items || []; })
+      .catch(function () { return []; });
+    var sheet = (typeof LIBRARY_SHEET_CSV === "string" && LIBRARY_SHEET_CSV)
+      ? fetch(LIBRARY_SHEET_CSV).then(function (r) { return r.text(); }).then(parseLibSheet).catch(function () { return []; })
+      : Promise.resolve([]);
+    return Promise.all([base, sheet]).then(function (a) {
+      var byId = {};
+      a[0].forEach(function (it) { byId[it.id] = it; });
+      a[1].forEach(function (it) { byId[it.id] = it; });   // 시트 우선
+      return Object.keys(byId).map(function (k) { return byId[k]; })
+        .sort(function (x, y) { return (y.date || "").localeCompare(x.date || ""); });
+    });
+  }
   function loadLibrary() {
     if (!document.getElementById("library-list") && !document.querySelector("[data-lib-reports]") &&
         !document.querySelector("[data-lib-strip]")) return;
-    fetch("assets/data/library.json?cb=" + Date.now()).then(function (r) { return r.json(); }).then(function (j) {
-      libState.items = j.items || [];
+    fetchLibraryItems().then(function (items) {
+      libState.items = items;
       libState.loaded = true;
       renderLibrary();
       renderLibraryPage();
@@ -702,11 +738,16 @@
     if (!document.querySelector("[data-read]")) return;
     var id = new URLSearchParams(location.search).get("r");
     if (!id) { readState.error = "notFound"; renderReport(); return; }
-    fetch("assets/data/library.json?cb=" + Date.now()).then(function (r) { return r.json(); }).then(function (j) {
-      var it = (j.items || []).filter(function (x) { return x.id === id; })[0];
+    fetchLibraryItems().then(function (items) {
+      var it = items.filter(function (x) { return x.id === id; })[0];
       if (!it) { readState.error = "notFound"; renderReport(); return; }
       readState.item = it;
       document.title = it.title + " — Briefing Signal Lab";
+      if (it.body) {                       // 시트 인라인 본문 → .md fetch 없이 바로 렌더
+        readState.bodyHtml = renderMarkdown(it.body);
+        renderReport();
+        return;
+      }
       return fetch(it.file + "?cb=" + Date.now()).then(function (r) { return r.text(); }).then(function (md) {
         readState.bodyHtml = renderMarkdown(md);
         renderReport();
