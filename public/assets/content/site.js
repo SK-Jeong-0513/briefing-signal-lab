@@ -375,7 +375,7 @@ const WEEKLY_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZ
 /* 서재(Library) 업로드 경로: '서재' 탭 게시 CSV. 비우면 library.json(.md)만 사용.
  * 채우면 시트 행이 리포트로 병합됨(본문 md를 셀에 담아 .md 파일 없이 업로드).
  * 열: id · 유형(report/note) · 분류(기술/금융/경제) · 발행일 · 제목 · 요약 · 태그 · 본문 · access */
-const LIBRARY_SHEET_CSV = "";
+const LIBRARY_SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9qlZFl78TiUcCCKApDu7dD_4rkGF8tlYWpyV2dzaTQg6WFtd9DJoNMyjyPa-dn21JzQ1ivAVKPd31/pub?gid=1244768960&single=true&output=csv";
 
 /* 방문 기록 비콘: Apps Script 웹앱(analytics/Code.gs)의 /exec URL. 비우면 기록 안 함.
  * 이미지 비콘(GET)이라 CORS 없음. '방문로그' 탭에 [날짜시각·페이지·referrer·방문자ID] append.
