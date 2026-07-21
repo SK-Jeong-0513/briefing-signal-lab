@@ -67,6 +67,21 @@
 - **fail-open:** `SETTINGS_CSV` 미설정·네트워크 실패·키 부재는 모두 **활성**으로 간주(오직 `0`일 때만 중지) → 실수로 파이프가 멈추지 않는다.
 - ⚠️ **텔레그램 서버(별도 repo)는 아직 이 토글을 안 읽는다.** 그쪽 일일 파이프까지 멈추려면 텔레그램 서버에도 동일 가드를 추가해야 한다(후속).
 
+## LLM 엔진 선택 (⑤ 탭)
+
+주간 초안·시장 종목 생성에 쓰는 LLM 엔진을 콘솔에서 고른다. 파이프 토글과 같은 store(`settings` 탭)를 쓴다.
+
+- 콘솔 ⑤ 탭에서 **주력 엔진** 선택 → `settings` 탭 `llm_primary` 기록.
+- `scripts/lib/ai.py`가 실행 시 `SETTINGS_CSV`에서 `llm_primary`를 읽어 그 엔진을 **맨 앞(주력)**에 세우고 나머지는 **폴백**으로 유지. 미설정·오류·모르는 값이면 기본 순서(deepseek 주력) — fail-open.
+- `SETTINGS_CSV` 시크릿이 이미 등록돼 있으면 추가 셋업 없음. **다음 크론 실행부터** 적용.
+
+### 새 LLM provider 추가 (예: OpenAI GPT, Claude 등)
+"주력 선택"만으론 새 provider가 안 생긴다. 3가지가 함께 필요:
+1. **Secret 등록** — GitHub Settings → Secrets → Actions (예: `OPENAI_API_KEY`).
+2. **`scripts/lib/ai.py`의 `ENGINES`에 한 줄 추가** — `(이름, base_url, 기본모델, 키_env이름)`. (OpenAI 호환 `/chat/completions` 엔드포인트여야 함.)
+3. **`admin/Code.gs`의 `LLM_ENGINES` 배열에 이름 추가** + Apps Script 재붙여넣기·재배포 (콘솔 드롭다운에 노출).
+4. **워크플로 env** — `weekly-draft.yml`·`market-data.yml`의 해당 스텝 env에 `<키_env이름>: ${{ secrets.<Secret> }}` 추가 (Actions는 .yml에 명시한 시크릿만 주입).
+
 ## 유지보수
 
 - 매주: 주간 초안 승인 탭에서 한 주 배치 승인 → 발행 후 옛 주 draft 선택 삭제.

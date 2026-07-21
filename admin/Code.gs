@@ -259,3 +259,18 @@ function setPipelineEnabled(on) {
   _setSetting_('pipeline_enabled', on ? '1' : '0');
   return { ok: true, enabled: !!on };
 }
+
+// ───────────────────────── LLM 엔진 선택 ─────────────────────────
+// ⚠️ scripts/lib/ai.py의 ENGINES와 동기 유지(새 provider 추가 시 양쪽 + Secret + 워크플로 env).
+var LLM_ENGINES = ['deepseek', 'gemini'];
+function getLlmConfig() {
+  _assertAuth_();
+  var primary = _getSetting_('llm_primary');
+  return { engines: LLM_ENGINES, primary: (LLM_ENGINES.indexOf(primary) >= 0) ? primary : LLM_ENGINES[0] };
+}
+function setLlmPrimary(name) {
+  _assertAuth_();
+  if (LLM_ENGINES.indexOf(name) < 0) throw new Error('알 수 없는 엔진: ' + name);
+  _setSetting_('llm_primary', name);
+  return { ok: true, primary: name };
+}

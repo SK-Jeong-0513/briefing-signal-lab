@@ -13,6 +13,8 @@ OpenAI 호환 chat/completions 엔드포인트로 두 엔진을 통일 호출. s
 키 동작 확인(Actions에서):
     python scripts/lib/ai.py --test
 """
+import csv
+import io
 import json
 import os
 import sys
@@ -46,10 +48,49 @@ def _post(url, key, payload, timeout=40):
         return json.loads(r.read().decode("utf-8"))
 
 
+def _get_primary():
+    """settings 탭 CSV(env SETTINGS_CSV)에서 llm_primary 읽기. 운영자 콘솔이 씀.
+    없거나 실패하면 None(기본 순서=ENGINES 그대로, deepseek 주력). fail-open."""
+    url = os.environ.get("SETTINGS_CSV", "").strip()
+    if not url:
+        return None
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "BriefingSignalLab/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            rows = list(csv.reader(io.StringIO(r.read().decode("utf-8", "replace"))))
+    except Exception:
+        return None
+    if not rows:
+        return None
+    header = [c.strip().lower() for c in rows[0]]
+    ki, vi = (header.index("key"), header.index("value")) if ("key" in header and "value" in header) else (0, 1)
+    for row in rows[1:]:
+        if len(row) > max(ki, vi) and row[ki].strip() == "llm_primary":
+            return row[vi].strip() or None
+    return None
+
+
+_ORDER = None
+
+
+def _engines_ordered():
+    """콘솔 선택(llm_primary)을 주력으로 앞세운 엔진 목록. 프로세스당 1회만 settings 읽음."""
+    global _ORDER
+    if _ORDER is None:
+        primary = _get_primary()
+        if primary and any(e[0] == primary for e in ENGINES):
+            _ORDER = ([e for e in ENGINES if e[0] == primary] +
+                      [e for e in ENGINES if e[0] != primary])
+            print("[ai] 주력 엔진 = %s (운영자 콘솔 선택)" % primary)
+        else:
+            _ORDER = list(ENGINES)
+    return _ORDER
+
+
 def chat(system, user, max_tokens=700, temperature=0.3):
     """엔진 순서대로 시도. (text, engine_name) 반환. 전부 실패면 (None, None)."""
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    for name, base, model, keyvar in ENGINES:
+    for name, base, model, keyvar in _engines_ordered():
         key = os.environ.get(keyvar, "").strip()
         if not key:
             print("[ai] %s 키(%s) 없음. 건너뜀" % (name, keyvar))
