@@ -13,7 +13,7 @@ const FINANCE_DOMAINS = [
     tagline: { ko: "국채·크레딧·스프레드", en: "Govvies, credit, spreads" } },
   { id: "commodity", label: { ko: "원자재·대체", en: "Commodities & Alts" }, status: "live",
     tagline: { ko: "에너지·금속·대체자산", en: "Energy, metals, alts" } },
-  { id: "flows", label: { ko: "펀드·자금흐름", en: "Funds & Flows" }, status: "soon",
+  { id: "flows", label: { ko: "펀드·자금흐름", en: "Funds & Flows" }, status: "live",  // 2026-07-21 개방: 로봇 flows 초안 승인분 표시(bio와 동일 메커니즘)
     tagline: { ko: "수급·ETF·포지셔닝", en: "Flows, ETFs, positioning" } },
 ];
 
