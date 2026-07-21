@@ -5,7 +5,7 @@
 ## 원칙
 
 - **단일 소스:** `github.com/SK-Jeong-0513/briefing-signal-lab` (로컬 작업 폴더 = `BrieSigLab/`).
-- **배포 대상:** `public/` 폴더만. `main`에 push되면 GitHub Actions가 자동배포 → https://sk-jeong-0513.github.io/briefing-signal-lab/
+- **배포 대상:** `public/` 폴더만. `main`에 push되면 GitHub Actions가 자동배포 → **https://brevislab.com** (커스텀 도메인, 배포 소스=`sk-jeong-0513.github.io/briefing-signal-lab`)
 - **콘텐츠는 데이터:** 브리핑 추가/수정은 코드가 아니라 `public/assets/content/<카테고리>.js` 데이터 편집.
 
 ## 브랜치 규칙

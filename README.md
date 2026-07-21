@@ -3,7 +3,8 @@
 기술·금융·경제 신호를 매일 선별해 무료 샘플과 유료 전체 브리핑으로 제공하는 구독형 브리핑 플랫폼.
 
 정적 사이트(HTML/CSS/JS, 빌드 도구 없음). **GitHub Pages + GitHub Actions 자동배포.**
-라이브: https://sk-jeong-0513.github.io/briefing-signal-lab/
+라이브: **https://brevislab.com** (커스텀 도메인·HTTPS). 배포 소스=`sk-jeong-0513.github.io/briefing-signal-lab`.
+운영: 반자동 주간 파이프(로봇 크롤+LLM 초안 → 운영자 콘솔 승인 → 사이트) + 시장 일일·대시보드·경제캘린더 자동화 + 운영자 관리자 콘솔(`admin/`, 별도 BSL_admin Apps Script).
 
 ## 구조
 
