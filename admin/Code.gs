@@ -149,6 +149,27 @@ function libraryAdd(item) {
   _appendByHeader_(sh, item);
   return { ok: true };
 }
+/** 기존 행 수정. item에 있는 열만 덮어쓰고 나머지 열은 보존. */
+function libraryUpdate(row, item) {
+  _assertAuth_();
+  var sh = _openMarket_().getSheetByName(LIBRARY_TAB);
+  if (!sh) throw new Error('탭 없음: ' + LIBRARY_TAB);
+  if (!item || !String(item['id'] || '').trim() || !String(item['제목'] || '').trim()) {
+    throw new Error('id와 제목은 필수입니다');
+  }
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  var existing = sh.getRange(row, 1, 1, header.length).getValues()[0];
+  var values = header.map(function (h, i) {
+    return (item.hasOwnProperty(h) && item[h] != null) ? item[h] : existing[i];
+  });
+  sh.getRange(row, 1, 1, header.length).setValues([values]);
+  return { ok: true };
+}
+function libraryDeleteRows(rows) {
+  _assertAuth_();
+  var sh = _openMarket_().getSheetByName(LIBRARY_TAB);
+  return { ok: true, deleted: _deleteRows_(sh, rows) };
+}
 
 // ───────────────────────── ④ 방문 통계 ─────────────────────────
 function visitStats() {

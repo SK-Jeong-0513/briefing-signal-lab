@@ -123,8 +123,9 @@
         <label class="f">태그 (쉼표 구분)</label><input id="l-tags" placeholder="우주·방산, SCM">
         <label class="f">본문 (마크다운)</label><textarea id="l-body"></textarea>
         <div class="row" style="margin-top:var(--s-md)">
-          <button class="btn primary" onclick="libraryAdd()">추가</button>
-          <span class="muted small">추가 후 사이트는 서재 시트 CSV를 다음 로드 시 반영합니다.</span>
+          <button class="btn primary" id="l-save" onclick="librarySave()">추가</button>
+          <button class="btn" id="l-cancel" onclick="libCancelEdit()" style="display:none">취소</button>
+          <span class="muted small">추가/수정 후 사이트는 서재 시트 CSV를 다음 로드 시 반영합니다.</span>
         </div>
       </div>
       <div class="panel"><h2>기존 항목</h2><div id="l-list"><div class="empty">불러오는 중…</div></div></div>
@@ -261,26 +262,56 @@
   }
 
   // ── ③ 서재 ──
-  var _libLoaded=false;
+  var _libLoaded=false, _lib=[];
   function loadLibrary(){_libLoaded=true;
     call('libraryList').then(function(d){
+      _lib=d.rows;
       if(!d.rows.length){document.getElementById('l-list').innerHTML='<div class="empty">항목 없음</div>';return;}
-      var html='<table><thead><tr><th>발행일</th><th>유형</th><th>분류</th><th>제목</th></tr></thead><tbody>';
+      var html='<table><thead><tr><th>발행일</th><th>유형</th><th>분류</th><th>제목</th><th>액션</th></tr></thead><tbody>';
       d.rows.slice().reverse().forEach(function(r){
-        html+='<tr><td>'+esc(r['발행일'])+'</td><td>'+esc(r['유형'])+'</td><td>'+esc(r['분류'])+'</td><td>'+esc(r['제목'])+'</td></tr>';});
+        html+='<tr><td>'+esc(r['발행일'])+'</td><td>'+esc(r['유형'])+'</td><td>'+esc(r['분류'])+'</td><td>'+esc(r['제목'])+'</td>'+
+          '<td style="white-space:nowrap"><button class="btn" onclick="libEdit('+r._row+')">수정</button> <button class="btn danger" onclick="libDelete('+r._row+')">삭제</button></td></tr>';});
       document.getElementById('l-list').innerHTML=html+'</tbody></table>';
     }).catch(function(e){_libLoaded=false;fail(e);});
   }
-  function libraryAdd(){
+  var _libEditRow=null;
+  function librarySave(){
     var item={
       'id':val('l-id'),'유형':val('l-type'),'분류':val('l-cat'),'발행일':val('l-date'),
       '제목':val('l-title'),'요약':val('l-abstract'),'태그':val('l-tags'),
       '본문':val('l-body'),'access':val('l-access')
     };
     if(!item['id']||!item['제목']){toast('id와 제목은 필수',true);return;}
-    call('libraryAdd',item).then(function(){toast('서재에 추가됨');
-      ['l-id','l-title','l-abstract','l-tags','l-body'].forEach(function(x){document.getElementById(x).value='';});
-      _libLoaded=false;loadLibrary();}).catch(fail);
+    var p=_libEditRow ? call('libraryUpdate',_libEditRow,item) : call('libraryAdd',item);
+    p.then(function(){toast(_libEditRow?'수정됨':'서재에 추가됨');libCancelEdit();_libLoaded=false;loadLibrary();}).catch(fail);
+  }
+  function libEdit(row){
+    var r=_lib.filter(function(x){return x._row===row;})[0]; if(!r)return;
+    document.getElementById('l-id').value=r['id']||'';
+    document.getElementById('l-type').value=(r['유형']||'report');
+    document.getElementById('l-cat').value=(r['분류']||'기술');
+    document.getElementById('l-date').value=r['발행일']||'';
+    document.getElementById('l-title').value=r['제목']||'';
+    document.getElementById('l-abstract').value=r['요약']||'';
+    document.getElementById('l-tags').value=r['태그']||'';
+    document.getElementById('l-body').value=r['본문']||'';
+    document.getElementById('l-access').value=(r['access']||'free');
+    _libEditRow=row;
+    document.getElementById('l-save').textContent='수정 저장';
+    document.getElementById('l-cancel').style.display='';
+    window.scrollTo(0,0);
+    toast('수정 모드: '+(r['제목']||''));
+  }
+  function libCancelEdit(){
+    _libEditRow=null;
+    ['l-id','l-title','l-abstract','l-tags','l-body'].forEach(function(x){document.getElementById(x).value='';});
+    document.getElementById('l-save').textContent='추가';
+    document.getElementById('l-cancel').style.display='none';
+  }
+  function libDelete(row){
+    var r=_lib.filter(function(x){return x._row===row;})[0];
+    if(!confirm('삭제: '+((r&&r['제목'])||row)+' (되돌릴 수 없습니다)'))return;
+    call('libraryDeleteRows',[row]).then(function(res){toast(res.deleted+'행 삭제');if(_libEditRow===row)libCancelEdit();_libLoaded=false;loadLibrary();}).catch(fail);
   }
 
   // ── ④ 방문 통계 ──
