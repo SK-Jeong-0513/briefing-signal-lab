@@ -10,7 +10,7 @@
  * 탭 작업 = TECH_WEEKLY에 분야별 최신 이슈 추가/교체. 랜딩 티저는 헤드라이너에서 자동 파생.
  */
 
-/* ⑤ 발행 시트 CSV(WEEKLY_SHEET_CSV)는 site.js에 정의(tech/finance/economy 공용). */
+/* 공개 발행항목 CSV(WEEKLY_RELEASE_ITEMS_CSV)는 site.js에 정의(tech/finance/economy 공용). */
 
 /* ── 분야(밸류체인 테마) 메뉴: live=가동, soon=곧 공개(로드맵) ── */
 const TECH_DOMAINS = [
@@ -47,7 +47,7 @@ const TECH_DOMAINS = [
   {
     id: "bio",
     label: { ko: "바이오", en: "Bio" },
-    status: "live",  // 2026-07-21 개방: W30 승인분 확보(운영자 콘솔 확인). 시트 approved 행을 렌더.
+    status: "live",  // 공개 렌더는 주간-발행항목의 published 스냅샷만 사용.
     tagline: { ko: "임상·플랫폼·헬스테크", en: "Clinical, platforms, healthtech" },
   },
 ];

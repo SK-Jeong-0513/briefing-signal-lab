@@ -9,11 +9,11 @@
   설문/구독자 시트(BizSignal Labs, mailer)와 무관하다. 소스는 아래 DOMAINS의 도메인 키워드로
   검색한 뉴스뿐이며, 기업명은 그 뉴스에서 '관찰'로 추출될 뿐 사전 종목 리스트가 아니다.
 
-산출물은 '초안'이다. 사람이 시트에서 draft->approved로 선별하고 헤드라이너 딥다이브를
-직접 작성하는 것이 유일한 발행 게이트다(④). 이 스크립트는 ④⑤에 관여하지 않는다.
+산출물은 '초안'이다. draft->approved는 편집 승인일 뿐 공개 게이트가 아니다.
+공개는 관리자 수동 예약 또는 prepare_weekly_release.py의 조건부 자동 검수 후 발행 원장을 거친다.
 
 '주간-초안' 탭 컬럼(헤더 정확히):
-    분야 · 발행주 · 유형 · 제목ko · 제목en · 한줄ko · 한줄en · 밸류체인 · 출처URL · 선행도 · status
+    분야 · 발행주 · 유형 · 제목ko · 제목en · 한줄ko · 한줄en · 밸류체인 · 출처URL · 원문제목 · 원문일시 · 수집일시 · 생성엔진 · 선행도 · status
 
 Actions/로컬 환경변수:
     DEEPSEEK_API_KEY / GEMINI_API_KEY   (lib/ai.py)
@@ -32,6 +32,7 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 import ai      # noqa: E402
@@ -43,7 +44,7 @@ ATOM = {"a": "http://www.w3.org/2005/Atom"}
 
 # 시트 헤더 순서(웹앱이 헤더명으로 매핑하므로 시트 첫 행과 정확히 일치해야 함).
 HEADER = ["분야", "발행주", "유형", "제목ko", "제목en", "한줄ko", "한줄en",
-          "밸류체인", "출처URL", "선행도", "status"]
+          "밸류체인", "출처URL", "원문제목", "원문일시", "수집일시", "생성엔진", "선행도", "status"]
 
 # 런칭 앵커 2개(가동 분야). 로드맵/타 카테고리는 아래에 도메인 항목을 append 해 확장.
 # 소스: 현재 Google News RSS만 기본 사용(온타깃 검증됨). arXiv 어댑터(feed_arxiv)는 유지하나
@@ -164,10 +165,11 @@ DOMAINS = [
 ]
 
 
-def week_kst():
-    """발행주 라벨(ISO): 'YYYY-Www'. KST(UTC+9) 기준."""
-    kst = datetime.now(timezone.utc) + timedelta(hours=9)
-    return kst.strftime("%G-W%V")
+def week_kst(now=None):
+    """다음 화요일 발행호의 ISO 키. 일요일 생성분이 다음 주 호로 들어가게 한다."""
+    kst = now or (datetime.now(timezone.utc) + timedelta(hours=9))
+    days = (1 - kst.weekday()) % 7
+    return (kst + timedelta(days=days)).strftime("%G-W%V")
 
 
 def get(url, timeout=25):
@@ -202,8 +204,13 @@ def feed_gnews(query, n=4):
     for it in root.findall(".//item")[:n]:
         title = (it.findtext("title") or "").strip()
         link = (it.findtext("link") or "").strip()
+        published = (it.findtext("pubDate") or "").strip()
+        try:
+            published = parsedate_to_datetime(published).astimezone(timezone.utc).isoformat()
+        except Exception:
+            published = ""
         if title:
-            out.append((title, link, "뉴스"))
+            out.append((title, link, "뉴스", published))
     return out
 
 
@@ -223,8 +230,9 @@ def feed_arxiv(query, n=2):
     for e in root.findall("a:entry", ATOM)[:n]:
         title = " ".join((e.findtext("a:title", "", ATOM) or "").split())
         link = (e.findtext("a:id", "", ATOM) or "").strip()
+        published = (e.findtext("a:published", "", ATOM) or "").strip()
         if title:
-            out.append((title, link, "arXiv 논문"))
+            out.append((title, link, "arXiv 논문", published))
     return out
 
 
@@ -233,11 +241,11 @@ def collect(domain):
     heads, seen = [], set()
     for kind, query in domain["feeds"]:
         items = feed_gnews(query) if kind == "gnews" else feed_arxiv(query)
-        for title, link, src in items:
+        for title, link, src, published in items:
             key = title.lower()
             if key not in seen:
                 seen.add(key)
-                heads.append((title, link, src))
+                heads.append((title, link, src, published))
         time.sleep(1)  # 소스 rate-limit 완화
     return heads[:12]
 
@@ -290,7 +298,7 @@ def draft_domain(domain, week):
             n = int(c.get("출처n", 0))
         except Exception:
             n = 0
-        src = heads[n - 1][1] if 1 <= n <= len(heads) else ""
+        source = heads[n - 1] if 1 <= n <= len(heads) else ("", "", "", "")
         row = {
             "분야": domain["id"],
             "발행주": week,
@@ -300,7 +308,11 @@ def draft_domain(domain, week):
             "한줄ko": (c.get("한줄ko") or "").strip(),
             "한줄en": (c.get("한줄en") or "").strip(),
             "밸류체인": (c.get("밸류체인") or "").strip(),
-            "출처URL": src,
+            "출처URL": source[1],
+            "원문제목": source[0],
+            "원문일시": source[3],
+            "수집일시": datetime.now(timezone.utc).isoformat(),
+            "생성엔진": engine,
             "선행도": str(c.get("선행도", "")).strip(),
             "status": "draft",
         }

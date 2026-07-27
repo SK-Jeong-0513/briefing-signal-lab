@@ -103,7 +103,13 @@
             <button class="btn danger" onclick="weeklyDeleteSelected()">선택 삭제</button>
           </div>
         </div>
-        <p class="small muted" style="margin:8px 0 0">한 주를 통으로 승인하고, 발행 후 옛 주 draft를 선택 삭제하세요. 사이트는 approved만 읽습니다.</p>
+        <p class="small muted" style="margin:8px 0 0">approved는 편집 승인입니다. 공개는 아래 “이번 호 발행 예약” 또는 화요일 자동 검수 후 발행 원장을 통해서만 진행됩니다.</p>
+      </div>
+      <div class="panel">
+        <div class="row">
+          <div class="grow"><h2 style="margin:0">이번 호 발행</h2><div id="w-release" class="small muted">발행주를 선택하세요.</div></div>
+          <button class="btn primary" onclick="weeklyPrepare()">이번 호 발행 예약 / 웹판 업데이트</button>
+        </div>
       </div>
       <div class="panel" id="w-table"><div class="empty">불러오는 중…</div></div>
     </section>
@@ -235,12 +241,16 @@
     call('weeklyList').then(function(d){_weekly=d;
       var weeks=[];d.rows.forEach(function(r){var w=r['발행주'];if(w&&weeks.indexOf(w)<0)weeks.push(w);});
       weeks.sort().reverse();
-      document.getElementById('w-week').innerHTML='<option value="">전체</option>'+weeks.map(function(w){return '<option>'+esc(w)+'</option>';}).join('');
+      var select=document.getElementById('w-week'), previous=select.value;
+      select.innerHTML='<option value="">전체</option>'+weeks.map(function(w){return '<option>'+esc(w)+'</option>';}).join('');
+      select.value=(previous&&weeks.indexOf(previous)>=0)?previous:(weeks[0]||'');
       renderWeekly();
+      loadWeeklyRelease();
     }).catch(fail);
   }
   function renderWeekly(){
     var fw=document.getElementById('w-week').value, fs=document.getElementById('w-status').value;
+    loadWeeklyRelease();
     var rows=_weekly.rows.filter(function(r){
       return (!fw||String(r['발행주'])===fw)&&(!fs||String(r['status']||'').trim()===fs);
     });
@@ -276,6 +286,28 @@
     if(!rows.length){toast('삭제할 행을 선택하세요',true);return;}
     if(!confirm(rows.length+'개 행을 삭제합니다. 되돌릴 수 없습니다.'))return;
     call('weeklyDeleteRows',rows).then(function(r){toast(r.deleted+'행 삭제');loadWeekly();}).catch(fail);
+  }
+
+
+  function loadWeeklyRelease(){
+    var issue=document.getElementById('w-week').value, host=document.getElementById('w-release');
+    if(!issue){host.textContent='발행주를 선택하세요.';return;}
+    host.textContent='원장 확인 중…';
+    call('weeklyReleaseStatus',issue).then(function(d){
+      if(!d.latest){host.textContent=issue+' · 아직 발행 원장 기록 없음';return;}
+      var r=d.latest;
+      host.innerHTML='<b>'+esc(issue)+' · '+esc(r.state||'')+' · rev.'+esc(r.revision||'1')+'</b>'+
+        (r.updated_at?'<br>최근 갱신 '+esc(r.updated_at):'')+(r.message?'<br>'+esc(r.message):'');
+    }).catch(fail);
+  }
+  function weeklyPrepare(){
+    var issue=document.getElementById('w-week').value;
+    if(!issue){toast('발행주를 선택하세요',true);return;}
+    if(!confirm(issue+' approved 행으로 발행 스냅샷을 만듭니다. 이미 발행된 호면 웹 rev.2+로 갱신되고 이메일은 재발송되지 않습니다.'))return;
+    call('weeklyPrepareRelease',issue).then(function(r){
+      toast(r.unchanged?'이미 발행 예약됨':r.state+' · rev.'+r.revision+' · '+r.count+'건');
+      loadWeeklyRelease();
+    }).catch(fail);
   }
 
   // ── ③ 서재 ──

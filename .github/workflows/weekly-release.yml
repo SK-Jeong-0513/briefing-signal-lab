@@ -1,0 +1,27 @@
+name: Weekly briefing release gate
+
+# 화요일 17:05 KST: 수동 발행 예약이 없는 호만 독립 LLM 검수 후 auto_ready/skipped 기록.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 8 * * 2"   # 화 08:05 UTC = 화 17:05 KST
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Evaluate and prepare weekly release
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DATA_GO_DEEPSEEK }}
+          GEMINI_API_KEY: ${{ secrets.DATA_GO_GEMINI }}
+          SETTINGS_CSV: ${{ secrets.SETTINGS_CSV }}
+          WEEKLY_DRAFT_CSV: ${{ secrets.WEEKLY_DRAFT_CSV }}
+          WEEKLY_RELEASE_CSV: ${{ secrets.WEEKLY_RELEASE_CSV }}
+          WEEKLY_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}
+          WEEKLY_WEBAPP_TOKEN: ${{ secrets.MARKET_WEBAPP_TOKEN }}
+          WEEKLY_MIN_SCORE: "85"
+          WEEKLY_MIN_CONFIDENCE: "0.85"
+          WEEKLY_FRESH_DAYS: "10"
+        run: python3 scripts/prepare_weekly_release.py

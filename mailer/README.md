@@ -3,7 +3,7 @@
 무료 구독자에게 **기술·금융·경제 3개 카테고리를 한 통**으로 발송하고, 이메일 링크로 선호도/수신거부를 카테고리별 시트에 반영하는 메일러.
 
 - **경로:** Google Apps Script. 사이트 호스팅과 독립.
-- **발송:** `sendWeekly()` 수동 실행(구독자당 1통, 구독한 카테고리·분야 섹션만).
+- **발송:** 화요일 20:00 `sendWeekly()` 트리거(구독자당 1통, 구독한 카테고리·분야 섹션만).
 - **위치:** 배포 안 됨(사이트는 `public/`만 서빙). 버전관리·복사용 원본.
 
 ## 시트 구조 (응답 1 + 선호도 3)
@@ -25,7 +25,7 @@
 2. **CFG.SALT는 이전에 설정한 값 그대로 유지** — 바꾸면 이미 보낸 메일의 링크 토큰이 깨집니다.
 3. **doGet 코드가 바뀌었으므로 웹앱 재배포 필요:** 배포 → **배포 관리 → ✏️(편집) → 버전: 새 버전 → 배포.** URL은 그대로 유지되니 `CFG.WEBAPP_URL`도 그대로.
 4. 3개 선호도 탭(`관심분야(기술)/(금융)/(경제)`)이 존재하는지 확인(헤더는 자동 생성).
-5. `sendWeekly` 실행 → `TEST_MODE=true`면 나에게만 1통(미리보기) → OK면 `false`로 전원.
+5. `sendWeekly` 실행 → `TEST_MODE=true`면 나에게만 1통(미리보기, 원장 변경 없음) → OK면 `false`로 바꾸고 `createWeeklyTriggers()` 1회 실행.
 
 ## 발송 로직
 
@@ -38,11 +38,33 @@
 
 ## 매주 발송
 
-- `CATS[].issues`만 그 주 내용으로 교체(사이트 `public/assets/content/{tech,finance,economy}.js`의 무료 부분과 동일).
-- `sendWeekly` 실행.
+- 콘텐츠는 `BSL_market/주간-발행항목` rev.1 스냅샷을 사용한다. 코드의 정적 `CATS[].issues`는 주간 발송 소스가 아니다.
+- 화요일 20:00 트리거가 `sendWeekly()`를 실행하며, 실패 후 재실행은 성공 수신자를 제외한다.
 
 ## 개인정보/발송 규칙
 
 - 이메일은 링크에 넣지 않음(해시 토큰만). 수신거부 필수(정보통신망법).
 - 발송 한도 GmailApp ~100통/일. 대량·정식은 도메인 인증 ESP로 이관.
 - 이메일은 KO. 종목·자산은 관찰 대상으로만 명시, 매수·매도 권유 없음.
+
+## 자동 주간 발송 (2026-07-27 설계)
+
+주간 메일은 코드에 고정된 `CATS[].issues`가 아니라 `BSL_market`의 발행 원장과 발행항목을 읽는다.
+
+- 화요일 20:00 KST 고정 발송
+- `published` 상태이며 발행항목이 1건 이상인 호만 대상
+- 호·리비전·수신자 해시별 성공 로그가 있으면 재발송하지 않음
+- 부분 실패 재시도는 실패 수신자만 대상
+- 웹판 `rev.2+` 업데이트는 이메일 재발송하지 않음
+- 0건은 `skipped`
+
+Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필요하다. 기존 `sendDailyMarket()`과 `createDailyTrigger()`는 별도 경로로 유지한다.
+
+배포 순서:
+
+1. `CFG.MARKET_SHEET_ID`에 BSL_market ID를 설정하고 Apps Script 속성 `WEEKLY_CRON_TOKEN`에 긴 임의 토큰을 저장한다.
+2. `admin/`으로 `주간-발행`·`주간-발행항목`·`주간-발송로그` 탭을 먼저 만든다.
+3. Apps Script에 `mailer/Code.gs`를 다시 붙여넣고 `TEST_MODE=true`로 `sendWeekly()` 미리보기 1건을 확인한다. 테스트 모드는 원장과 발송 로그를 변경하지 않는다.
+4. `TEST_MODE=false`로 바꾸고 웹앱을 새 버전으로 재배포한다. GitHub Secret `WEEKLY_MAILER_URL`에는 이 웹앱 URL, `WEEKLY_MAILER_TOKEN`에는 위 스크립트 속성과 같은 값을 넣는다. `.github/workflows/weekly-send.yml`이 화요일 20:00 KST에 정확히 호출한다.
+5. `createWeeklyTriggers()`를 한 번 실행해 일·월·화 알림과 Apps Script 재시도용 발송 트리거를 만든다. Apps Script 트리거는 시각 오차가 있을 수 있지만 수신자 로그가 GitHub 호출과의 중복을 막는다.
+6. 기존 `createDailyTrigger()`는 그대로 유지한다.

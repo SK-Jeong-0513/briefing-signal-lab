@@ -5,8 +5,8 @@
  *   - PREF: 관심분야(기술)/관심분야(금융)/관심분야(경제) — 구독 상태. 읽기/쓰기, 헤더 자동생성.
  *
  * [설치] 응답 시트에서 확장 프로그램→Apps Script→이 파일 붙여넣기(bound 아니면 CFG.SHEET_ID).
- *   CFG의 SALT 교체·탭 이름 확인 → 웹앱 배포→WEBAPP_URL → sendWeekly 실행(TEST_MODE=true=나에게만).
- * [발송] sendWeekly(). [매주] 각 CATS[].issues만 갱신(사이트 content/*.js 무료 부분과 동일).
+ *   CFG의 SALT·MARKET_SHEET_ID 확인 → 웹앱 재배포 → TEST_MODE 미리보기 → createWeeklyTriggers() 1회.
+ * [발송] 화요일 20:00 sendWeekly(). 콘텐츠는 BSL_market 주간-발행/주간-발행항목 rev.1에서 읽는다.
  * [개인정보] 이메일은 링크에 넣지 않음(해시 토큰만). 수신거부 필수.
  *
  * [일일 시황 메일 — Stage 4] sendDailyMarket(): 텔레그램 파이프가 '시장' 스프레드시트의
@@ -18,7 +18,7 @@
 // ===== CONFIG — 여기만 수정 =====
 const CFG = {
   TEST_MODE: true,
-  BASE: "https://sk-jeong-0513.github.io/briefing-signal-lab/",
+  BASE: "https://brevislab.com/",
   WEBAPP_URL: "https://script.google.com/macros/s/AKfycbxZlLlqMIjzOR9545l1f-pe29X4XFV6NCqKzVs0aL7kETCR3fKXt7uH6FWWSN7rxi0/exec",
   SENDER_NAME: "Briefing Signal Lab",
   SUBJECT: "[주간 브리핑] 기술 · 금융 · 경제 신호",
@@ -34,6 +34,9 @@ const CFG = {
   MARKET_SHEET_ID: "",              // '시장' 스프레드시트 ID(시트 URL의 /d/<여기>/edit)
   MARKET_TAB: "시장-일일",
   MARKET_BODY_TAB: "시장-본문",       // 텔레그램 상세 요약(날짜·시간대·본문)
+  WEEKLY_LEDGER_TAB: "주간-발행",
+  WEEKLY_ITEM_TAB: "주간-발행항목",
+  WEEKLY_DELIVERY_TAB: "주간-발송로그",
   DAILY_CATS: ["경제", "금융", "기술"],   // 메일에 담을 순서
   DAILY_SUBJECT: "[일일 시황]",       // 뒤에 날짜가 붙음
 };
@@ -42,7 +45,7 @@ const CFG = {
 const CATS = [
   {
     key: "tech", label: "기술", prefSheet: "관심분야(기술)", page: "tech.html",
-    domains: [{ id: "ai-infra", label: "AI 인프라" }, { id: "semicon", label: "반도체 공급망" }],
+    domains: [{ id: "ai-infra", label: "AI 인프라" }, { id: "semicon", label: "반도체 공급망" }, { id: "power", label: "전력·에너지" }, { id: "space", label: "우주·방산" }, { id: "bio", label: "바이오" }],
     issues: {
       "ai-infra": {
         signals: [
@@ -66,7 +69,7 @@ const CATS = [
   },
   {
     key: "finance", label: "금융", prefSheet: "관심분야(금융)", page: "finance.html",
-    domains: [{ id: "kr-equity", label: "국내 증시" }, { id: "us-equity", label: "미국 증시" }],
+    domains: [{ id: "kr-equity", label: "국내 증시" }, { id: "us-equity", label: "미국 증시" }, { id: "bond", label: "채권·금리 시장" }, { id: "commodity", label: "원자재·대체" }, { id: "flows", label: "펀드·자금흐름" }],
     issues: {
       "kr-equity": {
         signals: [
@@ -168,44 +171,142 @@ function prefUpsert_(name, email, domainLabels, status) {
 function catByKey_(key) { return CATS.filter(function (c) { return c.key === key; })[0]; }
 function domById_(cat, id) { return cat.domains.filter(function (d) { return d.id === id; })[0]; }
 
-// ===== 발송 =====
-function sendWeekly() {
-  var rt = tableOf_(CFG.RESP_SHEET);
-  var iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent), iK = idx_(rt.header, CFG.RESP_COL.keywords);
-  if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
-  var maps = {}; CATS.forEach(function (c) { maps[c.key] = prefMap_(c.prefSheet); });
+// ===== 원장 기반 주간 발송 =====
+function weeklyMarketSs_() {
+  if (!CFG.MARKET_SHEET_ID) throw new Error("CFG.MARKET_SHEET_ID를 채우세요.");
+  return SpreadsheetApp.openById(CFG.MARKET_SHEET_ID);
+}
+function weeklyTable_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh) throw new Error("주간 탭 없음: " + name);
+  var values = sh.getDataRange().getValues(), header = (values[0] || []).map(function (h) { return String(h).trim(); }), rows = [];
+  for (var r = 1; r < values.length; r++) { var o = { _row: r + 1 }; for (var c = 0; c < header.length; c++) o[header[c]] = values[r][c]; rows.push(o); }
+  return { sh: sh, header: header, rows: rows };
+}
+function weeklyAppend_(table, item) { table.sh.appendRow(table.header.map(function (h) { return item[h] != null ? item[h] : ""; })); }
+function weeklyNow_() { return Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd'T'HH:mm:ssXXX"); }
+function weeklyIsoIssue_(addDays) {
+  var p = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy,M,d").split(",").map(Number);
+  var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + (addDays || 0)));
+  var day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
+  var year = d.getUTCFullYear(), start = new Date(Date.UTC(year, 0, 1));
+  var week = Math.ceil((((d - start) / 86400000) + 1) / 7);
+  return year + "-W" + (week < 10 ? "0" : "") + week;
+}
+function weeklyLatestBundle_(issueKey) {
+  var ss = weeklyMarketSs_(), ledger = weeklyTable_(ss, CFG.WEEKLY_LEDGER_TAB), chosen = null;
+  for (var i = ledger.rows.length - 1; i >= 0; i--) {
+    var row = ledger.rows[i], state = String(row.state || ""), rev = Number(row.revision || 0);
+    if (String(row.issue_key) === String(issueKey) && rev === 1 && ["manual_ready","auto_ready","published","email_partial","emailed"].indexOf(state) >= 0) { chosen = row; break; }
+  }
+  if (!chosen || String(chosen.state) === "emailed") return null;
+  var items = weeklyTable_(ss, CFG.WEEKLY_ITEM_TAB);
+  var itemSeen = {};
+  var selected = items.rows.filter(function (r) {
+    if (String(r.issue_key) !== String(chosen.issue_key) || Number(r.revision || 0) !== 1 || ["ready","published"].indexOf(String(r['상태'] || "")) < 0) return false;
+    var key = String(r['출처URL'] || "") + "|" + String(r['제목ko'] || "");
+    if (itemSeen[key]) return false; itemSeen[key] = 1; return true;
+  });
+  if (!selected.length) return null;
+  return { ss: ss, ledger: ledger, itemTable: items, ledgerRow: chosen, issueKey: String(chosen.issue_key), revision: 1, items: selected };
+}
+function weeklyPublish_(bundle) {
+  if (String(bundle.ledgerRow.state) === "published" || String(bundle.ledgerRow.state) === "email_partial") return;
+  var now = weeklyNow_(), h = bundle.itemTable.header, iState = h.indexOf("상태") + 1, iPub = h.indexOf("published_at") + 1, iUpd = h.indexOf("updated_at") + 1;
+  bundle.items.forEach(function (r) {
+    bundle.itemTable.sh.getRange(r._row, iState).setValue("published");
+    if (iPub > 0) bundle.itemTable.sh.getRange(r._row, iPub).setValue(now);
+    if (iUpd > 0) bundle.itemTable.sh.getRange(r._row, iUpd).setValue(now);
+    r['상태'] = "published"; r.published_at = now; r.updated_at = now;
+  });
+  weeklyAppend_(bundle.ledger, { issue_key: bundle.issueKey, state: "published", revision: 1, manual_confirmed: bundle.ledgerRow.manual_confirmed, auto_mode: bundle.ledgerRow.auto_mode, published_at: now, emailed_at: "", content_hash: bundle.ledgerRow.content_hash, updated_at: now, message: "20:00 공개; 주간 메일 발송 시작" });
+}
+function weeklyReleaseCats_(items) {
+  var byDomain = {};
+  items.forEach(function (r) { var d = String(r['분야'] || ""); if (!d) return; (byDomain[d] = byDomain[d] || []).push(r); });
+  return CATS.map(function (base) {
+    var cat = { key: base.key, label: base.label, prefSheet: base.prefSheet, page: base.page, domains: base.domains, issues: {} };
+    base.domains.forEach(function (d) {
+      var rows = byDomain[d.id] || []; if (!rows.length) return;
+      var signals = rows.filter(function (r) { return String(r['유형'] || "signal").toLowerCase() !== "headliner"; }).map(function (r) { return { t: String(r['제목ko'] || ""), l: String(r['한줄ko'] || ""), tag: "" }; });
+      var headRow = rows.filter(function (r) { return String(r['유형'] || "").toLowerCase() === "headliner"; })[0] || rows[0];
+      cat.issues[d.id] = { signals: signals.length ? signals : [{ t: String(headRow['제목ko'] || ""), l: String(headRow['한줄ko'] || ""), tag: "" }], head: { title: String(headRow['제목ko'] || ""), sum: [String(headRow['한줄ko'] || "")] } };
+    });
+    return cat;
+  });
+}
+function weeklyDelivery_() {
+  var ss = weeklyMarketSs_(), sh = ss.getSheetByName(CFG.WEEKLY_DELIVERY_TAB);
+  if (!sh) { sh = ss.insertSheet(CFG.WEEKLY_DELIVERY_TAB); sh.appendRow(["issue_key","revision","recipient_hash","status","attempted_at","error"]); }
+  return weeklyTable_(ss, CFG.WEEKLY_DELIVERY_TAB);
+}
+function weeklySentMap_(table, issue, revision) {
+  var out = {}; table.rows.forEach(function (r) { if (String(r.issue_key) === issue && Number(r.revision || 0) === revision && String(r.status) === "sent") out[String(r.recipient_hash)] = 1; }); return out;
+}
+function weeklyLog_(table, issue, revision, hash, status, error) { weeklyAppend_(table, { issue_key: issue, revision: revision, recipient_hash: hash, status: status, attempted_at: weeklyNow_(), error: error || "" }); }
+function weeklySafeError_(e, email) { return String(e || "").split(email).join("[recipient]").slice(0, 300); }
 
+function sendWeekly() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) { Logger.log("[주간] 다른 발송 실행 중 — 중복 실행 생략"); return; }
+  try { return sendWeeklyUnlocked_(); } finally { lock.releaseLock(); }
+}
+function sendWeeklyUnlocked_() {
+  var issueKey = weeklyIsoIssue_(0), bundle = weeklyLatestBundle_(issueKey);
+  if (!bundle) { Logger.log("[주간 " + issueKey + "] 발송 가능한 rev.1 원장/항목 없음 또는 이미 완료 — 생략"); return; }
+  if (!CFG.TEST_MODE) weeklyPublish_(bundle);
+  CFG.WEEK = bundle.issueKey + " · rev.1";
+  var releaseCats = weeklyReleaseCats_(bundle.items);
+  var rt = tableOf_(CFG.RESP_SHEET), iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent), iK = idx_(rt.header, CFG.RESP_COL.keywords);
+  if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
+  var maps = {}; releaseCats.forEach(function (c) { maps[c.key] = prefMap_(c.prefSheet); });
+  var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, bundle.issueKey, 1);
   var sent = 0, skipped = 0, failed = 0, seen = {};
   for (var i = 0; i < rt.rows.length; i++) {
-    var cells = rt.rows[i].cells;
-    var email = String(cells[iE] || "").trim().toLowerCase();
-    if (!email || email.indexOf("@") < 0) { skipped++; continue; }
-    if (seen[email]) continue; seen[email] = 1;
-    if (!consented_(cells[iC])) { skipped++; continue; }
-
-    var perCat = [];   // { cat, domIds }
-    CATS.forEach(function (c) {
-      var p = maps[c.key][email], domIds;
-      if (p) {
-        if (p.status === "수신거부") { return; }
-        domIds = c.domains.filter(function (d) { return p.domains.indexOf(d.label) >= 0; }).map(function (d) { return d.id; });
-      } else {
-        domIds = c.domains.map(function (d) { return d.id; });
-        prefUpsert_(c.prefSheet, email, c.domains.map(function (d) { return d.label; }), "구독"); // seed
-      }
+    var cells = rt.rows[i].cells, email = String(cells[iE] || "").trim().toLowerCase();
+    if (!email || email.indexOf("@") < 0 || seen[email] || !consented_(cells[iC])) { skipped++; continue; }
+    seen[email] = 1;
+    var hash = token_(email); if (sentMap[hash]) { skipped++; continue; }
+    var perCat = [];
+    releaseCats.forEach(function (c) {
+      var p = maps[c.key][email], available = c.domains.filter(function (d) { return !!c.issues[d.id]; }), domIds;
+      if (p && p.status === "수신거부") return;
+      domIds = p ? available.filter(function (d) { return p.domains.indexOf(d.label) >= 0; }).map(function (d) { return d.id; }) : available.map(function (d) { return d.id; });
+      if (!p && available.length) prefUpsert_(c.prefSheet, email, c.domains.map(function (d) { return d.label; }), "구독");
       if (domIds.length) perCat.push({ cat: c, domIds: domIds });
     });
     if (!perCat.length) { skipped++; continue; }
-
-    var kw = iK >= 0 ? String(cells[iK] || "").trim() : "";
-    var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
+    var kw = iK >= 0 ? String(cells[iK] || "").trim() : "", recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, CFG.SUBJECT, plain_(perCat, kw), { name: CFG.SENDER_NAME, htmlBody: html_(email, kw, perCat) });
+      GmailApp.sendEmail(recipient, CFG.SUBJECT + " · " + bundle.issueKey, plain_(perCat, kw), { name: CFG.SENDER_NAME, htmlBody: html_(email, kw, perCat) });
       sent++;
+      if (!CFG.TEST_MODE) { weeklyLog_(delivery, bundle.issueKey, 1, hash, "sent", ""); sentMap[hash] = 1; }
       if (CFG.TEST_MODE) break;
-    } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
+    } catch (e) { failed++; if (!CFG.TEST_MODE) weeklyLog_(delivery, bundle.issueKey, 1, hash, "failed", weeklySafeError_(e, email)); Logger.log("[ERROR] recipient_hash=" + hash + " " + weeklySafeError_(e, email)); }
   }
-  Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
+  if (!CFG.TEST_MODE) {
+    var state = failed ? "email_partial" : "emailed", now = weeklyNow_();
+    weeklyAppend_(bundle.ledger, { issue_key: bundle.issueKey, state: state, revision: 1, manual_confirmed: bundle.ledgerRow.manual_confirmed, auto_mode: bundle.ledgerRow.auto_mode, published_at: bundle.items[0].published_at || now, emailed_at: failed ? "" : now, content_hash: bundle.ledgerRow.content_hash, updated_at: now, message: "발송 성공 " + sent + " · 실패 " + failed + " · 생략 " + skipped });
+  }
+  Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "[주간 " + bundle.issueKey + "] 발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
+}
+
+function weeklyAlert_(label, addDays) {
+  var issueKey = weeklyIsoIssue_(addDays || 0), bundle = weeklyLatestBundle_(issueKey);
+  var msg = bundle ? bundle.issueKey + " 상태 " + bundle.ledgerRow.state + " · " + bundle.items.length + "건" : issueKey + " 발행 준비 원장 없음";
+  GmailApp.sendEmail(CFG.OPERATOR_EMAIL, "[BSL 주간 승인 알림] " + label, msg + "\n관리자 콘솔에서 승인/발행 예약 상태를 확인하세요.");
+}
+function weeklyAlertSunday() { weeklyAlert_("일요일 09:00", 1); }
+function weeklyAlertMonday() { weeklyAlert_("월요일 18:00", 0); }
+function weeklyAlertTuesday() { weeklyAlert_("화요일 12:00", 0); }
+function createWeeklyTriggers() {
+  var names = ["weeklyAlertSunday","weeklyAlertMonday","weeklyAlertTuesday","sendWeekly"];
+  ScriptApp.getProjectTriggers().forEach(function (tr) { if (names.indexOf(tr.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(tr); });
+  ScriptApp.newTrigger("weeklyAlertSunday").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("weeklyAlertMonday").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(18).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("weeklyAlertTuesday").timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(12).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("sendWeekly").timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(20).nearMinute(0).inTimezone("Asia/Seoul").create();
+  Logger.log("주간 알림 3개 + 화요일 20:00 발송 트리거 생성");
 }
 
 // ===== 이메일 HTML (테이블·인라인·SVG 없음) =====
@@ -451,6 +552,21 @@ function dailyPlain_(dg, detail) {
   }
   lines.push("시장 탭: " + CFG.BASE + "market.html", "AI 자동 생성 · 정보 제공, 투자 조언 아님.");
   return lines.join("\n");
+}
+
+// ===== GitHub Actions 고정시각 호출(화요일 20:00 KST) =====
+function doPost(e) {
+  var expected = PropertiesService.getScriptProperties().getProperty("WEEKLY_CRON_TOKEN") || "";
+  var data = {};
+  try { data = JSON.parse((e && e.postData && e.postData.contents) || "{}"); } catch (err) {}
+  if (!expected || String(data.token || "") !== expected) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  if (String(data.action || "") !== "send_weekly") {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unknown_action" })).setMimeType(ContentService.MimeType.JSON);
+  }
+  sendWeekly();
+  return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ===== 링크 처리(웹앱) — 카테고리별 선호도 시트에 반영 =====

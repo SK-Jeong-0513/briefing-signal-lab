@@ -1,0 +1,19 @@
+name: Weekly briefing publish and email
+
+# 화요일 20:00 KST 고정 호출. Apps Script 내부 발송 로그가 재시도 중복을 막는다.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11 * * 2"   # 화 11:00 UTC = 화 20:00 KST
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Publish issue and send weekly email
+        env:
+          WEEKLY_MAILER_URL: ${{ secrets.WEEKLY_MAILER_URL }}
+          WEEKLY_MAILER_TOKEN: ${{ secrets.WEEKLY_MAILER_TOKEN }}
+        run: python3 scripts/trigger_weekly_mailer.py

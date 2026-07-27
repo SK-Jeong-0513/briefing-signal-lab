@@ -38,3 +38,16 @@ public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시
 `public/assets/content/`의 데이터를 수정하고 `git push` → GitHub Actions가 자동 배포합니다.
 
 - 구독/문의 링크: `public/assets/content/site.js`의 `LINKS.freeForm` / `LINKS.paidForm`.
+
+## 주간 발행 수명주기 (2026-07-27)
+
+주간 초안의 `approved`는 편집 승인이고 공개 상태가 아니다. 공개 사이트와 주간 메일은 `BSL_market`의 발행 원장을 기준으로 한다.
+
+- 일요일 06:00 초안 생성
+- 화요일 17:00 수동 마감, 17:05 조건부 자동 승인
+- 화요일 20:00 고정 공개·메일 발송
+- 자동 검수 통과 1건 이상 발행, 0건 `skipped`
+- 발행 후 늦은 승인분은 웹판 `rev.2+`로 추가하며 이메일은 재발송하지 않음
+- 일일 브리핑 파이프는 별도이며 변경하지 않음
+
+로컬 구현 후 라이브 반영에는 Google Sheet 탭/CSV 게시와 Apps Script 재배포가 필요하다. Actions Secret `WEEKLY_DRAFT_CSV`(초안), `WEEKLY_RELEASE_CSV`(발행 원장), `WEEKLY_RELEASE_ITEMS_CSV`(발행항목)를 등록한다. Pages 배포가 마지막 값을 `site.js`의 공개 설정에 주입한다. 메일러 Apps Script 속성/Actions Secret에 같은 `WEEKLY_CRON_TOKEN`/`WEEKLY_MAILER_TOKEN`을 설정하고 `WEEKLY_MAILER_URL`을 등록한 뒤 `createWeeklyTriggers()`를 1회 실행한다. 화요일 20:00 고정 호출은 `weekly-send.yml`이 담당하고 Apps Script 트리거는 재시도 경로다.
