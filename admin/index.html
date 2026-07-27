@@ -143,6 +143,11 @@
       <div class="panel">
         <div id="v-stats"><div class="empty">불러오는 중…</div></div>
       </div>
+      <div class="panel">
+        <h2>유입 경로 (referrer)</h2>
+        <p class="small muted" style="margin:0 0 8px">외부에서 어느 경로로 들어왔는지입니다. 구독자를 늘리려면 <b>실제로 작동한 채널</b>에 더 넣는 게 먼저입니다. '직접 방문·알 수 없음'은 북마크·주소 직접 입력·앱 내 링크·HTTPS→HTTP 이동 등이 섞입니다.</p>
+        <div id="v-ref"></div>
+      </div>
       <div class="row" style="align-items:flex-start">
         <div class="panel grow"><h2>날짜별</h2><div id="v-date"></div></div>
         <div class="panel grow"><h2>페이지별</h2><div id="v-page"></div></div>
@@ -379,11 +384,13 @@
   function loadVisits(){_visLoaded=true;
     call('visitStats').then(function(s){
       var html='<span class="stat"><b>'+s.views+'</b><span>페이지뷰</span></span>'+
-               '<span class="stat"><b>'+s.visitors+'</b><span>순방문(익명ID)</span></span>';
+               '<span class="stat"><b>'+s.visitors+'</b><span>순방문(익명ID)</span></span>'+
+               '<span class="stat"><b>'+(s.external||0)+'</b><span>외부 유입</span></span>';
       if(s.testRows&&s.testRows.length)
         html+='<button class="btn danger" onclick="visitDelTest()">테스트 행 '+s.testRows.length+'개 삭제</button>';
       document.getElementById('v-stats').innerHTML=html;
       _testRows=s.testRows||[];
+      document.getElementById('v-ref').innerHTML=miniTable(s.byRef,'ref','count');
       document.getElementById('v-date').innerHTML=miniTable(s.byDate,'date','count');
       document.getElementById('v-page').innerHTML=miniTable(s.byPage,'page','count');
     }).catch(function(e){_visLoaded=false;fail(e);});

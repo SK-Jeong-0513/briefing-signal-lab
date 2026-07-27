@@ -250,15 +250,26 @@ function libraryDeleteRows(rows) {
 }
 
 // ───────────────────────── ④ 방문 통계 ─────────────────────────
+// referrer 원본은 전체 URL이라 그대로 세면 같은 채널이 수십 줄로 흩어진다.
+// 호스트만 남기고, 자기 사이트에서 넘어온 이동은 '사이트 내 이동'으로 묶어
+// '외부에서 몇 명이 어느 경로로 왔나'만 보이게 한다.
+function _refLabel_(raw) {
+  var s = String(raw || '').trim();
+  if (!s) return '직접 방문·알 수 없음';
+  var host = s.replace(/^[a-z]+:\/\//i, '').split('/')[0].split('?')[0].toLowerCase();
+  if (!host) return '직접 방문·알 수 없음';
+  if (host.indexOf('brevislab.com') >= 0 || host.indexOf('sk-jeong-0513.github.io') >= 0) return '사이트 내 이동';
+  return host.replace(/^www\./, '');
+}
 function visitStats() {
   _assertAuth_();
   var sh = _openAnalytics_().getSheetByName(VISIT_TAB);
   if (!sh) throw new Error('탭 없음: ' + VISIT_TAB);
-  var out = { views: 0, visitors: 0, byDate: [], byPage: [], testRows: [] };
+  var out = { views: 0, visitors: 0, external: 0, byDate: [], byPage: [], byRef: [], testRows: [] };
   var last = sh.getLastRow();
   if (last <= 1) return out;
   var data = sh.getRange(2, 1, last - 1, 4).getValues();  // 날짜시각·페이지·referrer·방문자ID
-  var seen = {}, dateMap = {}, pageMap = {};
+  var seen = {}, dateMap = {}, pageMap = {}, refMap = {};
   for (var i = 0; i < data.length; i++) {
     var ts = String(_norm_(data[i][0]) || ''), page = String(data[i][1] || ''), id = String(data[i][3] || '');
     out.views++;
@@ -266,12 +277,17 @@ function visitStats() {
     var d = ts.slice(0, 10);
     if (d) dateMap[d] = (dateMap[d] || 0) + 1;
     if (page) pageMap[page] = (pageMap[page] || 0) + 1;
+    var ref = _refLabel_(data[i][2]);
+    refMap[ref] = (refMap[ref] || 0) + 1;
+    if (ref !== '사이트 내 이동' && ref !== '직접 방문·알 수 없음') out.external++;
     if (page.indexOf('beacon-test') >= 0) out.testRows.push(i + 2);
   }
   out.visitors = Object.keys(seen).length;
   out.byDate = Object.keys(dateMap).sort().map(function (k) { return { date: k, count: dateMap[k] }; });
   out.byPage = Object.keys(pageMap).sort(function (a, b) { return pageMap[b] - pageMap[a]; })
     .map(function (k) { return { page: k, count: pageMap[k] }; });
+  out.byRef = Object.keys(refMap).sort(function (a, b) { return refMap[b] - refMap[a]; })
+    .map(function (k) { return { ref: k, count: refMap[k] }; });
   return out;
 }
 function visitDeleteRows(rows) {
