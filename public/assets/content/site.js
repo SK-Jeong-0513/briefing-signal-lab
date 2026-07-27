@@ -164,6 +164,24 @@ const UI = {
       en: "Free members get sample briefings daily. The full paid briefing is currently in waitlist validation.",
     },
     freeCta: { ko: "무료로 구독하기", en: "Subscribe free" },
+    emailPlaceholder: { ko: "이메일 주소", en: "Email address" },
+    consent: {
+      ko: "브리핑 메일 수신에 동의합니다. 언제든 메일 하단 링크로 해지할 수 있습니다.",
+      en: "I agree to receive the briefing email. You can unsubscribe anytime via the link in each email.",
+    },
+    submit: { ko: "무료 구독", en: "Subscribe" },
+    sending: { ko: "신청 중…", en: "Sending…" },
+    done: {
+      ko: "구독 신청이 접수됐습니다. 다음 브리핑부터 받아보실 수 있습니다.",
+      en: "You're subscribed. You'll receive the next briefing.",
+    },
+    errEmail: { ko: "이메일 주소를 확인해 주세요.", en: "Please check your email address." },
+    errConsent: { ko: "수신 동의가 필요합니다.", en: "Please agree to receive the email." },
+    errSend: {
+      ko: "신청에 실패했습니다. 잠시 후 다시 시도하거나 아래 링크로 신청해 주세요.",
+      en: "Something went wrong. Please retry or use the form link below.",
+    },
+    formFallback: { ko: "폼으로 신청하기", en: "Use the form instead" },
     paidCta: { ko: "유료 문의 / 대기자 등록", en: "Paid inquiry / waitlist" },
   },
   techPage: {
@@ -358,6 +376,24 @@ const UI = {
     },
     rights: { ko: "© 2026 Briefing Signal Lab. All rights reserved.", en: "© 2026 Briefing Signal Lab. All rights reserved." },
   },
+};
+
+/* 사이트 안에서 바로 구독받기 위한 설정.
+ * 브리핑 구독 전용 Google Form에 직접 POST한다(새 탭 이동 없음).
+ *
+ * ⚠️ formId가 비어 있으면 인라인 폼을 숨기고 기존 LINKS.freeForm 버튼으로 폴백한다.
+ *    (폼을 만들기 전에 배포돼도 구독 경로가 끊기지 않게 하기 위함)
+ *
+ * 설정 방법: 질문 3개짜리 폼을 만들고 응답을 메일러가 읽는 스프레드시트에 연결한 뒤,
+ *   폼 URL을 열어 각 질문의 entry ID를 채운다. 질문 제목은 메일러 CFG.RESP_COL과
+ *   정확히 같아야 한다 — '이메일 주소' · '메일 수신 동의' · '관심 키워드'.
+ *   consent 값은 메일러가 '동의' 포함 여부로 판정한다(CFG.CONSENT_TRUE_INCLUDES). */
+const SUBSCRIBE_FORM = {
+  formId: "",              // 예: "1FAIpQLSd..." (viewform URL의 /d/e/<여기>/viewform)
+  emailEntry: "",          // 예: "entry.123456789"  — '이메일 주소'
+  consentEntry: "",        // 예: "entry.987654321"  — '메일 수신 동의'
+  consentValue: "동의합니다", // 동의 객관식 보기 문구와 정확히 일치해야 함
+  keywordEntry: "",        // 예: "entry.555555555"  — '관심 키워드'(선택, 비우면 미전송)
 };
 
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */

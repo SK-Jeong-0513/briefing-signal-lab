@@ -31,6 +31,68 @@
     });
   }
 
+  /* ── 사이트 내 구독 폼 ─────────────────────────────────────────────
+   * 구독 전용 Google Form에 직접 POST해 새 탭 이동을 없앤다.
+   * Forms는 CORS 헤더를 안 주므로 no-cors로 보낸다 → 응답을 읽을 수 없어
+   * 성공은 낙관적으로 표시하고, 실패 대비 폼 링크를 항상 남겨둔다.
+   * 미설정(formId 빈 값)이면 폼을 숨기고 기존 외부 버튼만 노출한다. */
+  var subForm = null;
+  function subConfigured() {
+    return typeof SUBSCRIBE_FORM === "object" && SUBSCRIBE_FORM &&
+      !!SUBSCRIBE_FORM.formId && !!SUBSCRIBE_FORM.emailEntry && !!SUBSCRIBE_FORM.consentEntry;
+  }
+  function subText() {
+    if (!subForm) return;
+    subForm.querySelector(".sub__email").placeholder = t(node("cta.emailPlaceholder"));
+    subForm.querySelector(".sub__consent span").textContent = t(node("cta.consent"));
+    var btn = subForm.querySelector(".sub__submit");
+    if (btn.dataset.busy !== "1") btn.textContent = t(node("cta.submit"));
+  }
+  function subMsg(key, isErr) {
+    var el = subForm.querySelector(".sub__msg");
+    el.textContent = key ? t(node("cta." + key)) : "";
+    el.dataset.err = isErr ? "1" : "";
+  }
+  function initSubscribe() {
+    subForm = document.getElementById("subscribe");
+    if (!subForm) return;
+    var actions = document.querySelector(".cta__actions");
+    if (!subConfigured()) return;   // 미설정 → hidden 유지, 외부 버튼 폴백
+    subForm.hidden = false;
+    // 인라인 폼이 살아있으면 같은 자리의 '무료로 구독하기' 버튼은 중복이라 감춘다.
+    // 유료 문의 버튼은 성격이 달라 유지.
+    var freeBtn = actions && actions.querySelector('[data-link="freeForm"]');
+    if (freeBtn) freeBtn.hidden = true;
+    subText();
+    subForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var btn = subForm.querySelector(".sub__submit");
+      if (btn.dataset.busy === "1") return;
+      var email = (subForm.querySelector(".sub__email").value || "").trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { subMsg("errEmail", true); return; }
+      if (!subForm.querySelector('input[name="consent"]').checked) { subMsg("errConsent", true); return; }
+      btn.dataset.busy = "1";
+      btn.textContent = t(node("cta.sending"));
+      subMsg("", false);
+      var body = new URLSearchParams();
+      body.append(SUBSCRIBE_FORM.emailEntry, email);
+      body.append(SUBSCRIBE_FORM.consentEntry, SUBSCRIBE_FORM.consentValue || "동의합니다");
+      if (SUBSCRIBE_FORM.keywordEntry) body.append(SUBSCRIBE_FORM.keywordEntry, "");
+      fetch("https://docs.google.com/forms/d/e/" + SUBSCRIBE_FORM.formId + "/formResponse",
+            { method: "POST", mode: "no-cors", body: body })
+        .then(function () {
+          subForm.querySelector(".sub__row").hidden = true;
+          subForm.querySelector(".sub__consent").hidden = true;
+          subMsg("done", false);
+        })
+        .catch(function () {
+          btn.dataset.busy = "";
+          btn.textContent = t(node("cta.submit"));
+          subMsg("errSend", true);
+        });
+    });
+  }
+
   /* 스파크라인 path (values → viewBox 0..100 x 0..40) */
   function sparkPath(values) {
     if (!values || !values.length) return "";
@@ -778,6 +840,7 @@
 
   function renderAll() {
     applyStaticI18n();
+    subText();          // 구독 폼은 data-i18n이 아니라 placeholder/버튼이라 별도 갱신
     renderPoints();
     renderBriefings();
     renderCompare();
@@ -874,6 +937,7 @@
     document.documentElement.classList.add("js");
     try { var saved = localStorage.getItem("bsl-lang"); if (saved === "en" || saved === "ko") lang = saved; } catch (e) {}
     applyLinks();
+    initSubscribe();
     setLang(lang);
     if (document.getElementById("calendar")) loadCalSheet();
     loadReport();

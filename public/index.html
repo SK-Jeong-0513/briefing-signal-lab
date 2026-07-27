@@ -154,6 +154,20 @@
       <div class="wrap reveal">
         <h2 class="cta__title" data-i18n="cta.title"></h2>
         <p class="cta__sub" data-i18n="cta.sub"></p>
+        <!-- 사이트 안에서 바로 구독. SUBSCRIBE_FORM 미설정이면 script.js가 숨기고
+             아래 폴백 버튼만 남긴다(구독 경로가 끊기지 않게). -->
+        <form class="sub" id="subscribe" hidden novalidate>
+          <div class="sub__row">
+            <input class="sub__email" type="email" name="email" autocomplete="email"
+                   inputmode="email" required aria-label="이메일 주소" />
+            <button class="btn btn--primary sub__submit" type="submit"></button>
+          </div>
+          <label class="sub__consent">
+            <input type="checkbox" name="consent" required />
+            <span></span>
+          </label>
+          <p class="sub__msg" role="status" aria-live="polite"></p>
+        </form>
         <div class="cta__actions">
           <a class="btn btn--primary" data-link="freeForm" target="_blank" rel="noopener" data-i18n="cta.freeCta"></a>
           <a class="btn btn--ghost" data-link="paidForm" target="_blank" rel="noopener" data-i18n="cta.paidCta"></a>
