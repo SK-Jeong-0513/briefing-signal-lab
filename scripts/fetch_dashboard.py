@@ -11,7 +11,37 @@ import xml.etree.ElementTree as ET
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BriefingSignalLab/1.0"
 OUT = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "dashboard.json")
 OUT_MANUAL = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "valuechain_manual.json")
+OUT_QUOTES = os.path.join(os.path.dirname(__file__), "..", "public", "assets", "data", "quotes.json")
 RANGE = "3y"
+
+# ── 일일 메일 '주요 시장 지표' 스냅샷 ────────────────────────────────────────
+# (라벨, Yahoo 심볼, 소수자리, 종류) — 종류: "" 일반 / "rate" 금리(값에 % · 변화는 bp)
+# 표시 문자열까지 여기서 만든다. 메일러(Apps Script)는 수동 붙여넣기 배포라
+# 티커·라벨·포맷 변경이 메일러 코드를 건드리지 않게 하기 위함.
+# 순서 = 메일에 찍히는 순서(2열 좌→우). 21개 = 2열 11행.
+QUOTES = [
+    ("나스닥",          "%5EIXIC",   2, ""),
+    ("S&P500",         "%5EGSPC",   2, ""),
+    ("다우",            "%5EDJI",    2, ""),
+    ("러셀2000",        "%5ERUT",    2, ""),
+    ("달러인덱스",       "DX-Y.NYB",  2, ""),
+    ("원/달러",         "KRW=X",     2, ""),
+    ("WTI",            "CL=F",      2, ""),
+    ("금",              "GC=F",      1, ""),
+    ("은",              "SI=F",      2, ""),
+    ("구리",            "HG=F",      4, ""),
+    ("US2Y",           "2YY=F",     3, "rate"),
+    ("US5Y",           "%5EFVX",    3, "rate"),
+    ("US10Y",          "%5ETNX",    3, "rate"),
+    ("SOXX(반도체)",    "SOXX",      2, ""),
+    ("ITA(방산)",       "ITA",       2, ""),
+    ("UFO(우주)",       "UFO",       2, ""),
+    ("XLK(IT)",        "XLK",       2, ""),
+    ("XLY(소비재)",     "XLY",       2, ""),
+    ("XLF(금융)",       "XLF",       2, ""),
+    ("XLC(엔터)",       "XLC",       2, ""),
+    ("EWY(한국·야간)",  "EWY",       2, ""),
+]
 
 # 시계열 정의: key -> (이름, 단위, Yahoo 심볼)  (TGA/바스켓은 별도 처리)
 YAHOO = {
@@ -162,7 +192,7 @@ def customs_export():
     요청 필수 파라미터를 priodYear/priodMon/priodDt/strtYmd 순으로 탐색."""
     key = os.environ.get("DATA_GO_KR_KEY", "").strip()
     if not key:
-        print("[수출] DATA_GO_KR_KEY 시크릿 없음 — 건너뜀")
+        print("[수출] DATA_GO_KR_KEY 시크릿 없음 - 건너뜀")
         return [], []
     hexish = all(c in "0123456789abcdefABCDEF" for c in key)
     print("[수출] key 진단: len=%d has_percent=%s hexish=%s (내용 비노출)" % (len(key), "%" in key, hexish))
@@ -318,6 +348,83 @@ def manual_from_sheet():
     print("→ %s (%d cards)" % (os.path.abspath(OUT_MANUAL), len(items)))
 
 
+def _fmt_num(value, decimals):
+    """1234.5 → '1,234.50'. 천단위 콤마 + 고정 소수자리."""
+    return "{:,.{d}f}".format(value, d=decimals)
+
+
+def quotes_snapshot():
+    """QUOTES 목록의 최근 2거래일 종가 → 표시용 스냅샷(public/assets/data/quotes.json).
+
+    일일 시황 메일이 이 파일 하나만 읽어 '주요 시장 지표' 블록을 그린다.
+    - 개별 심볼 실패는 그 행만 생략(빈칸보다 없는 게 낫다).
+    - 전부 실패하면 파일을 덮지 않는다(직전 스냅샷 보존 — 수출 시리즈와 같은 fail-safe).
+    - asof = 발송 시각이 아니라 Yahoo 응답의 실제 마지막 거래일. 월요일 아침에
+      금요일 마감이 찍히는 게 정상이므로, 신선도 판단은 메일러가 asof로 한다.
+    """
+    fetched = []
+    for label, sym, decimals, kind in QUOTES:
+        try:
+            url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?range=5d&interval=1d" % sym)
+            res = get(url)["chart"]["result"][0]
+            ts = res["timestamp"]
+            close = res["indicators"]["quote"][0]["close"]
+            pts = [(time.strftime("%Y-%m-%d", time.gmtime(t)), v)
+                   for t, v in zip(ts, close) if v is not None]
+            if len(pts) < 2:
+                print("[quotes] %s(%s): 종가 2개 미만 - 생략" % (label, sym))
+                continue
+        except Exception as e:
+            print("[quotes] %s(%s) 실패 - 생략: %s" % (label, sym, e))
+            continue
+        fetched.append((label, sym, decimals, kind, pts))
+    if not fetched:
+        print("[quotes] 유효 행 0건 → 직전 스냅샷 보존")
+        return
+
+    # 기준 거래일 = 마지막 봉 날짜의 최빈값. 선물·환율은 24시간 거래라 미국 주식이
+    # 열리기 전에도 '오늘' 봉이 잡히는데, 그건 진행 중인 미완성 봉이다. 최빈값을
+    # 기준으로 삼고 모든 심볼을 그 날짜 이하의 마지막 봉으로 맞춰야 한 호가 같은 장을 가리킨다.
+    days = {}
+    for _, _, _, _, pts in fetched:
+        days[pts[-1][0]] = days.get(pts[-1][0], 0) + 1
+    asof = max(days, key=lambda d: (days[d], d))
+
+    rows = []
+    for label, sym, decimals, kind, pts in fetched:
+        usable = [p for p in pts if p[0] <= asof]
+        if len(usable) < 2:
+            print("[quotes] %s(%s): %s 기준 종가 부족 - 생략" % (label, sym, asof))
+            continue
+        now, prev = usable[-1][1], usable[-2][1]
+        if kind == "rate":
+            # 금리는 값 자체가 %. 변화는 %가 아니라 bp로 적어야 %p 혼동이 없다.
+            value = _fmt_num(now, decimals) + "%"
+            diff = round((now - prev) * 100)
+            change = "%+d" % diff + "bp"
+        else:
+            value = _fmt_num(now, decimals)
+            # 표시 자릿수로 먼저 반올림하고 방향을 정한다. 그래야 +0.04% 가
+            # '-0.0%'(빨강) 처럼 오타로 보이는 표시가 안 나온다.
+            diff = round(((now - prev) / prev * 100) if prev else 0.0, 1)
+            if diff == 0:
+                diff = 0.0
+                change = "0.0%"
+            else:
+                change = "%+.1f%%" % diff
+        rows.append({"label": label, "value": value, "change": change,
+                     "dir": (1 if diff > 0 else (-1 if diff < 0 else 0))})
+    if not rows:
+        print("[quotes] 유효 행 0건 → 직전 스냅샷 보존")
+        return
+    out = {"asof": asof, "updated": time.strftime("%Y-%m-%d"),
+           "note": "Yahoo Finance 종가. 정보 제공이며 투자 조언 아님.", "rows": rows}
+    os.makedirs(os.path.dirname(OUT_QUOTES), exist_ok=True)
+    with open(OUT_QUOTES, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+    print("→ %s (%d/%d rows, asof %s)" % (os.path.abspath(OUT_QUOTES), len(rows), len(QUOTES), asof))
+
+
 def main():
     series = {}
     for key, (name, unit, sym) in YAHOO.items():
@@ -385,10 +492,16 @@ def main():
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     print("→ %s (%d series, %d pairs)" % (os.path.abspath(OUT), len(series), len(pairs)))
 
+    # 일일 메일 지표 스냅샷(quotes.json). 실패해도 대시보드 산출물에는 영향 없음.
+    try:
+        quotes_snapshot()
+    except Exception as e:
+        print("[WARN] quotes 스냅샷 실패 - 직전 파일 보존: %s" % e)
+
     # 수동 카드(대시보드-수동 시트 → valuechain_manual.json). env 없으면 no-op(기존 보존).
     manual_from_sheet()
     if len(pairs) < 3:
-        print("[WARN] 페어 %d개 — 데이터 수집 확인 필요" % len(pairs))
+        print("[WARN] 페어 %d개 - 데이터 수집 확인 필요" % len(pairs))
 
 
 if __name__ == "__main__":

@@ -43,6 +43,8 @@ const CFG = {
   WEEKLY_DELIVERY_TAB: "주간-발송로그",
   DAILY_CATS: ["경제", "금융", "기술"],   // 메일에 담을 순서
   DAILY_SUBJECT: "[일일 시황]",       // 뒤에 날짜가 붙음
+  QUOTES_PATH: "assets/data/quotes.json",  // 주요 시장 지표 스냅샷(fetch_dashboard.py 생성)
+  QUOTES_STALE_DAYS: 5,             // asof가 이보다 오래면 지표 블록만 생략(연휴 3~4일은 통과)
 };
 
 // ===== 카테고리 정의 + 이번 주 무료 콘텐츠(KO). 매주 issues만 교체. =====
@@ -112,7 +114,7 @@ const CATS = [
   },
 ];
 
-const C = { primary: "#2454D6", soft: "#E8EEFF", text: "#17202A", muted: "#5F6B7A", border: "#D8DEE8", canvas: "#F7F8FA", surface: "#FFFFFF" };
+const C = { primary: "#2454D6", soft: "#E8EEFF", text: "#17202A", muted: "#5F6B7A", border: "#D8DEE8", canvas: "#F7F8FA", surface: "#FFFFFF", success: "#12733E", danger: "#C9342F" };
 
 // ===== 시트 헬퍼 =====
 function ss_() {
@@ -485,6 +487,7 @@ function sendDailyMarket() {
   var unsub = unsubSet_();
   var subject = CFG.DAILY_SUBJECT + " " + dg.today;
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
+  var quotes = quotes_();       // 주요 시장 지표(실패·낡음이면 null → 블록만 생략)
 
   var sent = 0, skipped = 0, failed = 0, seen = {};
   for (var i = 0; i < rt.rows.length; i++) {
@@ -496,7 +499,7 @@ function sendDailyMarket() {
 
     var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail) });
+      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail, quotes), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail, quotes) });
       sent++;
       if (CFG.TEST_MODE) break;
     } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
@@ -568,7 +571,62 @@ function createDailyTrigger() {
     .atHour(3).nearMinute(0).everyDays(1).inTimezone("Asia/Seoul").create();
   return applyDailySchedule();
 }
-function dailyHtml_(email, dg, detail) {
+// ── 주요 시장 지표 (quotes.json) ────────────────────────────────────────────
+// 표시 문자열은 fetch_dashboard.py가 이미 만들어 둔다. 메일러는 읽어 그리기만 한다
+// (메일러는 수동 붙여넣기 배포라 티커·라벨·포맷 변경이 여기 닿지 않게 함).
+// 실패·낡음은 전부 블록 생략으로 처리 — 지표 하나 때문에 브리핑이 안 나가면 안 된다.
+function quotes_() {
+  try {
+    var res = UrlFetchApp.fetch(CFG.BASE + CFG.QUOTES_PATH, { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log("[지표] HTTP " + res.getResponseCode() + " — 블록 생략");
+      return null;
+    }
+    var q = JSON.parse(res.getContentText());
+    if (!q || !q.rows || !q.rows.length || !q.asof) {
+      Logger.log("[지표] 빈 스냅샷 — 블록 생략");
+      return null;
+    }
+    // asof는 '어느 장의 숫자인가'다. 월요일 아침에 금요일 마감이 찍히는 건 정상이므로
+    // 발송일과 다르다는 이유로 막지 않고, 연휴를 넘는 공백(파이프 고장)만 막는다.
+    var days = Math.floor((new Date().getTime() - new Date(q.asof + "T00:00:00Z").getTime()) / 86400000);
+    if (isNaN(days) || days > CFG.QUOTES_STALE_DAYS) {
+      Logger.log("[지표] asof " + q.asof + " (" + days + "일 전) — 낡아서 블록 생략");
+      return null;
+    }
+    return q;
+  } catch (e) {
+    Logger.log("[지표] 조회 실패 — 블록 생략: " + e);
+    return null;
+  }
+}
+function quoteCell_(r) {
+  if (!r) return '<td width="50%"></td>';
+  var color = r.dir > 0 ? C.success : (r.dir < 0 ? C.danger : C.muted);
+  return '<td width="50%" style="padding:3px 0;font-size:12px;color:' + C.muted + ';white-space:nowrap">' +
+    esc_(r.label) + ' <span style="color:' + C.text + ';font-weight:600">' + esc_(r.value) + "</span> " +
+    '<span style="color:' + color + '">' + esc_(r.change) + "</span></td>";
+}
+function quotesHtml_(q) {
+  if (!q) return "";
+  var rows = "";
+  for (var i = 0; i < q.rows.length; i += 2) {
+    rows += "<tr>" + quoteCell_(q.rows[i]) + quoteCell_(q.rows[i + 1]) + "</tr>";
+  }
+  return '<div style="margin:0 0 16px">' +
+    '<div style="font-size:12px;color:' + C.muted + ';margin:0 0 6px">주요 시장 지표 · 미 증시 ' +
+      esc_(q.asof.slice(5)) + " 마감 기준</div>" +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + "</table>" +
+    '<div style="border-top:1px solid ' + C.border + ';margin:14px 0 0"></div></div>';
+}
+function quotesPlain_(q) {
+  if (!q) return [];
+  return ["[주요 시장 지표 · 미 증시 " + q.asof.slice(5) + " 마감 기준]"]
+    .concat(q.rows.map(function (r) { return "- " + r.label + " " + r.value + " " + r.change; }))
+    .concat([""]);
+}
+
+function dailyHtml_(email, dg, detail, quotes) {
   var tok = token_(email);
   var body = dg.groups.map(function (g) {
     var sigs = g.items.map(function (o) {
@@ -589,7 +647,7 @@ function dailyHtml_(email, dg, detail) {
       '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.primary + '">BRIEFING SIGNAL LAB · ' + esc_(dg.today) + " 장전</div>",
       '<div style="font-size:20px;font-weight:700;margin-top:4px">일일 시황</div>',
     "</td></tr>",
-    '<tr><td style="padding:20px 24px">', body, renderBody_(detail),
+    '<tr><td style="padding:20px 24px">', quotesHtml_(quotes), body, renderBody_(detail),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 4px"><tr><td style="border-radius:8px;background:' + C.primary + '">',
         '<a href="' + CFG.BASE + 'market.html" style="display:inline-block;padding:12px 20px;font-size:14px;font-weight:600;color:#fff;text-decoration:none">시장 탭에서 전체 보기 →</a>',
       "</td></tr></table>",
@@ -601,8 +659,8 @@ function dailyHtml_(email, dg, detail) {
     "</table></td></tr></table></div>",
   ].join("");
 }
-function dailyPlain_(dg, detail) {
-  var lines = ["일일 시황 (" + dg.today + " 장전)", ""];
+function dailyPlain_(dg, detail, quotes) {
+  var lines = ["일일 시황 (" + dg.today + " 장전)", ""].concat(quotesPlain_(quotes));
   dg.groups.forEach(function (g) {
     if (g.label) lines.push("[" + g.label + "]");
     g.items.forEach(function (o) { lines.push("- " + o.title + " : " + o.line); });
