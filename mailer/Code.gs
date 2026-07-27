@@ -43,8 +43,6 @@ const CFG = {
   WEEKLY_DELIVERY_TAB: "주간-발송로그",
   DAILY_CATS: ["경제", "금융", "기술"],   // 메일에 담을 순서
   DAILY_SUBJECT: "[일일 시황]",       // 뒤에 날짜가 붙음
-  QUOTES_PATH: "assets/data/quotes.json",  // 주요 시장 지표 스냅샷(fetch_dashboard.py 생성)
-  QUOTES_STALE_DAYS: 5,             // asof가 이보다 오래면 지표 블록만 생략(연휴 3~4일은 통과)
 };
 
 // ===== 카테고리 정의 + 이번 주 무료 콘텐츠(KO). 매주 issues만 교체. =====
@@ -575,9 +573,12 @@ function createDailyTrigger() {
 // 표시 문자열은 fetch_dashboard.py가 이미 만들어 둔다. 메일러는 읽어 그리기만 한다
 // (메일러는 수동 붙여넣기 배포라 티커·라벨·포맷 변경이 여기 닿지 않게 함).
 // 실패·낡음은 전부 블록 생략으로 처리 — 지표 하나 때문에 브리핑이 안 나가면 안 된다.
+var QUOTES_PATH = "assets/data/quotes.json";  // CFG.BASE 기준 상대 경로(fetch_dashboard.py가 생성)
+var QUOTES_STALE_DAYS = 5;                    // asof가 이보다 오래면 블록만 생략(연휴 3~4일은 통과)
+
 function quotes_() {
   try {
-    var res = UrlFetchApp.fetch(CFG.BASE + CFG.QUOTES_PATH, { muteHttpExceptions: true, followRedirects: true });
+    var res = UrlFetchApp.fetch(CFG.BASE + QUOTES_PATH, { muteHttpExceptions: true, followRedirects: true });
     if (res.getResponseCode() !== 200) {
       Logger.log("[지표] HTTP " + res.getResponseCode() + " — 블록 생략");
       return null;
@@ -590,7 +591,7 @@ function quotes_() {
     // asof는 '어느 장의 숫자인가'다. 월요일 아침에 금요일 마감이 찍히는 건 정상이므로
     // 발송일과 다르다는 이유로 막지 않고, 연휴를 넘는 공백(파이프 고장)만 막는다.
     var days = Math.floor((new Date().getTime() - new Date(q.asof + "T00:00:00Z").getTime()) / 86400000);
-    if (isNaN(days) || days > CFG.QUOTES_STALE_DAYS) {
+    if (isNaN(days) || days > QUOTES_STALE_DAYS) {
       Logger.log("[지표] asof " + q.asof + " (" + days + "일 전) — 낡아서 블록 생략");
       return null;
     }
