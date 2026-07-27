@@ -67,4 +67,16 @@ Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필�
 3. Apps Script에 `mailer/Code.gs`를 다시 붙여넣고 `TEST_MODE=true`로 `sendWeekly()` 미리보기 1건을 확인한다. 테스트 모드는 원장과 발송 로그를 변경하지 않는다.
 4. `TEST_MODE=false`로 바꾸고 웹앱을 새 버전으로 재배포한다. GitHub Secret `WEEKLY_MAILER_URL`에는 이 웹앱 URL, `WEEKLY_MAILER_TOKEN`에는 위 스크립트 속성과 같은 값을 넣는다. `.github/workflows/weekly-send.yml`이 화요일 20:00 KST에 정확히 호출한다.
 5. `createWeeklyTriggers()`를 한 번 실행해 일·월·화 알림과 Apps Script 재시도용 발송 트리거를 만든다. Apps Script 트리거는 시각 오차가 있을 수 있지만 수신자 로그가 GitHub 호출과의 중복을 막는다.
-6. 기존 `createDailyTrigger()`는 그대로 유지한다.
+6. 기존 `createDailyTrigger()`는 그대로 유지한다. 다만 아래 "일일 시황 발송 시각" 변경 후에는 한 번 다시 실행해 동기화 트리거를 만든다.
+
+## 일일 시황 발송 시각 (2026-07-27)
+
+발송 시각은 코드가 아니라 **관리자 콘솔 설정**이다. 서머타임 등으로 적정 시각이 바뀌기 때문이다.
+
+- 값: `BSL_market`의 `settings` 탭 `daily_send_time`, `HH:MM` KST. 관리자 콘솔 ⑤ 탭에서 지정한다.
+- 미설정·형식 오류는 `CFG.DAILY_SEND_TIME`(기본 `07:40`)로 폴백하고 로그를 남긴다. 시트 조회 실패도 마찬가지(fail-open).
+- `applyDailySchedule()`이 설정 시각으로 발송 트리거를 재생성한다(멱등 — 여러 번 실행해도 트리거는 1개).
+- `syncDailySchedule()`이 매일 새벽 03:00에 돌며 설정이 바뀌었거나 트리거가 사라졌으면 재생성한다. **콘솔에서 시각을 바꾸면 다음 날부터 자동 반영**된다.
+- `createDailyTrigger()`는 설치용이다. 발송 트리거 + 새벽 동기화 트리거를 함께 만든다.
+
+⚠️ **Apps Script 시간 트리거는 지정 시각 ±15분 오차가 있다**(정확한 시각 지정 불가). 종전에는 `atHour(8)`만 있고 `nearMinute()`가 없어 08:00~09:00 사이 **임의 시각**에 실행됐고, 그래서 KRX 장전 단일가(08:30) 이후에 도착하는 일이 있었다. 목표 도착 시각보다 여유를 두고 지정할 것. 텔레그램 `장전` 요약 생성(07:00 KST, 별도 레포)보다 뒤여야 그날 상세 본문이 담긴다.

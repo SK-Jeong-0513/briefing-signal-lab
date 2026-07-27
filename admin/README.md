@@ -111,4 +111,12 @@
 4. GitHub Actions Secret `WEEKLY_RELEASE_ITEMS_CSV`에는 `주간-발행항목` CSV URL을 넣는다. `deploy-pages.yml`이 배포 사본의 `site.js`에 주입하며 raw 초안 CSV를 넣으면 안 된다.
 5. `admin/Code.gs`와 `admin/index.html`을 Apps Script에 다시 붙여넣고 재배포한다.
 
+## ⑤ 엔진·발송시각 탭
+
+주력 LLM 엔진(`settings.llm_primary`)과 **일일 시황 발송 시각**(`settings.daily_send_time`, `HH:MM` KST)을 지정한다.
+
+발송 시각은 저장만 하면 되고, 메일러(별도 Apps Script)의 새벽 03:00 `syncDailySchedule()`이 **다음 날부터 트리거에 자동 반영**한다. 서머타임 전환 때도 이 값만 고치면 된다. 미지정이면 메일러 폴백 `07:40`이 쓰이며, 콘솔은 "(기본값 — 아직 지정 안 함)"으로 표시한다.
+
+⚠️ Apps Script 시간 트리거는 **±15분 오차**가 있어 정확한 시각 지정은 불가하다. KRX 장전 단일가(08:30) 전 도착이 목적이면 여유를 두고, 텔레그램 `장전` 요약 생성(07:00 KST) 이후로 지정한다. 자세한 동작은 [mailer/README.md](../mailer/README.md) 참고.
+
 `admin/` 변경은 Apps Script에 다시 붙여넣고 재배포해야 한다.
