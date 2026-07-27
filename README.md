@@ -20,7 +20,8 @@ public/assets/style.css    디자인 토큰 + 레이아웃
 public/assets/script.js    KO/EN 토글, 동적 렌더, 캘린더 모듈, 시트 로더
 public/assets/content/tech.js       기술: 주간·분야 모델(TECH_DOMAINS, TECH_WEEKLY) + 랜딩용 BRIEFINGS_TECH 파생
 public/assets/content/finance.js|economy.js   카테고리별 브리핑 데이터(BRIEFINGS_*, 일간 flat)
-public/assets/content/site.js       UI 카피·각 페이지 i18n·LINKS·시트 CSV URL(주간/서재/방문) + BRIEFINGS 합치기
+public/assets/content/site.js       UI 카피·각 페이지 i18n·SUBSCRIBE_FORM·LINKS·시트 CSV URL(주간/서재/방문) + BRIEFINGS 합치기
+public/assets/data/quotes.json      일일 메일 '주요 시장 지표' 스냅샷(fetch_dashboard.py 생성, 21개 2열 11행)
 public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시트 URL(CAL_SHEET_URL)
 ```
 
@@ -37,7 +38,21 @@ public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시
 
 `public/assets/content/`의 데이터를 수정하고 `git push` → GitHub Actions가 자동 배포합니다.
 
-- 구독/문의 링크: `public/assets/content/site.js`의 `LINKS.freeForm` / `LINKS.paidForm`.
+- 구독: `public/assets/content/site.js`의 `SUBSCRIBE_FORM`(구독 전용 폼 id·entry). 유료 문의 링크만 `LINKS.paidForm`.
+
+## 구독 경로 (2026-07-28)
+
+랜딩 CTA에서 **이메일 + 수신동의**만 받아 구독 전용 Google Form에 직접 POST한다(새 탭 이동 없음).
+
+- 설정: `site.js`의 `SUBSCRIBE_FORM` — `formId` · `emailEntry` · `consentEntry` · `consentValue`.
+- **폴백:** `formId`가 비면 인라인 폼을 숨기고 기존 외부 링크 버튼을 남긴다. 셋 중 하나만 빠져도 폼이 조용히 숨으므로 테스트가 "모두 비거나 모두 채워짐"을 강제한다.
+- Forms는 CORS 헤더를 주지 않아 `no-cors`로 보낸다 → 응답을 읽을 수 없어 성공은 낙관 표시한다.
+- 무료 구독 버튼(nav·히어로)은 전부 인라인 폼으로 향한다. 폼은 랜딩에만 있어 다른 페이지는 `index.html#subscribe`로 보낸다.
+- 같은 브라우저 반복 신청은 `localStorage`로 막는다(메일러가 이메일 기준 dedup하므로 중복 행이 있어도 메일은 한 번만 간다).
+- **폼 질문 제목이 곧 응답 시트 열 이름**이며, 질문을 고쳐도 기존 열 제목은 따라오지 않는다. 메일러 `CFG.RESP_COL`은 시트의 **실제 헤더**에 맞춘다.
+- 새 색·여백을 만들지 않는다. 스타일은 `DESIGN.md` 토큰만 사용하며 테스트가 새 색상값 0개를 강제한다.
+
+⚠️ `.btn`처럼 `display`를 지정한 클래스는 브라우저 기본 `[hidden]`을 이긴다. JS로 `el.hidden = true`를 걸 요소에는 `[hidden] { display: none }` 규칙을 함께 둘 것.
 
 ## 주간 발행 수명주기 (2026-07-27)
 
