@@ -282,7 +282,7 @@ function sendWeeklyUnlocked_() {
     if (!perCat.length) { skipped++; continue; }
     var kw = iK >= 0 ? String(cells[iK] || "").trim() : "", recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, CFG.SUBJECT + " · " + bundle.issueKey, plain_(perCat, kw), { name: CFG.SENDER_NAME, htmlBody: html_(email, kw, perCat) });
+      GmailApp.sendEmail(recipient, CFG.SUBJECT + " · " + bundle.issueKey, mailSafe_(plain_(perCat, kw)), { name: CFG.SENDER_NAME, htmlBody: mailSafe_(html_(email, kw, perCat)) });
       sent++;
       if (!CFG.TEST_MODE) { weeklyLog_(delivery, bundle.issueKey, 1, hash, "sent", ""); sentMap[hash] = 1; }
       if (CFG.TEST_MODE) break;
@@ -389,6 +389,11 @@ function plain_(perCat, kw) {
   return lines.join("\n");
 }
 function esc_(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+// GmailApp.sendEmail이 비-BMP(서로게이트 쌍) 문자를 깨뜨린다. 시트·Apps Script 읽기까지는
+// 정상인데(진단: U+D83D U+DCCC 확인) 수신 메일에서만 replacement 문자로 나온다.
+// 한글은 BMP라 무사하고 이모지만 깨지므로, 메일에 넘기기 직전 astral 문자를 제거한다.
+// LLM이 만든 본문·제목에 이모지가 섞여 들어오는 경로가 여럿이라 발송 직전 한 곳에서 막는다.
+function mailSafe_(s) { return String(s == null ? "" : s).replace(/[\uD800-\uDFFF]/g, ""); }
 
 // ===== 일일 시황 메일 (Stage 4) =====
 // '시장' 스프레드시트(구독자 시트와 별개)의 시장-일일 탭을 openById로 읽는다.
@@ -497,7 +502,7 @@ function sendDailyMarket() {
 
     var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail, quotes), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail, quotes) });
+      GmailApp.sendEmail(recipient, subject, mailSafe_(dailyPlain_(dg, detail, quotes)), { name: CFG.SENDER_NAME, htmlBody: mailSafe_(dailyHtml_(email, dg, detail, quotes)) });
       sent++;
       if (CFG.TEST_MODE) break;
     } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
