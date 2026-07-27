@@ -53,16 +53,42 @@
     el.textContent = key ? t(node("cta." + key)) : "";
     el.dataset.err = isErr ? "1" : "";
   }
+  /* 무료 구독 버튼(nav·히어로)을 인라인 폼으로 보낸다.
+   * 폼은 index.html에만 있으므로 다른 페이지에서는 index.html#subscribe로 넘긴다.
+   * 미설정이면 손대지 않아 기존 외부 폼 링크가 그대로 남는다(폴백). */
+  function wireSubscribeLinks(hasForm) {
+    document.querySelectorAll('[data-link="freeForm"]').forEach(function (el) {
+      if (el.hidden) return;
+      el.removeAttribute("target");
+      el.removeAttribute("rel");
+      if (!hasForm) { el.setAttribute("href", "index.html#subscribe"); return; }
+      el.setAttribute("href", "#subscribe");
+      el.addEventListener("click", function (e) {
+        e.preventDefault();
+        focusSubscribe();
+      });
+    });
+  }
+  function focusSubscribe() {
+    if (!subForm || subForm.hidden) return;
+    var input = subForm.querySelector(".sub__email");
+    // 이미 신청을 마친 상태(입력줄 숨김)면 포커스할 대상이 없다.
+    if (input && !subForm.querySelector(".sub__row").hidden) input.focus({ preventScroll: true });
+    subForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
   function initSubscribe() {
     subForm = document.getElementById("subscribe");
-    if (!subForm) return;
-    var actions = document.querySelector(".cta__actions");
     if (!subConfigured()) return;   // 미설정 → hidden 유지, 외부 버튼 폴백
+    if (!subForm) { wireSubscribeLinks(false); return; }   // 폼 없는 페이지(랜딩 외)
     subForm.hidden = false;
     // 인라인 폼이 살아있으면 같은 자리의 '무료로 구독하기' 버튼은 중복이라 감춘다.
     // 유료 문의 버튼은 성격이 달라 유지.
+    var actions = document.querySelector(".cta__actions");
     var freeBtn = actions && actions.querySelector('[data-link="freeForm"]');
     if (freeBtn) freeBtn.hidden = true;
+    wireSubscribeLinks(true);
+    // 다른 페이지에서 index.html#subscribe로 넘어온 경우
+    if (location.hash === "#subscribe") setTimeout(focusSubscribe, 0);
     subText();
     subForm.addEventListener("submit", function (e) {
       e.preventDefault();

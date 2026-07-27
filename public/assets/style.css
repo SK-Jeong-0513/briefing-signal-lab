@@ -407,6 +407,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .cta .btn--ghost:hover { border-color: var(--surface); color: var(--surface); background: rgba(255,255,255,0.08); }
 
 /* 사이트 내 구독 폼 — cta 밴드(짙은 배경) 위에 올라간다. 새 색 생성 없이 토큰만 사용. */
+/* .btn의 display:inline-flex가 브라우저 기본 [hidden]을 덮으므로 명시한다.
+   (인라인 폼이 켜지면 같은 자리의 중복 '무료로 구독하기' 버튼을 숨기는 데 필요) */
+.btn[hidden] { display: none; }
 .sub { max-width: 460px; margin: var(--s-xl) auto 0; text-align: left; }
 .sub[hidden] { display: none; }
 .sub__row { display: flex; gap: var(--s-sm); flex-wrap: wrap; }
