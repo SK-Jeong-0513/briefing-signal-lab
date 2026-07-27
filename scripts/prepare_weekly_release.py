@@ -119,8 +119,24 @@ def evaluate_row(row):
     return obj, "" if passed else "evaluation_gate"
 
 
-def select_candidates(rows, issue_key, now=None, evaluator=evaluate_row):
+def prior_keys(items, issue_key):
+    """지난 호에 이미 발행된 기사 키(출처URL·정규화 원문제목). 같은 기사의 주 넘김 재게재를 막는다."""
+    keys = set()
+    for row in items:
+        if (row.get("issue_key") or "").strip() == issue_key:
+            continue
+        url = (row.get("출처URL") or "").strip().lower()
+        if url:
+            keys.add(url)
+        key = title_key(row.get("원문제목"))
+        if key:
+            keys.add(key)
+    return keys
+
+
+def select_candidates(rows, issue_key, now=None, evaluator=evaluate_row, prior=None):
     now = now or datetime.now(KST)
+    prior = prior or set()
     candidates = [r for r in rows if (r.get("발행주") or "").strip() == issue_key and (r.get("status") or "draft").strip().lower() != "rejected"]
     seen_url, seen_title, accepted, rejected = set(), set(), [], []
     for row in candidates:
@@ -129,6 +145,8 @@ def select_candidates(rows, issue_key, now=None, evaluator=evaluate_row):
         title = title_key(row.get("원문제목") or row.get("제목ko"))
         if url in seen_url or (title and title in seen_title):
             reasons.append("duplicate")
+        if (url and url in prior) or (title and title in prior):
+            reasons.append("duplicate_prior_issue")
         seen_url.add(url)
         if title:
             seen_title.add(title)
@@ -142,6 +160,14 @@ def select_candidates(rows, issue_key, now=None, evaluator=evaluate_row):
             continue
         accepted.append((row, evaluation))
     return accepted, rejected
+
+
+def tally(values):
+    """'키 n, 키 n' 요약 문자열. 운영자가 원장 message만 보고 분야/탈락사유를 파악하게 한다."""
+    counts = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return ", ".join("%s %d" % (k, counts[k]) for k in sorted(counts))
 
 
 def content_hash(items):
@@ -174,10 +200,20 @@ def main():
     if any((r.get("state") or "").strip() in READY_STATES for r in current):
         print("[release] %s 이미 준비/처리됨 - no-op" % issue)
         return 0
-    accepted, rejected = select_candidates(fetch_csv(draft_url), issue)
+    prior = set()
+    items_url = os.environ.get("WEEKLY_RELEASE_ITEMS_CSV", "").strip()
+    if items_url:
+        try:
+            prior = prior_keys(fetch_csv(items_url), issue)
+        except Exception as e:
+            print("[release] 발행항목 조회 실패(과거 호 중복 대조 생략): %s" % e)
+    else:
+        print("[release] WEEKLY_RELEASE_ITEMS_CSV 미설정 - 과거 호 중복 대조 생략")
+    accepted, rejected = select_candidates(fetch_csv(draft_url), issue, prior=prior)
     now = datetime.now(KST).isoformat(timespec="seconds")
+    reasons = tally([r for x in rejected for r in x["reasons"]])
     if not accepted:
-        ledger_row = {"issue_key": issue, "state": "skipped", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": "", "updated_at": now, "message": "통과 0건; 제외 %d건" % len(rejected)}
+        ledger_row = {"issue_key": issue, "state": "skipped", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": "", "updated_at": now, "message": "통과 0건; 제외 %d건 (%s)" % (len(rejected), reasons)}
         post_rows("주간-발행", [ledger_row])
         print("[release] %s skipped" % issue)
         return 0
@@ -188,9 +224,10 @@ def main():
         items.append(item)
     digest = content_hash(items)
     post_rows("주간-발행항목", items)
-    ledger_row = {"issue_key": issue, "state": "auto_ready", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": digest, "updated_at": now, "message": "자동 검수 통과 %d건; 제외 %d건" % (len(items), len(rejected))}
+    ledger_row = {"issue_key": issue, "state": "auto_ready", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": digest, "updated_at": now, "message": "자동 검수 통과 %d건 [%s]; 제외 %d건 (%s)" % (len(items), tally([i["분야"] for i in items]), len(rejected), reasons)}
     post_rows("주간-발행", [ledger_row])
-    print("[release] %s auto_ready %d건" % (issue, len(items)))
+    print("[release] %s auto_ready %d건 [%s]" % (issue, len(items), tally([i["분야"] for i in items])))
+    print("[release] 제외 %d건 (%s)" % (len(rejected), reasons))
     return 0
 
 

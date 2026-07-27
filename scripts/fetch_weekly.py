@@ -19,13 +19,19 @@ Actions/로컬 환경변수:
     DEEPSEEK_API_KEY / GEMINI_API_KEY   (lib/ai.py)
     WEEKLY_WEBAPP_URL                   Apps Script 쓰기 웹앱 URL (선택, 없으면 dry-run)
     WEEKLY_WEBAPP_TOKEN                 웹앱 공유 토큰 (선택)
+    WEEKLY_COLLECT_DAYS                 수집 기간(일, 기본 7). 발행 게이트 freshness(10일)보다 짧아야 한다.
+    WEEKLY_DRAFT_CSV                    '주간-초안' 게시 CSV (선택). 지난 주 수집분 재수집 방지.
+    WEEKLY_RELEASE_ITEMS_CSV            '주간-발행항목' 게시 CSV (선택). 이미 발행된 기사 재수집 방지.
 실행: python3 scripts/fetch_weekly.py [--dry] [--limit=N]
 
 소스 확장: DOMAINS[*]["feeds"]에 ("gnews", 쿼리) 또는 ("arxiv", 쿼리)를 추가.
 1차 소스(실적콜·특허 RSS 등)는 검증 후 같은 feeds 리스트에 어댑터를 붙여 확장한다.
 """
+import csv
+import io
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -41,6 +47,10 @@ import toggle  # noqa: E402
 
 UA = "Mozilla/5.0 (BriefingSignalLab/1.0)"
 ATOM = {"a": "http://www.w3.org/2005/Atom"}
+
+# 수집 기간(일). Google News RSS는 관련도순이라 기간을 안 주면 수개월 전 기사가 상위에 남는다.
+# 일요일 수집 → 화요일 발행이므로 발행 게이트 freshness(WEEKLY_FRESH_DAYS=10)보다 짧아야 한다.
+COLLECT_DAYS = int(os.environ.get("WEEKLY_COLLECT_DAYS", "7"))
 
 # 시트 헤더 순서(웹앱이 헤더명으로 매핑하므로 시트 첫 행과 정확히 일치해야 함).
 HEADER = ["분야", "발행주", "유형", "제목ko", "제목en", "한줄ko", "한줄en",
@@ -93,6 +103,7 @@ DOMAINS = [
     {
         "id": "bio",
         "label": {"ko": "바이오", "en": "Bio"},
+        "hint": "임상 단계 진입·허가·기술이전·CDMO 수주 등 파이프라인과 생산 밸류체인의 구조 변화를 시사하는 항목",
         "feeds": [
             ("gnews", "바이오 임상시험 신약 개발"),
             ("gnews", "AI 신약개발 디지털치료제"),
@@ -190,8 +201,11 @@ def _fetch(url, timeout=25):
     return None
 
 
-def feed_gnews(query, n=4):
-    url = "https://news.google.com/rss/search?q=%s&hl=ko&gl=KR&ceid=KR:ko" % urllib.parse.quote(query)
+def feed_gnews(query, n=6, now=None):
+    """최근 COLLECT_DAYS일 기사만. when: 연산자로 좁히고 pubDate로 한 번 더 거른다."""
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=COLLECT_DAYS)
+    q = "%s when:%dd" % (query, COLLECT_DAYS)
+    url = "https://news.google.com/rss/search?q=%s&hl=ko&gl=KR&ceid=KR:ko" % urllib.parse.quote(q)
     xml = _fetch(url)
     if not xml:
         return []
@@ -204,13 +218,13 @@ def feed_gnews(query, n=4):
     for it in root.findall(".//item")[:n]:
         title = (it.findtext("title") or "").strip()
         link = (it.findtext("link") or "").strip()
-        published = (it.findtext("pubDate") or "").strip()
         try:
-            published = parsedate_to_datetime(published).astimezone(timezone.utc).isoformat()
+            dt = parsedate_to_datetime((it.findtext("pubDate") or "").strip()).astimezone(timezone.utc)
         except Exception:
-            published = ""
-        if title:
-            out.append((title, link, "뉴스", published))
+            dt = None
+        # 일시 불명·기간 밖 기사는 여기서 제외. 발행 게이트 freshness에서 어차피 걸린다.
+        if title and dt and dt >= cutoff:
+            out.append((title, link, "뉴스", dt.isoformat()))
     return out
 
 
@@ -236,17 +250,63 @@ def feed_arxiv(query, n=2):
     return out
 
 
-def collect(domain):
-    """도메인 feeds에서 헤드라인 수집 → 제목 기준 중복 제거, 최대 12건."""
-    heads, seen = [], set()
+def title_key(value):
+    """제목 정규화 키(공백·기호·매체명 표기 차이 흡수). prepare_weekly_release.title_key와 동일 규칙."""
+    return re.sub(r"[^0-9a-z가-힣]+", "", (value or "").lower())
+
+
+def _csv_rows(url):
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return list(csv.DictReader(io.StringIO(r.read().decode("utf-8-sig", "replace"))))
+
+
+def used_keys():
+    """이미 초안/발행에 쓴 기사 키(출처URL·정규화 원문제목) 집합.
+
+    같은 기사가 관련도 상위에 몇 주간 남아 W29·W30·W31에 반복 게재되던 문제의 방어선.
+    CSV 미설정·조회 실패는 fail-open(수집은 계속) — 중복이 완전 차단만 안 될 뿐이다.
+    """
+    keys = set()
+    for env_name in ("WEEKLY_DRAFT_CSV", "WEEKLY_RELEASE_ITEMS_CSV"):
+        url = os.environ.get(env_name, "").strip()
+        if not url:
+            print("[dedup] %s 미설정 - 과거분 대조 생략" % env_name)
+            continue
+        try:
+            rows = _csv_rows(url)
+        except Exception as e:
+            print("[dedup] %s 조회 실패(계속 진행): %s" % (env_name, e))
+            continue
+        for row in rows:
+            link = (row.get("출처URL") or "").strip().lower()
+            if link:
+                keys.add(link)
+            key = title_key(row.get("원문제목"))
+            if key:
+                keys.add(key)
+        print("[dedup] %s: %d행 반영" % (env_name, len(rows)))
+    return keys
+
+
+def collect(domain, used=None):
+    """도메인 feeds에서 헤드라인 수집 → 이번 실행 내 중복 + 과거 사용분 제거, 최대 12건."""
+    used = used or set()
+    heads, seen, skipped = [], set(), 0
     for kind, query in domain["feeds"]:
         items = feed_gnews(query) if kind == "gnews" else feed_arxiv(query)
         for title, link, src, published in items:
             key = title.lower()
-            if key not in seen:
-                seen.add(key)
-                heads.append((title, link, src, published))
+            if key in seen:
+                continue
+            seen.add(key)
+            if link.strip().lower() in used or title_key(title) in used:
+                skipped += 1
+                continue
+            heads.append((title, link, src, published))
         time.sleep(1)  # 소스 rate-limit 완화
+    if skipped:
+        print("[dedup] %s: 과거 사용 기사 %d건 제외" % (domain["id"], skipped))
     return heads[:12]
 
 
@@ -268,8 +328,8 @@ def _parse_cards(text):
         return []
 
 
-def draft_domain(domain, week):
-    heads = collect(domain)
+def draft_domain(domain, week, used=None):
+    heads = collect(domain, used)
     if not heads:
         print("[skip] %s: 헤드라인 없음" % domain["id"])
         return []
@@ -281,6 +341,8 @@ def draft_domain(domain, week):
         "이 중 '선행 신호'(%s)가 될 만한 것을 최대 5개 고르고, 각각을 후보 신호 카드로 만드세요. "
         "일반 뉴스여도 위 관점으로 재해석할 수 있으면 신호로 만드세요. 전문 요약이 아니라 후보만 만듭니다.\n"
         "규칙: 투자판단(매수·매도·목표가·비중) 표현 절대 금지. 관련 기업/자산은 '관찰'로만. 모르면 비워두세요.\n"
+        "  '매수세·매도세·목표가·비중·베팅·저가 매수'는 단어 자체를 쓰지 마세요(자동 린트에서 카드가 통째로 버려집니다). "
+        "자금 흐름은 '순매수·순매도·순유입·순유출·수급' 같은 사실 표현으로 쓰세요.\n"
         "아래 JSON 배열로만 출력(설명·코드펜스 없이):\n"
         '[{"출처n": <헤드라인 번호>, "제목ko": "...", "제목en": "...", '
         '"한줄ko": "메커니즘/관찰 1줄", "한줄en": "...", '
@@ -359,13 +421,20 @@ def main():
             limit = int(a.split("=")[1])
     domains = DOMAINS[:limit] if limit else DOMAINS
     week = week_kst()
-    print("[weekly] 발행주 %s · 도메인 %d개 처리" % (week, len(domains)))
-    rows = []
+    print("[weekly] 발행주 %s · 도메인 %d개 처리 · 최근 %d일 기사만" % (week, len(domains), COLLECT_DAYS))
+    used = used_keys()
+    rows, empty = [], []
     for i, d in enumerate(domains):
         if i:
             time.sleep(2)
-        rows.extend(draft_domain(d, week))
+        made = draft_domain(d, week, used)
+        if not made:
+            empty.append(d["id"])
+        rows.extend(made)
     print("[weekly] 초안 %d행 생성" % len(rows))
+    if empty:
+        # 분야가 통째로 비면 그 주 사이트에 '준비 중'으로만 뜬다 — 운영자가 로그에서 바로 보게 남긴다.
+        print("[weekly] 초안 0건 분야(%d): %s" % (len(empty), ", ".join(empty)))
     if dry:
         for r in rows:
             print("  ", json.dumps(r, ensure_ascii=False))
