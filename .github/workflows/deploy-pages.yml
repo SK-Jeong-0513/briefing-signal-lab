@@ -25,6 +25,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      - name: Inject weekly release CSV
+        env:
+          WEEKLY_RELEASE_ITEMS_CSV: ${{ secrets.WEEKLY_RELEASE_ITEMS_CSV }}
+        run: python3 scripts/inject_weekly_release_csv.py
       - name: Upload site (public/)
         uses: actions/upload-pages-artifact@v3
         with:

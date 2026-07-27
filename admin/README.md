@@ -21,7 +21,7 @@
 3. **프로젝트 설정(⚙) → 스크립트 속성**:
    | 속성 | 값 |
    |---|---|
-   | `MARKET_ID` | BSL_market 스프레드시트 ID (주간-초안·서재·대시보드-수동·settings 탭) |
+   | `MARKET_ID` | BSL_market 스프레드시트 ID (주간-초안·주간-발행·주간-발행항목·주간-발송로그·서재·대시보드-수동·settings 탭) |
    | `ANALYTICS_ID` | BSL_analytics 스프레드시트 ID (방문로그 탭) |
    | `ADMIN_EMAILS` | 본인 gmail (선택; 비우면 "액세스: 나만"에만 의존) |
 
@@ -35,7 +35,7 @@
 
 | 탭 | 헤더 | 비고 |
 |---|---|---|
-| `주간-초안` | 분야·발행주·유형·제목ko·제목en·한줄ko·한줄en·밸류체인·출처URL·선행도·status | 이미 존재(주간 파이프) |
+| `주간-초안` | 분야·발행주·유형·제목ko·제목en·한줄ko·한줄en·밸류체인·출처URL·원문제목·원문일시·수집일시·생성엔진·선행도·status | 기존 탭에 원문제목·원문일시·수집일시·생성엔진 열 추가 |
 | `서재` | id·유형·분류·발행일·제목·요약·태그·본문·access | 이미 존재(서재 업로드) |
 | `대시보드-수동` | 카드키·라벨·단위·주기·출처·시각·값 | **신설 필요** (모듈 ②) |
 | `settings` | key·value | **자동 생성**(첫 토글 시 콘솔이 만듦) |
@@ -88,3 +88,27 @@
 - 분기: 대시보드 수동 탭에 계약가 지수 점 1개 추가.
 - 리포트 게시 시: 서재 업로드 폼 사용.
 - **정식 유료 이전 시:** 이 콘솔·시트를 진짜 백엔드/DB로 대체하고 폐기(임시 스택).
+
+## 주간 발행 원장 및 예약 발행
+
+주간 행 승인과 호 발행은 분리한다. `approved` 행은 공개되지 않으며 운영자가 “이번 호 발행 예약”을 실행하거나 자동 검수가 완료돼야 발행 원장에 준비 상태가 생긴다.
+
+추가 탭:
+
+| 탭 | 헤더 |
+|---|---|
+| `주간-발행` | issue_key·state·revision·manual_confirmed·auto_mode·published_at·emailed_at·content_hash·updated_at·message |
+| `주간-발행항목` | issue_key·revision·분야·발행주·유형·제목ko·제목en·한줄ko·한줄en·밸류체인·출처URL·원문제목·원문일시·검수점수·검수사유·상태·published_at·updated_at |
+| `주간-발송로그` | issue_key·revision·recipient_hash·status·attempted_at·error |
+
+운영 일정은 일요일 06:00 생성, 화요일 17:00 마감, 17:05 자동 검수, 20:00 발행이다. 늦은 승인분은 웹판 리비전을 올리되 주간 이메일은 다시 보내지 않는다.
+
+설정 순서:
+
+1. 관리자 콘솔을 한 번 열어 위 3개 탭을 자동 생성하거나 헤더를 수동으로 정확히 만든다.
+2. `주간-발행`과 `주간-발행항목` 탭을 각각 CSV로 웹 게시한다.
+3. GitHub Actions Secret `WEEKLY_DRAFT_CSV`에는 `주간-초안`, `WEEKLY_RELEASE_CSV`에는 `주간-발행` CSV URL을 넣는다. 메일러 고정 호출용 `WEEKLY_MAILER_URL`과 `WEEKLY_MAILER_TOKEN`도 등록한다.
+4. GitHub Actions Secret `WEEKLY_RELEASE_ITEMS_CSV`에는 `주간-발행항목` CSV URL을 넣는다. `deploy-pages.yml`이 배포 사본의 `site.js`에 주입하며 raw 초안 CSV를 넣으면 안 된다.
+5. `admin/Code.gs`와 `admin/index.html`을 Apps Script에 다시 붙여넣고 재배포한다.
+
+`admin/` 변경은 Apps Script에 다시 붙여넣고 재배포해야 한다.

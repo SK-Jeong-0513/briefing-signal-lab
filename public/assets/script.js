@@ -517,7 +517,7 @@
 
   /* ── 주간 브리핑 렌더 — tech/finance=분야 모델, economy=단일 다이제스트. 공용. ── */
   var weeklyState = {};
-  var weeklySheet = {};  /* ⑤: 도메인id -> {week, signals[]} (approved 시트행). 비면 정적(TECH_WEEKLY) 유지 */
+  var weeklySheet = {};  /* published 발행항목 스냅샷. raw approved는 읽지 않는다. */
   function weeklyCfgs() {
     var cfgs = [];
     if (typeof TECH_DOMAINS !== "undefined")
@@ -558,22 +558,24 @@
     var base = weeklyIssueOf(cfg, id), sh = weeklySheet[id];
     var issueWk = categoryIssueWeek(cfg);
     if (!issueWk) return base;                                                          // 시트 콘텐츠 전무 → 정적 폴백
-    if (!sh || !sh.signals || !sh.signals.length || sh.week !== issueWk) return null;   // 이번 호 주 미승인 → 준비 중
+    if (!sh || ((!sh.signals || !sh.signals.length) && !sh.headliner) || sh.week !== issueWk) return null; // published 항목 없음 → 준비 중
     var merged = {}; if (base) for (var k in base) merged[k] = base[k];
     merged.domain = id;
     merged.signals = sh.signals;
     if (sh.headliner) merged.headliner = sh.headliner;  // 시트 헤드라이너 우선(없으면 base 것 유지, base도 없으면 undefined=신호만)
     merged.week = weeklyWeekLabel(sh.week);
+    merged.release = sh.release;
     return merged;
   }
   /* single 모드(경제): 정적 단일 이슈에 cfg.sheetDomain(예: "macro") 승인 신호가 있으면 교체. */
   function weeklyResolveSingle(cfg) {
     var base = cfg.single, sh = weeklySheet[cfg.sheetDomain];
-    if (!sh || !sh.signals || !sh.signals.length) return base;
+    if (!sh || ((!sh.signals || !sh.signals.length) && !sh.headliner)) return base;
     var merged = {}; for (var k in base) merged[k] = base[k];
     merged.signals = sh.signals;
     if (sh.headliner) merged.headliner = sh.headliner;
     merged.week = weeklyWeekLabel(sh.week);
+    merged.release = sh.release;
     return merged;
   }
   function weeklyMenuHtml(cfg) {
@@ -623,8 +625,14 @@
           "</div>" +
         "</article>";
     }
+    var releaseMeta = "";
+    if (issue.release) {
+      var revised = Number(issue.release.revision || 1) > 1;
+      releaseMeta = '<span class="badge-sample">rev.' + issue.release.revision + (revised ? (lang === "ko" ? " · 업데이트" : " · updated") : "") + "</span>" +
+        '<span class="tech-issue__week">' + (revised ? (lang === "ko" ? "초판 " : "Published ") + issue.release.initialPublishedAt + " · " + (lang === "ko" ? "최종 " : "Updated ") + issue.release.updatedAt : (lang === "ko" ? "발행 " : "Published ") + issue.release.publishedAt) + "</span>";
+    }
     var head2 = '<div class="tech-issue__head"><span class="chip">' + headLabel + "</span>" +
-      '<span class="tech-issue__week">' + t(issue.week) + " " + t(ui.weekSuffix) + "</span></div>";
+      '<span class="tech-issue__week">' + t(issue.week) + " " + t(ui.weekSuffix) + "</span>" + releaseMeta + "</div>";
     var tl = tagline ? '<p class="tech-tagline section-sub">' + tagline + "</p>" : "";
     return '<div class="tech-issue">' + head2 + tl + digest + head + "</div>";
   }
@@ -674,36 +682,34 @@
     }
   }
   function renderAllWeekly() { weeklyCfgs().forEach(function (cfg) { renderWeekly(cfg); }); }
-  /* ⑤: '주간-초안' 시트 CSV에서 approved·signal 행만 읽어 도메인별 최신 발행주 신호 목록 구성.
-   *    mktRows(헤더 소문자 매핑) 재사용. 실패/공백이면 정적 유지. tag 컬럼 없음 → 칩 생략. */
+  /* 공개 사이트는 '주간-발행항목'의 published 스냅샷만 읽는다. */
   function loadWeeklySheet() {
-    if (typeof WEEKLY_SHEET_CSV !== "string" || !WEEKLY_SHEET_CSV) return;
-    fetch(WEEKLY_SHEET_CSV).then(function (r) { return r.text(); }).then(function (txt) {
-      var rows = mktRows(txt), byDom = {};
+    if (typeof WEEKLY_RELEASE_ITEMS_CSV !== "string" || !WEEKLY_RELEASE_ITEMS_CSV) return;
+    fetch(WEEKLY_RELEASE_ITEMS_CSV).then(function (r) { return r.text(); }).then(function (txt) {
+      var rows = mktRows(txt), issues = {};
       rows.forEach(function (o) {
-        if ((o["status"] || "").toLowerCase() !== "approved") return;
-        var dom = (o["분야"] || o["domain"] || "").trim(); if (!dom) return;
-        var titleKo = (o["제목ko"] || "").trim(); if (!titleKo) return;
-        var week = (o["발행주"] || o["week"] || "").trim();
-        var titleEn = (o["제목en"] || titleKo).trim();
-        var lineKo = (o["한줄ko"] || "").trim(), lineEn = (o["한줄en"] || o["한줄ko"] || "").trim();
-        var bucket = (byDom[dom] = byDom[dom] || {})[week] = (byDom[dom][week] || { signals: [], headliner: null });
+        if ((o["상태"] || o["state"] || "").toLowerCase() !== "published") return;
+        var issue = (o["issue_key"] || o["발행주"] || "").trim(), revision = parseInt(o["revision"] || "1", 10);
+        var dom = (o["분야"] || o["domain"] || "").trim(), titleKo = (o["제목ko"] || "").trim();
+        if (!issue || !dom || !titleKo) return;
+        var revs = (issues[issue] = issues[issue] || {}), domains = (revs[revision] = revs[revision] || {});
+        var bucket = domains[dom] = domains[dom] || { signals: [], headliner: null, publishedAt: "", updatedAt: "" };
+        var titleEn = (o["제목en"] || titleKo).trim(), lineKo = (o["한줄ko"] || "").trim(), lineEn = (o["한줄en"] || o["한줄ko"] || "").trim();
+        bucket.publishedAt = bucket.publishedAt || (o["published_at"] || "").trim();
+        bucket.updatedAt = (o["updated_at"] || bucket.publishedAt || "").trim();
         if ((o["유형"] || o["type"] || "").toLowerCase() === "headliner") {
-          // 시트 헤드라이너(간소): 제목·요약(한줄)·밸류체인만. spark/watch/sources 없음.
-          if (!bucket.headliner) bucket.headliner = {
-            title: { ko: titleKo, en: titleEn },
-            summary: { ko: [lineKo], en: [lineEn] },
-            valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() },
-          };
-        } else {  // 기본 = signal
+          if (!bucket.headliner) bucket.headliner = { title: { ko: titleKo, en: titleEn }, summary: { ko: [lineKo], en: [lineEn] }, valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() } };
+        } else if (!bucket.signals.some(function (s) { return s.title.ko === titleKo; })) {
           bucket.signals.push({ title: { ko: titleKo, en: titleEn }, lede: { ko: lineKo, en: lineEn }, tag: "" });
         }
       });
-      var out = {};
-      Object.keys(byDom).forEach(function (dom) {
-        var weeks = Object.keys(byDom[dom]).sort();  // ISO주 문자열 정렬=시간순
-        var b = byDom[dom][weeks[weeks.length - 1]];
-        out[dom] = { week: weeks[weeks.length - 1], signals: b.signals, headliner: b.headliner };
+      var issueKeys = Object.keys(issues).sort(); if (!issueKeys.length) return;
+      var issueKey = issueKeys[issueKeys.length - 1], revisions = Object.keys(issues[issueKey]).map(Number).sort(function (a, b) { return a - b; });
+      var revision = revisions[revisions.length - 1], selected = issues[issueKey][revision], initial = issues[issueKey][1] || selected, out = {};
+      var initialDomains = Object.keys(initial), initialPublishedAt = initialDomains.length ? initial[initialDomains[0]].publishedAt : "";
+      Object.keys(selected).forEach(function (dom) {
+        var b = selected[dom];
+        out[dom] = { week: issueKey, signals: b.signals, headliner: b.headliner, release: { revision: revision, publishedAt: b.publishedAt, initialPublishedAt: initialPublishedAt || b.publishedAt, updatedAt: b.updatedAt } };
       });
       weeklySheet = out;
       renderAllWeekly();

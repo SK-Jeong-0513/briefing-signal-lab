@@ -18,7 +18,10 @@
  */
 
 // ───────────────────────── 탭 이름 ─────────────────────────
-var WEEKLY_TAB   = '주간-초안';        // 분야·발행주·유형·제목ko·제목en·한줄ko·한줄en·밸류체인·출처URL·선행도·status
+var WEEKLY_TAB   = '주간-초안';        // 편집 승인 원천. approved 자체는 공개 상태가 아님
+var RELEASE_TAB  = '주간-발행';        // 호 상태 단일 원장
+var RELEASE_ITEM_TAB = '주간-발행항목'; // 공개/메일 스냅샷
+var DELIVERY_TAB = '주간-발송로그';     // 수신자 해시별 발송 결과
 var LIBRARY_TAB  = '서재';             // id·유형·분류·발행일·제목·요약·태그·본문·access
 var VISIT_TAB    = '방문로그';          // 날짜시각·페이지·referrer·방문자ID  (BSL_analytics)
 var DASH_TAB     = '대시보드-수동';      // 카드키·라벨·단위·주기·출처·시각·값 (신설)
@@ -109,6 +112,17 @@ function _appendByHeader_(sh, item) {
     .map(function (h) { return String(h).trim(); });
   sh.appendRow(header.map(function (h) { return item[h] != null ? item[h] : ''; }));
 }
+function _ensureTab_(ss, name, header) {
+  var sh = ss.getSheetByName(name) || ss.insertSheet(name);
+  if (sh.getLastColumn() === 0 || sh.getLastRow() === 0) sh.getRange(1, 1, 1, header.length).setValues([header]);
+  var actual = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  header.forEach(function (h) { if (actual.indexOf(h) < 0) throw new Error(name + ' 헤더 누락: ' + h); });
+  return sh;
+}
+function _nowKst_() { return Utilities.formatDate(new Date(), 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ssXXX"); }
+function _sha256_(value) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+}
 
 // ───────────────────────── ① 주간 초안 승인 ─────────────────────────
 function weeklyList() {
@@ -132,6 +146,70 @@ function weeklyDeleteRows(rows) {
   var sh = _openMarket_().getSheetByName(WEEKLY_TAB);
   return { ok: true, deleted: _deleteRows_(sh, rows) };
 }
+
+// ───────────────────────── ①-b 주간 호 발행 예약/웹 리비전 ─────────────────────────
+var RELEASE_HEADER = ['issue_key','state','revision','manual_confirmed','auto_mode','published_at','emailed_at','content_hash','updated_at','message'];
+var RELEASE_ITEM_HEADER = ['issue_key','revision','분야','발행주','유형','제목ko','제목en','한줄ko','한줄en','밸류체인','출처URL','원문제목','원문일시','검수점수','검수사유','상태','published_at','updated_at'];
+var DELIVERY_HEADER = ['issue_key','revision','recipient_hash','status','attempted_at','error'];
+
+function _releaseTabs_(ss) {
+  return {
+    ledger: _ensureTab_(ss, RELEASE_TAB, RELEASE_HEADER),
+    items: _ensureTab_(ss, RELEASE_ITEM_TAB, RELEASE_ITEM_HEADER),
+    delivery: _ensureTab_(ss, DELIVERY_TAB, DELIVERY_HEADER)
+  };
+}
+function weeklyReleaseStatus(issueKey) {
+  _assertAuth_();
+  var ss = _openMarket_(), tabs = _releaseTabs_(ss), data = _readTab_(ss, RELEASE_TAB).rows;
+  var rows = data.filter(function (r) { return !issueKey || String(r.issue_key) === String(issueKey); });
+  var latest = rows.length ? rows[rows.length - 1] : null;
+  return { issueKey: issueKey || '', latest: latest, history: rows.slice(-8) };
+}
+function weeklyPrepareRelease(issueKey) {
+  _assertAuth_();
+  if (!issueKey) throw new Error('발행주를 선택하세요');
+  var ss = _openMarket_(), tabs = _releaseTabs_(ss);
+  var approved = _readTab_(ss, WEEKLY_TAB).rows.filter(function (r) {
+    return String(r['발행주'] || '') === String(issueKey) && String(r.status || '').toLowerCase() === 'approved';
+  });
+  if (!approved.length) throw new Error('선택한 발행주의 approved 행이 없습니다');
+  var ledgerRows = _readTab_(ss, RELEASE_TAB).rows.filter(function (r) { return String(r.issue_key) === String(issueKey); });
+  var published = ledgerRows.some(function (r) { return ['published','email_partial','emailed'].indexOf(String(r.state)) >= 0; });
+  var maxRevision = ledgerRows.reduce(function (m, r) { return Math.max(m, Number(r.revision || 0)); }, 0);
+  var revision = published ? maxRevision + 1 : 1;
+  var itemState = published ? 'published' : 'ready';
+  var ledgerState = published ? 'published' : 'manual_ready';
+  var now = _nowKst_(), publishedAt = published ? now : '';
+  if (!published) {
+    var existingItems = _readTab_(ss, RELEASE_ITEM_TAB).rows;
+    var stateCol = _colIndex_(tabs.items, '상태'), updatedCol = _colIndex_(tabs.items, 'updated_at');
+    existingItems.forEach(function (r) {
+      if (String(r.issue_key) === String(issueKey) && Number(r.revision || 0) === 1 && String(r['상태']) === 'ready') {
+        tabs.items.getRange(r._row, stateCol).setValue('superseded');
+        tabs.items.getRange(r._row, updatedCol).setValue(now);
+      }
+    });
+  }
+  var items = approved.map(function (r) {
+    return {
+      issue_key: issueKey, revision: revision, '분야': r['분야'], '발행주': r['발행주'], '유형': r['유형'],
+      '제목ko': r['제목ko'], '제목en': r['제목en'], '한줄ko': r['한줄ko'], '한줄en': r['한줄en'],
+      '밸류체인': r['밸류체인'], '출처URL': r['출처URL'], '원문제목': r['원문제목'], '원문일시': r['원문일시'],
+      '검수점수': r['검수점수'] || '', '검수사유': published ? 'late manual web revision' : 'manual approval',
+      '상태': itemState, published_at: publishedAt, updated_at: now
+    };
+  });
+  items.forEach(function (item) { _appendByHeader_(tabs.items, item); });
+  var digest = _sha256_(JSON.stringify(items));
+  _appendByHeader_(tabs.ledger, {
+    issue_key: issueKey, state: ledgerState, revision: revision, manual_confirmed: 'true', auto_mode: 'false',
+    published_at: publishedAt, emailed_at: '', content_hash: digest, updated_at: now,
+    message: published ? '늦은 승인 웹판 rev.' + revision + ' (' + items.length + '건, 이메일 재발송 없음)' : '운영자 발행 예약 (' + items.length + '건)'
+  });
+  return { ok: true, unchanged: false, issueKey: issueKey, state: ledgerState, revision: revision, count: items.length };
+}
+
 
 // ───────────────────────── ③ 서재 업로드 ─────────────────────────
 function libraryList() {

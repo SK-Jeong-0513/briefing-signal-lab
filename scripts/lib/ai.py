@@ -87,10 +87,14 @@ def _engines_ordered():
     return _ORDER
 
 
-def chat(system, user, max_tokens=700, temperature=0.3):
-    """엔진 순서대로 시도. (text, engine_name) 반환. 전부 실패면 (None, None)."""
+def chat(system, user, max_tokens=700, temperature=0.3, exclude_engines=None):
+    """엔진 순서대로 시도. exclude_engines는 생성기와 다른 검수 엔진을 강제할 때 사용한다."""
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    excluded = set(exclude_engines or [])
     for name, base, model, keyvar in _engines_ordered():
+        if name in excluded:
+            print("[ai] %s 제외(독립 검수 엔진 규칙)" % name)
+            continue
         key = os.environ.get(keyvar, "").strip()
         if not key:
             print("[ai] %s 키(%s) 없음. 건너뜀" % (name, keyvar))
