@@ -28,8 +28,11 @@ const CFG = {
   OPERATOR_EMAIL: "paun.jeong@gmail.com",
   SALT: "bsl-CHANGE-ME-token-salt",     // 이미 고정했다면 그 값 유지.
   SHEET_ID: "",
-  RESP_SHEET: "설문지 응답 시트1",
-  RESP_COL: { email: "이메일 주소", consent: "메일 수신 동의", keywords: "관심 키워드" },
+  // 구독 전용 폼('Briefing Signal Lab 구독') 응답 탭. 옛 'Biz Signal Lab' 폼(시트1)에서 이전.
+  // ⚠️ 열 이름은 폼 질문 제목 그대로 만들어진다 — 질문을 고쳐도 기존 열 제목은 안 바뀐다.
+  //    바꿀 일이 생기면 시트의 실제 헤더를 보고 여기를 맞출 것.
+  RESP_SHEET: "설문지 응답 시트2",
+  RESP_COL: { email: "이메일 주소(E-Mail Address)", consent: "메일 수신 동의", keywords: "관심 키워드" },
   PREF_COL: { email: "이메일", domains: "관심 분야", status: "상태", updated: "갱신" },
   CONSENT_TRUE_INCLUDES: "동의",
   // 일일 시황 메일(Stage 4) — '시장' 스프레드시트는 구독자 시트와 다름
