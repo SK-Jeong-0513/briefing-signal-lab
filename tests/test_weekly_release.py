@@ -26,6 +26,18 @@ class WeeklyReleaseTests(unittest.TestCase):
     def test_missing_source_and_duplicate_are_excluded(self):
         ok,bad=release.select_candidates([self.row(출처URL=""),self.row(제목ko="다른 제목")],"2026-W31",datetime(2026,7,27,tzinfo=timezone.utc),self.good_eval)
         self.assertEqual(ok,[]); self.assertTrue(any("source_url" in x["reasons"] for x in bad)); self.assertTrue(any("duplicate" in x["reasons"] for x in bad))
+    def test_article_published_in_earlier_issue_is_excluded(self):
+        prior = release.prior_keys([{"issue_key":"2026-W30","출처URL":"https://example.com/a","원문제목":"HBM packaging capacity expands"}],"2026-W31")
+        ok,bad=release.select_candidates([self.row()],"2026-W31",datetime(2026,7,27,tzinfo=timezone.utc),self.good_eval,prior=prior)
+        self.assertEqual(ok,[]); self.assertIn("duplicate_prior_issue",bad[0]["reasons"])
+
+    def test_prior_keys_ignores_current_issue(self):
+        prior = release.prior_keys([{"issue_key":"2026-W31","출처URL":"https://example.com/a","원문제목":"HBM packaging capacity expands"}],"2026-W31")
+        self.assertEqual(prior,set())
+
+    def test_tally_summarises_domains(self):
+        self.assertEqual(release.tally(["semicon","macro","semicon"]),"macro 1, semicon 2")
+
     def test_low_score_is_excluded(self):
         ok,bad=release.select_candidates([self.row()],"2026-W31",datetime(2026,7,27,tzinfo=timezone.utc),lambda row:(None,"evaluation_gate"))
         self.assertEqual(ok,[]); self.assertIn("evaluation_gate",bad[0]["reasons"])

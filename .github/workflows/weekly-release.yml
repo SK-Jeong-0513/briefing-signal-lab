@@ -19,6 +19,7 @@ jobs:
           SETTINGS_CSV: ${{ secrets.SETTINGS_CSV }}
           WEEKLY_DRAFT_CSV: ${{ secrets.WEEKLY_DRAFT_CSV }}
           WEEKLY_RELEASE_CSV: ${{ secrets.WEEKLY_RELEASE_CSV }}
+          WEEKLY_RELEASE_ITEMS_CSV: ${{ secrets.WEEKLY_RELEASE_ITEMS_CSV }}   # 지난 호 중복 재게재 차단(선택)
           WEEKLY_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}
           WEEKLY_WEBAPP_TOKEN: ${{ secrets.MARKET_WEBAPP_TOKEN }}
           WEEKLY_MIN_SCORE: "85"

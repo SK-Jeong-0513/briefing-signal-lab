@@ -352,3 +352,26 @@ function setLlmPrimary(name) {
   _setSetting_('llm_primary', name);
   return { ok: true, primary: name };
 }
+
+// ───────────────────────── 일일 시황 발송 시각 ─────────────────────────
+// 메일러(별도 Apps Script)가 이 값을 읽어 새벽 03:00 syncDailySchedule()에서 트리거를 재생성한다.
+// 서머타임 등으로 적정 시각이 바뀌므로 코드가 아니라 설정으로 둔다.
+// ⚠️ Apps Script 시간 트리거는 지정 시각 ±15분 오차 — 프리마켓(08:30) 전 도착이 목적이면 여유를 둘 것.
+var DAILY_SEND_TIME_DEFAULT = '07:40';   // mailer/Code.gs CFG.DAILY_SEND_TIME과 동기 유지
+function _parseHhmm_(value) {
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return ('0' + Number(m[1])).slice(-2) + ':' + m[2];
+}
+function getDailySendTime() {
+  _assertAuth_();
+  var saved = _parseHhmm_(_getSetting_('daily_send_time'));
+  return { time: saved || DAILY_SEND_TIME_DEFAULT, isDefault: !saved, fallback: DAILY_SEND_TIME_DEFAULT };
+}
+function setDailySendTime(value) {
+  _assertAuth_();
+  var time = _parseHhmm_(value);
+  if (!time) throw new Error('시각 형식은 HH:MM (00:00~23:59)');
+  _setSetting_('daily_send_time', time);
+  return { ok: true, time: time };
+}

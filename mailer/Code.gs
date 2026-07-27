@@ -12,7 +12,9 @@
  * [일일 시황 메일 — Stage 4] sendDailyMarket(): 텔레그램 파이프가 '시장' 스프레드시트의
  *   시장-일일 탭에 적재한 그날 경제/금융/기술 시황을 동의한 전체 구독자에게 아침 1회 발송.
  *   시장 데이터는 별도 스프레드시트라 CFG.MARKET_SHEET_ID로 openById 읽기.
- *   설치: CFG.MARKET_SHEET_ID 채우기 → createDailyTrigger() 1회 실행(매일 08:00 KST).
+ *   설치: CFG.MARKET_SHEET_ID 채우기 → createDailyTrigger() 1회 실행.
+ *   발송 시각은 관리자 콘솔 설정(settings.daily_send_time, KST). 미설정 시 CFG.DAILY_SEND_TIME.
+ *   콘솔에서 시각을 바꾸면 새벽 03:00 syncDailySchedule()이 트리거를 다음 날부터 자동 반영한다.
  */
 
 // ===== CONFIG — 여기만 수정 =====
@@ -34,6 +36,8 @@ const CFG = {
   MARKET_SHEET_ID: "",              // '시장' 스프레드시트 ID(시트 URL의 /d/<여기>/edit)
   MARKET_TAB: "시장-일일",
   MARKET_BODY_TAB: "시장-본문",       // 텔레그램 상세 요약(날짜·시간대·본문)
+  SETTINGS_TAB: "settings",          // 관리자 콘솔이 쓰는 key·value 탭(BSL_market)
+  DAILY_SEND_TIME: "07:40",          // settings의 daily_send_time 미설정·오류 시 폴백(KST)
   WEEKLY_LEDGER_TAB: "주간-발행",
   WEEKLY_ITEM_TAB: "주간-발행항목",
   WEEKLY_DELIVERY_TAB: "주간-발송로그",
@@ -108,7 +112,7 @@ const CATS = [
   },
 ];
 
-const C = { primary: "#2454D6", soft: "#E8EEFF", text: "#17202A", muted: "#5F6B7A", border: "#D8DEE8", canvas: "#F7F8FA", surface: "#FFFFFF" };
+const C = { primary: "#2454D6", soft: "#E8EEFF", text: "#17202A", muted: "#5F6B7A", border: "#D8DEE8", canvas: "#F7F8FA", surface: "#FFFFFF", success: "#12733E", danger: "#C9342F" };
 
 // ===== 시트 헬퍼 =====
 function ss_() {
@@ -481,6 +485,7 @@ function sendDailyMarket() {
   var unsub = unsubSet_();
   var subject = CFG.DAILY_SUBJECT + " " + dg.today;
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
+  var quotes = quotes_();       // 주요 시장 지표(실패·낡음이면 null → 블록만 생략)
 
   var sent = 0, skipped = 0, failed = 0, seen = {};
   for (var i = 0; i < rt.rows.length; i++) {
@@ -492,22 +497,137 @@ function sendDailyMarket() {
 
     var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail) });
+      GmailApp.sendEmail(recipient, subject, dailyPlain_(dg, detail, quotes), { name: CFG.SENDER_NAME, htmlBody: dailyHtml_(email, dg, detail, quotes) });
       sent++;
       if (CFG.TEST_MODE) break;
     } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
   }
   Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "[일일 " + dg.today + "] 발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
 }
-// 매일 08:00 KST 트리거(장전 파이프가 07:00 시트 기록 후). 1회 실행하면 됨.
-function createDailyTrigger() {
+// ── 일일 발송 시각 (관리자 콘솔 settings.daily_send_time) ──────────────────────
+// 서머타임 등으로 적정 시각이 바뀌므로 코드가 아니라 설정으로 둔다.
+// ⚠️ Apps Script 시간 트리거는 지정 시각 ±15분 오차가 있다(정확한 시각 지정 불가).
+//    KRX 장전 단일가(08:30) 전 도착이 목적이면 그만큼 여유를 두고 지정할 것.
+var DAILY_TIME_PROP = "daily_send_time_applied";   // 마지막으로 트리거에 반영한 값
+
+// BSL_market의 settings 탭에서 key 조회. 미설정·오류는 null(호출부가 기본값 폴백).
+function marketSetting_(key) {
+  if (!CFG.MARKET_SHEET_ID) return null;
+  try {
+    var sh = SpreadsheetApp.openById(CFG.MARKET_SHEET_ID).getSheetByName(CFG.SETTINGS_TAB);
+    if (!sh || sh.getLastRow() < 2) return null;
+    var data = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === key) return String(data[i][1]).trim();
+    }
+  } catch (e) {
+    Logger.log("[설정] " + key + " 조회 실패(기본값 사용): " + e);
+  }
+  return null;
+}
+// "HH:MM" → {h, m, label}. 미설정·형식 오류는 CFG.DAILY_SEND_TIME으로 폴백(fail-open).
+function dailySendTime_() {
+  var raw = marketSetting_("daily_send_time") || CFG.DAILY_SEND_TIME;
+  var m = /^(\d{1,2}):(\d{2})$/.exec(String(raw).trim());
+  var h = m ? Number(m[1]) : -1, mi = m ? Number(m[2]) : -1;
+  if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) {
+    Logger.log("[설정] daily_send_time 형식 오류('" + raw + "') → 기본값 " + CFG.DAILY_SEND_TIME);
+    m = /^(\d{1,2}):(\d{2})$/.exec(CFG.DAILY_SEND_TIME);
+    h = Number(m[1]); mi = Number(m[2]);
+  }
+  return { h: h, m: mi, label: ("0" + h).slice(-2) + ":" + ("0" + mi).slice(-2) };
+}
+// 설정 시각으로 발송 트리거 재생성. 여러 번 실행해도 트리거는 항상 1개(멱등).
+function applyDailySchedule() {
+  var t = dailySendTime_();
   ScriptApp.getProjectTriggers().forEach(function (tr) {
     if (tr.getHandlerFunction() === "sendDailyMarket") ScriptApp.deleteTrigger(tr);
   });
-  ScriptApp.newTrigger("sendDailyMarket").timeBased().atHour(8).everyDays(1).inTimezone("Asia/Seoul").create();
-  Logger.log("일일 트리거 생성: 매일 08:00 KST sendDailyMarket");
+  ScriptApp.newTrigger("sendDailyMarket").timeBased()
+    .atHour(t.h).nearMinute(t.m).everyDays(1).inTimezone("Asia/Seoul").create();
+  PropertiesService.getScriptProperties().setProperty(DAILY_TIME_PROP, t.label);
+  Logger.log("일일 트리거 적용: 매일 " + t.label + " KST sendDailyMarket (±15분)");
+  return t.label;
 }
-function dailyHtml_(email, dg, detail) {
+// 매일 새벽 실행. 콘솔에서 시각을 바꾸면 다음 날부터 자동 반영된다.
+function syncDailySchedule() {
+  var want = dailySendTime_().label;
+  var applied = PropertiesService.getScriptProperties().getProperty(DAILY_TIME_PROP);
+  var live = ScriptApp.getProjectTriggers().some(function (tr) {
+    return tr.getHandlerFunction() === "sendDailyMarket";
+  });
+  if (applied === want && live) return;
+  Logger.log("[일일] 발송 시각 " + (applied || "미기록") + " → " + want + (live ? "" : " (트리거 없음)"));
+  applyDailySchedule();
+}
+// 설치 1회: 발송 트리거 + 새벽 03:00 동기화 트리거.
+function createDailyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (tr) {
+    if (tr.getHandlerFunction() === "syncDailySchedule") ScriptApp.deleteTrigger(tr);
+  });
+  ScriptApp.newTrigger("syncDailySchedule").timeBased()
+    .atHour(3).nearMinute(0).everyDays(1).inTimezone("Asia/Seoul").create();
+  return applyDailySchedule();
+}
+// ── 주요 시장 지표 (quotes.json) ────────────────────────────────────────────
+// 표시 문자열은 fetch_dashboard.py가 이미 만들어 둔다. 메일러는 읽어 그리기만 한다
+// (메일러는 수동 붙여넣기 배포라 티커·라벨·포맷 변경이 여기 닿지 않게 함).
+// 실패·낡음은 전부 블록 생략으로 처리 — 지표 하나 때문에 브리핑이 안 나가면 안 된다.
+var QUOTES_PATH = "assets/data/quotes.json";  // CFG.BASE 기준 상대 경로(fetch_dashboard.py가 생성)
+var QUOTES_STALE_DAYS = 5;                    // asof가 이보다 오래면 블록만 생략(연휴 3~4일은 통과)
+
+function quotes_() {
+  try {
+    var res = UrlFetchApp.fetch(CFG.BASE + QUOTES_PATH, { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log("[지표] HTTP " + res.getResponseCode() + " — 블록 생략");
+      return null;
+    }
+    var q = JSON.parse(res.getContentText());
+    if (!q || !q.rows || !q.rows.length || !q.asof) {
+      Logger.log("[지표] 빈 스냅샷 — 블록 생략");
+      return null;
+    }
+    // asof는 '어느 장의 숫자인가'다. 월요일 아침에 금요일 마감이 찍히는 건 정상이므로
+    // 발송일과 다르다는 이유로 막지 않고, 연휴를 넘는 공백(파이프 고장)만 막는다.
+    var days = Math.floor((new Date().getTime() - new Date(q.asof + "T00:00:00Z").getTime()) / 86400000);
+    if (isNaN(days) || days > QUOTES_STALE_DAYS) {
+      Logger.log("[지표] asof " + q.asof + " (" + days + "일 전) — 낡아서 블록 생략");
+      return null;
+    }
+    return q;
+  } catch (e) {
+    Logger.log("[지표] 조회 실패 — 블록 생략: " + e);
+    return null;
+  }
+}
+function quoteCell_(r) {
+  if (!r) return '<td width="50%"></td>';
+  var color = r.dir > 0 ? C.success : (r.dir < 0 ? C.danger : C.muted);
+  return '<td width="50%" style="padding:3px 0;font-size:12px;color:' + C.muted + ';white-space:nowrap">' +
+    esc_(r.label) + ' <span style="color:' + C.text + ';font-weight:600">' + esc_(r.value) + "</span> " +
+    '<span style="color:' + color + '">' + esc_(r.change) + "</span></td>";
+}
+function quotesHtml_(q) {
+  if (!q) return "";
+  var rows = "";
+  for (var i = 0; i < q.rows.length; i += 2) {
+    rows += "<tr>" + quoteCell_(q.rows[i]) + quoteCell_(q.rows[i + 1]) + "</tr>";
+  }
+  return '<div style="margin:0 0 16px">' +
+    '<div style="font-size:12px;color:' + C.muted + ';margin:0 0 6px">주요 시장 지표 · 미 증시 ' +
+      esc_(q.asof.slice(5)) + " 마감 기준</div>" +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + "</table>" +
+    '<div style="border-top:1px solid ' + C.border + ';margin:14px 0 0"></div></div>';
+}
+function quotesPlain_(q) {
+  if (!q) return [];
+  return ["[주요 시장 지표 · 미 증시 " + q.asof.slice(5) + " 마감 기준]"]
+    .concat(q.rows.map(function (r) { return "- " + r.label + " " + r.value + " " + r.change; }))
+    .concat([""]);
+}
+
+function dailyHtml_(email, dg, detail, quotes) {
   var tok = token_(email);
   var body = dg.groups.map(function (g) {
     var sigs = g.items.map(function (o) {
@@ -528,7 +648,7 @@ function dailyHtml_(email, dg, detail) {
       '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.primary + '">BRIEFING SIGNAL LAB · ' + esc_(dg.today) + " 장전</div>",
       '<div style="font-size:20px;font-weight:700;margin-top:4px">일일 시황</div>',
     "</td></tr>",
-    '<tr><td style="padding:20px 24px">', body, renderBody_(detail),
+    '<tr><td style="padding:20px 24px">', quotesHtml_(quotes), body, renderBody_(detail),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 4px"><tr><td style="border-radius:8px;background:' + C.primary + '">',
         '<a href="' + CFG.BASE + 'market.html" style="display:inline-block;padding:12px 20px;font-size:14px;font-weight:600;color:#fff;text-decoration:none">시장 탭에서 전체 보기 →</a>',
       "</td></tr></table>",
@@ -540,8 +660,8 @@ function dailyHtml_(email, dg, detail) {
     "</table></td></tr></table></div>",
   ].join("");
 }
-function dailyPlain_(dg, detail) {
-  var lines = ["일일 시황 (" + dg.today + " 장전)", ""];
+function dailyPlain_(dg, detail, quotes) {
+  var lines = ["일일 시황 (" + dg.today + " 장전)", ""].concat(quotesPlain_(quotes));
   dg.groups.forEach(function (g) {
     if (g.label) lines.push("[" + g.label + "]");
     g.items.forEach(function (o) { lines.push("- " + o.title + " : " + o.line); });

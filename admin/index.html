@@ -85,7 +85,7 @@
     <button data-tab="library" onclick="showTab('library')">③ 서재 업로드</button>
     <button data-tab="visits" onclick="showTab('visits')">④ 방문 통계</button>
     <button data-tab="dash" onclick="showTab('dash')">② 대시보드 수동</button>
-    <button data-tab="engine" onclick="showTab('engine')">⑤ LLM 엔진</button>
+    <button data-tab="engine" onclick="showTab('engine')">⑤ 엔진·발송시각</button>
   </nav>
   <main>
     <!-- ① 주간 초안 승인 -->
@@ -186,6 +186,17 @@
           <span class="muted small" id="e-note"></span>
         </div>
         <p class="small muted" style="margin:12px 0 0">새 provider 추가는 코드 등록(ai.py)+Secret+워크플로 env가 함께 필요합니다(README 참고).</p>
+      </div>
+      <div class="panel" style="margin-top:var(--s-md)">
+        <h2>일일 시황 발송 시각</h2>
+        <p class="small muted" style="margin:0 0 8px">매일 아침 일일 시황 메일이 나가는 시각(KST)입니다. 서머타임 등으로 적정 시각이 바뀌면 여기서 조정하세요. 저장하면 <b>다음 날 새벽 동기화</b> 때 메일러 트리거에 반영됩니다.</p>
+        <label class="f">발송 시각</label>
+        <input id="s-daily" type="time" style="max-width:160px">
+        <div class="row" style="margin-top:var(--s-md)">
+          <button class="btn primary" onclick="saveDailyTime()">저장</button>
+          <span class="muted small" id="s-note"></span>
+        </div>
+        <p class="small muted" style="margin:12px 0 0">⚠️ Apps Script 시간 트리거는 <b>±15분 오차</b>가 있어 정확한 시각 지정은 불가합니다. KRX 장전 단일가(08:30) 전 도착이 목적이면 그만큼 여유를 두세요. 텔레그램 장전 요약 생성(07:00)보다 뒤여야 그날 본문이 담깁니다.</p>
       </div>
     </section>
   </main>
@@ -423,6 +434,7 @@
   // ── ⑤ LLM 엔진 ──
   var _engLoaded=false;
   function loadEngine(){_engLoaded=true;
+    loadDailyTime();
     call('getLlmConfig').then(function(c){
       document.getElementById('e-primary').innerHTML=c.engines.map(function(e){
         return '<option'+(e===c.primary?' selected':'')+'>'+esc(e)+'</option>';}).join('');
@@ -433,6 +445,19 @@
     var name=document.getElementById('e-primary').value;
     call('setLlmPrimary',name).then(function(r){
       toast('주력 엔진 → '+r.primary);document.getElementById('e-note').textContent='현재 주력: '+r.primary;
+    }).catch(fail);
+  }
+  // 일일 시황 발송 시각 — 같은 탭에서 함께 로드
+  function loadDailyTime(){
+    call('getDailySendTime').then(function(t){
+      document.getElementById('s-daily').value=t.time;
+      document.getElementById('s-note').textContent='현재: '+t.time+(t.isDefault?' (기본값 — 아직 지정 안 함)':'');
+    }).catch(fail);
+  }
+  function saveDailyTime(){
+    call('setDailySendTime',val('s-daily')).then(function(r){
+      toast('발송 시각 → '+r.time+' (다음 날 새벽 반영)');
+      document.getElementById('s-note').textContent='현재: '+r.time;
     }).catch(fail);
   }
 

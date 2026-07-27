@@ -50,4 +50,12 @@ public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시
 - 발행 후 늦은 승인분은 웹판 `rev.2+`로 추가하며 이메일은 재발송하지 않음
 - 일일 브리핑 파이프는 별도이며 변경하지 않음
 
-로컬 구현 후 라이브 반영에는 Google Sheet 탭/CSV 게시와 Apps Script 재배포가 필요하다. Actions Secret `WEEKLY_DRAFT_CSV`(초안), `WEEKLY_RELEASE_CSV`(발행 원장), `WEEKLY_RELEASE_ITEMS_CSV`(발행항목)를 등록한다. Pages 배포가 마지막 값을 `site.js`의 공개 설정에 주입한다. 메일러 Apps Script 속성/Actions Secret에 같은 `WEEKLY_CRON_TOKEN`/`WEEKLY_MAILER_TOKEN`을 설정하고 `WEEKLY_MAILER_URL`을 등록한 뒤 `createWeeklyTriggers()`를 1회 실행한다. 화요일 20:00 고정 호출은 `weekly-send.yml`이 담당하고 Apps Script 트리거는 재시도 경로다.
+라이브 운영에는 Actions Secret `WEEKLY_DRAFT_CSV`(초안), `WEEKLY_RELEASE_CSV`(발행 원장), `WEEKLY_RELEASE_ITEMS_CSV`(발행항목)가 필요하다. Pages 배포가 발행항목 CSV를 `site.js`의 공개 설정에 주입한다. 메일러는 Apps Script 속성 `WEEKLY_CRON_TOKEN`과 동일한 Actions Secret `WEEKLY_MAILER_TOKEN`, 웹 앱 주소 `WEEKLY_MAILER_URL`을 사용한다. 화요일 20:00 고정 호출은 `weekly-send.yml`이 담당하고 Apps Script 트리거는 재시도 경로다.
+
+### 운영 검증 현황
+
+- 2026-07-27: `2026-W31 · manual_ready · rev.1` 48건 발행 스냅샷 생성
+- 운영자 미리보기 후 운영 모드에서 실제 발송 21명 성공·0명 실패, 최종 상태 `emailed`
+- Apps Script 주간 알림 3개와 화요일 20시 보조 발송 트리거 생성; 기존 일일 발송 트리거 유지
+- GitHub Actions `Weekly briefing publish and email` 연결 테스트 성공(run `30247525471`)
+- `emailed` 호는 이후 GitHub Actions 또는 Apps Script가 다시 호출돼도 재발송하지 않음
