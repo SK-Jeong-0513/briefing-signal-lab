@@ -182,6 +182,11 @@ const UI = {
       en: "Something went wrong. Please retry or use the form link below.",
     },
     formFallback: { ko: "폼으로 신청하기", en: "Use the form instead" },
+    already: {
+      ko: "이미 이 브라우저에서 구독을 신청하셨습니다.",
+      en: "You've already subscribed from this browser.",
+    },
+    again: { ko: "다른 주소로 구독하기", en: "Use a different address" },
     paidCta: { ko: "유료 문의 / 대기자 등록", en: "Paid inquiry / waitlist" },
   },
   techPage: {

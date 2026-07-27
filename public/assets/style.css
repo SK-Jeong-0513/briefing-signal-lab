@@ -433,6 +433,14 @@ ul { margin: 0; padding: 0; list-style: none; }
 .sub__msg:empty { display: none; }
 /* 짙은 배경 위라 danger 원색은 대비가 낮다 — 굵기로 오류를 구분한다. */
 .sub__msg[data-err="1"] { font-weight: 600; }
+/* '다른 주소로 구독하기' — 완료 후에만 노출되는 보조 동작이라 링크 톤으로 낮춘다. */
+.sub__again {
+  margin-top: var(--s-sm); padding: 0; border: 0; background: none;
+  color: var(--surface); font: inherit; font-size: 0.875rem;
+  text-decoration: underline; cursor: pointer; opacity: 0.85;
+}
+.sub__again[hidden] { display: none; }
+.sub__again:hover { opacity: 1; }
 
 /* ── 푸터 ──────────────────────────────────────────────── */
 .footer { background: var(--surface); border-top: 1px solid var(--border); }

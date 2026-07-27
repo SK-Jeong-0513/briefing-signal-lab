@@ -37,6 +37,32 @@
    * 성공은 낙관적으로 표시하고, 실패 대비 폼 링크를 항상 남겨둔다.
    * 미설정(formId 빈 값)이면 폼을 숨기고 기존 외부 버튼만 노출한다. */
   var subForm = null;
+  /* 같은 브라우저에서 반복 신청하면 시트에 중복 행이 쌓인다.
+   * 발송은 메일러가 이메일 기준으로 dedup하므로 메일이 두 번 가지는 않지만,
+   * 구독자 수 집계가 부풀고 사용자도 신청이 됐는지 알 수 없다.
+   * 기기·브라우저를 넘는 완전한 차단은 서버가 없으면 불가능하므로,
+   * 실제로 발생하는 경우(같은 사람이 다시 눌러봄)만 막는다. */
+  var SUB_KEY = "bsl-subscribed";
+  function subStored() { try { return localStorage.getItem(SUB_KEY) || ""; } catch (e) { return ""; } }
+  function subStore(v) { try { v ? localStorage.setItem(SUB_KEY, v) : localStorage.removeItem(SUB_KEY); } catch (e) {} }
+  /* 신청 완료 화면: 입력줄을 감추고 안내 + '다른 주소로' 버튼을 보인다. */
+  function subDoneView(msgKey) {
+    subForm.querySelector(".sub__row").hidden = true;
+    subForm.querySelector(".sub__consent").hidden = true;
+    subForm.querySelector(".sub__again").hidden = false;
+    subMsg(msgKey, false);
+  }
+  function subResetView() {
+    subStore("");
+    subForm.querySelector(".sub__row").hidden = false;
+    subForm.querySelector(".sub__consent").hidden = false;
+    subForm.querySelector(".sub__again").hidden = true;
+    var btn = subForm.querySelector(".sub__submit");
+    btn.dataset.busy = "";
+    subMsg("", false);
+    subText();
+    subForm.querySelector(".sub__email").focus({ preventScroll: true });
+  }
   function subConfigured() {
     return typeof SUBSCRIBE_FORM === "object" && SUBSCRIBE_FORM &&
       !!SUBSCRIBE_FORM.formId && !!SUBSCRIBE_FORM.emailEntry && !!SUBSCRIBE_FORM.consentEntry;
@@ -45,6 +71,7 @@
     if (!subForm) return;
     subForm.querySelector(".sub__email").placeholder = t(node("cta.emailPlaceholder"));
     subForm.querySelector(".sub__consent span").textContent = t(node("cta.consent"));
+    subForm.querySelector(".sub__again").textContent = t(node("cta.again"));
     var btn = subForm.querySelector(".sub__submit");
     if (btn.dataset.busy !== "1") btn.textContent = t(node("cta.submit"));
   }
@@ -87,9 +114,11 @@
     var freeBtn = actions && actions.querySelector('[data-link="freeForm"]');
     if (freeBtn) freeBtn.hidden = true;
     wireSubscribeLinks(true);
+    subForm.querySelector(".sub__again").addEventListener("click", subResetView);
+    subText();
+    if (subStored()) subDoneView("already");   // 이 브라우저에서 이미 신청함
     // 다른 페이지에서 index.html#subscribe로 넘어온 경우
     if (location.hash === "#subscribe") setTimeout(focusSubscribe, 0);
-    subText();
     subForm.addEventListener("submit", function (e) {
       e.preventDefault();
       var btn = subForm.querySelector(".sub__submit");
@@ -107,9 +136,8 @@
       fetch("https://docs.google.com/forms/d/e/" + SUBSCRIBE_FORM.formId + "/formResponse",
             { method: "POST", mode: "no-cors", body: body })
         .then(function () {
-          subForm.querySelector(".sub__row").hidden = true;
-          subForm.querySelector(".sub__consent").hidden = true;
-          subMsg("done", false);
+          subStore(email);
+          subDoneView("done");
         })
         .catch(function () {
           btn.dataset.busy = "";

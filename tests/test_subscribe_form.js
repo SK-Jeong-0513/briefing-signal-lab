@@ -69,8 +69,25 @@ assert(script.includes(re.source), '이메일 정규식이 코드와 동일해�
 assert(script.includes('errConsent'), '동의 미체크 시 차단');
 assert(html.includes('name="consent"') && html.includes('required'), '동의 체크박스 필수');
 
+// ── 같은 브라우저 반복 신청 방지 ──
+// 발송은 메일러가 이메일 기준으로 dedup 하므로 메일이 두 번 가진 않지만,
+// 시트에 중복 행이 쌓이고 사용자도 신청 여부를 알 수 없다.
+assert(script.includes('var SUB_KEY = "bsl-subscribed"'), '구독 상태 저장 키');
+assert(script.includes('if (subStored()) subDoneView("already")'), '재방문 시 완료 화면');
+assert(script.includes('subStore(email)'), '성공 시 저장');
+// localStorage 접근은 프라이버시 모드에서 던진다 — 폼 전체가 죽으면 안 된다
+const store = script.slice(script.indexOf('function subStored'), script.indexOf('function subDoneView'));
+assert((store.match(/try \{/g) || []).length >= 2, 'subStored·subStore 모두 try 로 감싸야 함');
+// 되돌리기 경로가 없으면 다른 주소로 구독할 방법이 사라진다
+assert(html.includes('class="sub__again"'), '다른 주소로 버튼');
+assert(script.includes('.sub__again").addEventListener("click", subResetView)'), '되돌리기 배선');
+assert(script.includes('subStore("")'), '되돌릴 때 저장값 제거');
+assert(css.includes('.sub__again[hidden]'), 'button 도 display 가 지정되므로 [hidden] 규칙 필요');
+// 완료 상태에서 nav 버튼을 눌러도 없는 입력칸에 포커스하면 안 된다
+assert(script.includes('!subForm.querySelector(".sub__row").hidden'), '완료 상태 포커스 가드');
+
 // ── i18n: 하드코딩 문구가 아니라 UI 사전에서 와야 한다 ──
-['emailPlaceholder', 'consent', 'submit', 'sending', 'done', 'errEmail', 'errConsent', 'errSend']
+['emailPlaceholder', 'consent', 'submit', 'sending', 'done', 'errEmail', 'errConsent', 'errSend', 'already', 'again']
   .forEach((k) => assert(site.includes(k + ':'), 'i18n 키 누락: ' + k));
 assert(script.includes('subText();'), '언어 전환 시 폼 문구 갱신');
 const renderAll = script.slice(script.indexOf('function renderAll()'), script.indexOf('function renderAll()') + 220);
