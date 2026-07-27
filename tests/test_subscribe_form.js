@@ -12,8 +12,18 @@ const css = fs.readFileSync('public/assets/style.css', 'utf8');
 assert(/const SUBSCRIBE_FORM = \{/.test(site), 'SUBSCRIBE_FORM 설정 블록');
 ['formId', 'emailEntry', 'consentEntry', 'consentValue', 'keywordEntry']
   .forEach((k) => assert(site.includes(k + ':'), '설정 키 누락: ' + k));
-// 아직 폼을 안 만들었으므로 비어 있어야 한다(채워서 커밋하면 잘못된 폼으로 POST 될 수 있음)
-assert(/formId: ""/.test(site), '기본값은 빈 문자열이어야 폴백이 작동');
+// 설정 정합성: formId 만 채우고 entry 를 빠뜨리면 subConfigured()가 false 라
+// 폼이 조용히 숨겨진다(장애를 눈치채기 어렵다) → 셋이 함께 채워져야 한다.
+const cfg = (k) => (site.match(new RegExp(k + ':\\s*"([^"]*)"')) || [])[1];
+const trio = ['formId', 'emailEntry', 'consentEntry'].map(cfg);
+assert(trio.every((v) => v === '') || trio.every((v) => v),
+  'formId·emailEntry·consentEntry 는 모두 비거나 모두 채워져야 함: ' + JSON.stringify(trio));
+if (cfg('formId')) {
+  assert(/^entry\.\d+$/.test(cfg('emailEntry')), 'emailEntry 형식');
+  assert(/^entry\.\d+$/.test(cfg('consentEntry')), 'consentEntry 형식');
+  // 메일러 consented_() 는 '동의' 포함 여부로 판정한다(CFG.CONSENT_TRUE_INCLUDES)
+  assert(cfg('consentValue').indexOf('동의') >= 0, "동의 보기 문구에 '동의'가 있어야 메일러가 구독으로 인식");
+}
 
 // ── 폴백: 미설정이면 폼을 숨기고 외부 버튼을 남긴다 ──
 assert(/<form class="sub" id="subscribe" hidden/.test(html), '기본 hidden');

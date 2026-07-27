@@ -389,11 +389,12 @@ const UI = {
  *   정확히 같아야 한다 — '이메일 주소' · '메일 수신 동의' · '관심 키워드'.
  *   consent 값은 메일러가 '동의' 포함 여부로 판정한다(CFG.CONSENT_TRUE_INCLUDES). */
 const SUBSCRIBE_FORM = {
-  formId: "",              // 예: "1FAIpQLSd..." (viewform URL의 /d/e/<여기>/viewform)
-  emailEntry: "",          // 예: "entry.123456789"  — '이메일 주소'
-  consentEntry: "",        // 예: "entry.987654321"  — '메일 수신 동의'
-  consentValue: "동의합니다", // 동의 객관식 보기 문구와 정확히 일치해야 함
-  keywordEntry: "",        // 예: "entry.555555555"  — '관심 키워드'(선택, 비우면 미전송)
+  // 'Briefing Signal Lab 구독' 폼 (2026-07-28 연결)
+  formId: "1FAIpQLSeR6wZ2WbX-l1gEr7-CMkCUfTJnZplcuIU_KoT90BKFUIpWJw",
+  emailEntry: "entry.971071144",                    // '이메일 주소(E-Mail Address)'
+  consentEntry: "entry.1751406240",                 // '메일 수신 동의'
+  consentValue: "동의합니다(Email Subscription)",     // 보기 문구와 한 글자도 달라선 안 됨
+  keywordEntry: "",                                 // '관심 키워드'(entry.718041000)는 체크박스라 미전송
 };
 
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
