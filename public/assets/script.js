@@ -185,17 +185,50 @@
   }
 
   /* 샘플 브리핑 카드 — 랜딩 티저: 카테고리별 대표 1건(최신) */
+  /* 랜딩 3카드를 주간 브리핑의 '앵커 헤드'(발행된 헤드라이너)로 채운다.
+   * 발행 스냅샷이 없거나 그 카테고리에 헤드라이너가 없으면 null → 정적 샘플로 폴백.
+   * 스파크라인은 장식이라 정적 카드 것을 재사용한다(라이브 데이터에 시계열이 없음). */
+  function liveHeadlinerCard(catKey) {
+    if (!weeklySheet || !Object.keys(weeklySheet).length) return null;
+    var cfg = weeklyCfgs().filter(function (c) { return c.key === catKey; })[0];
+    if (!cfg) return null;
+    var issue = null, domLabel = null;
+    if (cfg.mode === "single") {
+      issue = weeklyResolveSingle(cfg);
+    } else {
+      var best = weeklyBestDomain(cfg);
+      if (best) { issue = weeklyResolveIssue(cfg, best.id); domLabel = best.label; }
+    }
+    var head = issue && issue.headliner;
+    if (!head || !head.title || !head.summary) return null;
+    var base = BRIEFINGS.filter(function (b) { return b.category === catKey; })[0] || {};
+    var chain = (head.valueChain && head.valueChain.ko) || "";
+    return {
+      category: catKey,
+      label: domLabel || base.label || UI.nav[catKey],
+      title: head.title,
+      summary: head.summary,
+      // 밸류체인 문자열을 태그로 — 이 브리핑의 핵심 계약(어느 기업으로 이어지는가)
+      tags: chain ? chain.split(/[,·/]/).map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 3) : [],
+      sources: (head.source && head.source.name) ? [{ name: head.source.name, url: head.source.url }] : [],
+      spark: base.spark || [],
+      disclaimer: true,
+      live: true,
+    };
+  }
   function renderBriefings() {
     var host = document.getElementById("briefings");
     if (!host) return;
     var s = UI.samples;
     var reps = ["tech", "finance", "economy"].map(function (c) {
-      return BRIEFINGS.filter(function (b) { return b.category === c; })[0];
+      return liveHeadlinerCard(c) || BRIEFINGS.filter(function (b) { return b.category === c; })[0];
     }).filter(Boolean);
     host.innerHTML = reps.map(function (b) {
       var summary = b.summary[lang].map(function (line) { return "<li>" + line + "</li>"; }).join("");
       var tags = b.tags.map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
       var srcNames = b.sources.map(function (x) { return x.name; }).join(" · ");
+      // 라이브 헤드라이너는 이미 공개된 실제 콘텐츠라 '샘플' 배지가 맞지 않는다.
+      var badge = b.live ? t(UI.techPage.freeBadge) : t(s.sampleBadge);
       var disc = b.disclaimer
         ? '<span class="disclaimer-inline">' +
           '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>' +
@@ -204,13 +237,15 @@
       return (
         '<article class="card reveal">' +
           '<div class="card__top"><span class="chip">' + t(b.label) + '</span>' +
-            '<span class="badge-sample">' + t(s.sampleBadge) + "</span></div>" +
-          '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(b.spark) + '"/></svg>' +
+            '<span class="badge-sample">' + badge + "</span></div>" +
+          (b.spark && b.spark.length
+            ? '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(b.spark) + '"/></svg>'
+            : "") +
           '<h3 class="card__title">' + b.title[lang] + "</h3>" +
           '<ul class="card__summary">' + summary + "</ul>" +
           disc +
-          '<div class="card__meta">' + tags + "</div>" +
-          '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
+          (tags ? '<div class="card__meta">' + tags + "</div>" : "") +
+          (srcNames ? '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" : "") +
           '<div class="card__locked">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' +
             t(s.lockedLabel) + "</div>" +
@@ -814,7 +849,12 @@
         bucket.publishedAt = bucket.publishedAt || (o["published_at"] || "").trim();
         bucket.updatedAt = (o["updated_at"] || bucket.publishedAt || "").trim();
         if ((o["유형"] || o["type"] || "").toLowerCase() === "headliner") {
-          if (!bucket.headliner) bucket.headliner = { title: { ko: titleKo, en: titleEn }, summary: { ko: [lineKo], en: [lineEn] }, valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() } };
+          if (!bucket.headliner) bucket.headliner = {
+            title: { ko: titleKo, en: titleEn }, summary: { ko: [lineKo], en: [lineEn] },
+            valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() },
+            // 랜딩 카드가 출처를 표시한다 — 정적 샘플의 옛 출처가 남지 않도록 실제 원문을 보존.
+            source: { name: (o["원문제목"] || "").trim(), url: (o["출처URL"] || "").trim() },
+          };
         } else if (!bucket.signals.some(function (s) { return s.title.ko === titleKo; })) {
           bucket.signals.push({ title: { ko: titleKo, en: titleEn }, lede: { ko: lineKo, en: lineEn }, tag: "" });
         }
@@ -829,6 +869,7 @@
       });
       weeklySheet = out;
       renderAllWeekly();
+      renderBriefings();   // 랜딩 3카드도 발행 스냅샷이 도착한 뒤 다시 그린다
     }).catch(function () { /* 실패 시 정적 유지 */ });
   }
 
