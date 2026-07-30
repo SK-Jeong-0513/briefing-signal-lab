@@ -438,6 +438,22 @@
   }
   function mktCol(o, names) { for (var i = 0; i < names.length; i++) if (o[names[i]]) return o[names[i]]; return ""; }
 
+  /* 일일 시황 정렬용 시간대 순위. 시간대는 제목 접두사 "[장전] …"에 이미 들어 있어
+   * 별도 컬럼을 두지 않는다. 접두사 없는 레거시 행은 0으로 그 날짜의 맨 뒤. */
+  var MKT_PERIOD_RANK = { "장전": 1, "장중": 2, "마감": 3 };
+  function mktPeriodRank(o) {
+    var m = /^\s*\[([^\]]+)\]/.exec(mktCol(o, ["제목", "title"]) || "");
+    return (m && MKT_PERIOD_RANK[m[1].trim()]) || 0;
+  }
+  /* 최신순: 날짜 내림차순, 같은 날은 마감 → 장중 → 장전.
+   * 종전에는 날짜만 비교해서 같은 날 안에서는 시트 입력 순서(장전이 먼저)가 남아
+   * 날짜끼리는 최신순인데 하루 안에서는 오래된 순으로 뒤집혀 있었다. */
+  function mktDailySort(a, b) {
+    var da = mktCol(a, ["날짜", "date"]) || "", db = mktCol(b, ["날짜", "date"]) || "";
+    if (da !== db) return db.localeCompare(da);
+    return mktPeriodRank(b) - mktPeriodRank(a);
+  }
+
   function renderMarket() {
     if (!document.querySelector("[data-market]")) return;
     var M = UI.marketPage;
@@ -469,8 +485,8 @@
       // 분류 컬럼이 있으면 활성 카테고리로 필터, 없으면(레거시 행) 전부 표시
       var hasCat = all.some(function (o) { return mktCol(o, ["분류", "category"]); });
       var d = (hasCat ? all.filter(function (o) { return mktCol(o, ["분류", "category"]) === marketState.cat; }) : all)
-        .sort(function (a, b) { return (mktCol(b, ["날짜", "date"]) || "").localeCompare(mktCol(a, ["날짜", "date"]) || ""); })
-        .slice(0, 15);  // 최신순 + 상위 15개(무한 누적 방지)
+        .sort(mktDailySort)
+        .slice(0, 45);  // 카테고리당 하루 최대 9행(3시간대 × 3건) 기준 약 5일분
       dh.innerHTML = d.length ? d.map(function (o) {
         var src = mktCol(o, ["출처url", "출처", "source"]);
         if (src && !/^https?:\/\//i.test(src)) src = "";
