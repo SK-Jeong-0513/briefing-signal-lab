@@ -77,6 +77,17 @@ class QuotesTests(unittest.TestCase):
         wti = [r for r in out["rows"] if r["label"] == "WTI"][0]
         self.assertEqual(wti["value"], "89.31", "진행 중 봉이 아니라 기준일 종가를 써야 함")
         self.assertEqual(wti["change"], "-2.9%")
+        self.assertRegex(out["briefing_date"], r"^\d{4}-\d{2}-\d{2}$")
+
+    def test_kst_briefing_date_crosses_utc_midnight(self):
+        now = fd.datetime.datetime(2026, 7, 30, 22, 0, tzinfo=fd.datetime.timezone.utc)
+        self.assertEqual(fd._kst_date(now), "2026-07-31")
+
+    def test_quotes_only_mode_skips_full_dashboard(self):
+        with patch.object(fd, "quotes_snapshot") as quotes, patch.object(fd, "main") as dashboard:
+            fd.run(["--quotes-only"])
+        quotes.assert_called_once_with()
+        dashboard.assert_not_called()
 
     def test_failed_symbol_is_skipped_not_fatal(self):
         def responses(url):

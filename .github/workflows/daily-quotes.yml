@@ -1,0 +1,40 @@
+name: Update daily market quotes
+
+on:
+  schedule:
+    # 21:10 UTC = 06:10 KST. 미 동부 겨울 장 마감 10분 후이며,
+    # GitHub 예약 지연이 약 1시간이어도 07:25(메일 트리거 최초 시각) 전에 완료할 여유를 둔다.
+    - cron: "10 21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: daily-quotes
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch daily market quotes
+        run: python3 scripts/fetch_dashboard.py --quotes-only
+      - name: Commit, push & deploy if changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/assets/data/quotes.json
+          if git diff --cached --quiet; then
+            echo "변경 없음 — 커밋 생략"
+          else
+            git commit -m "chore(data): 일일 시황 지표 조기 갱신"
+            git pull --rebase origin main
+            git push origin HEAD:main
+            gh workflow run deploy-pages.yml
+          fi

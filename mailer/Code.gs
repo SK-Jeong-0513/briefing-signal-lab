@@ -586,7 +586,8 @@ var QUOTES_STALE_DAYS = 5;                    // asof가 이보다 오래면 블
 
 function quotes_() {
   try {
-    var res = UrlFetchApp.fetch(CFG.BASE + QUOTES_PATH, { muteHttpExceptions: true, followRedirects: true });
+    // GitHub Pages는 최대 10분 캐시한다. 발송 직전에는 고유 쿼리로 최신 배포본을 강제 조회한다.
+    var res = UrlFetchApp.fetch(CFG.BASE + QUOTES_PATH + "?v=" + Date.now(), { muteHttpExceptions: true, followRedirects: true });
     if (res.getResponseCode() !== 200) {
       Logger.log("[지표] HTTP " + res.getResponseCode() + " — 블록 생략");
       return null;
@@ -594,6 +595,11 @@ function quotes_() {
     var q = JSON.parse(res.getContentText());
     if (!q || !q.rows || !q.rows.length || !q.asof) {
       Logger.log("[지표] 빈 스냅샷 — 블록 생략");
+      return null;
+    }
+    var todayKst = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+    if (!q.briefing_date || q.briefing_date !== todayKst) {
+      Logger.log("[지표] 브리핑일 " + (q.briefing_date || "없음") + " ≠ " + todayKst + " — 전일 데이터 차단");
       return null;
     }
     // asof는 '어느 장의 숫자인가'다. 월요일 아침에 금요일 마감이 찍히는 건 정상이므로
@@ -622,15 +628,21 @@ function quotesHtml_(q) {
   for (var i = 0; i < q.rows.length; i += 2) {
     rows += "<tr>" + quoteCell_(q.rows[i]) + quoteCell_(q.rows[i + 1]) + "</tr>";
   }
+  var basis = q.briefing_date
+    ? esc_(q.briefing_date.slice(5)) + " 아침 기준 · 미 증시 " + esc_(q.asof.slice(5)) + " 마감"
+    : "미 증시 " + esc_(q.asof.slice(5)) + " 마감 기준";
   return '<div style="margin:0 0 16px">' +
-    '<div style="font-size:12px;color:' + C.muted + ';margin:0 0 6px">주요 시장 지표 · 미 증시 ' +
-      esc_(q.asof.slice(5)) + " 마감 기준</div>" +
+    '<div style="font-size:12px;color:' + C.muted + ';margin:0 0 6px">주요 시장 지표 · ' +
+      basis + "</div>" +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + "</table>" +
     '<div style="border-top:1px solid ' + C.border + ';margin:14px 0 0"></div></div>';
 }
 function quotesPlain_(q) {
   if (!q) return [];
-  return ["[주요 시장 지표 · 미 증시 " + q.asof.slice(5) + " 마감 기준]"]
+  var basis = q.briefing_date
+    ? q.briefing_date.slice(5) + " 아침 기준 · 미 증시 " + q.asof.slice(5) + " 마감"
+    : "미 증시 " + q.asof.slice(5) + " 마감 기준";
+  return ["[주요 시장 지표 · " + basis + "]"]
     .concat(q.rows.map(function (r) { return "- " + r.label + " " + r.value + " " + r.change; }))
     .concat([""]);
 }

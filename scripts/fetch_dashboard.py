@@ -353,6 +353,12 @@ def _fmt_num(value, decimals):
     return "{:,.{d}f}".format(value, d=decimals)
 
 
+def _kst_date(now=None):
+    """UTC 실행 환경에서도 한국 기준 브리핑 날짜를 반환."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return now.astimezone(datetime.timezone(datetime.timedelta(hours=9))).strftime("%Y-%m-%d")
+
+
 def quotes_snapshot():
     """QUOTES 목록의 최근 2거래일 종가 → 표시용 스냅샷(public/assets/data/quotes.json).
 
@@ -417,7 +423,7 @@ def quotes_snapshot():
     if not rows:
         print("[quotes] 유효 행 0건 → 직전 스냅샷 보존")
         return
-    out = {"asof": asof, "updated": time.strftime("%Y-%m-%d"),
+    out = {"asof": asof, "briefing_date": _kst_date(), "updated": _kst_date(),
            "note": "Yahoo Finance 종가. 정보 제공이며 투자 조언 아님.", "rows": rows}
     os.makedirs(os.path.dirname(OUT_QUOTES), exist_ok=True)
     with open(OUT_QUOTES, "w", encoding="utf-8") as f:
@@ -504,5 +510,15 @@ def main():
         print("[WARN] 페어 %d개 - 데이터 수집 확인 필요" % len(pairs))
 
 
-if __name__ == "__main__":
+def run(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv == ["--quotes-only"]:
+        quotes_snapshot()
+        return
+    if argv:
+        raise SystemExit("usage: fetch_dashboard.py [--quotes-only]")
     main()
+
+
+if __name__ == "__main__":
+    run()

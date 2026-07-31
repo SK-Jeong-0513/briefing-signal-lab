@@ -4,7 +4,7 @@ const fs = require('fs');
 const vm = require('vm');
 
 const SNAPSHOT = {
-  asof: '2026-07-24', updated: '2026-07-27', note: 'x',
+  asof: '2026-07-24', briefing_date: '2026-07-27', updated: '2026-07-27', note: 'x',
   rows: [
     { label: '나스닥', value: '24,975.82', change: '-0.6%', dir: -1 },
     { label: 'S&P500', value: '7,411.98', change: '+0.0%', dir: 0 },
@@ -15,30 +15,32 @@ const SNAPSHOT = {
 // now = 메일 발송 시각(고정). fetch = quotes.json 응답 스텁.
 function ctx(now, fetchImpl) {
   const logs = [];
+  const urls = [];
   const RealDate = Date;
   const c = vm.createContext({
     console,
-    Utilities: { formatDate: () => '2026,7,28' },
+    Utilities: { formatDate: () => String(now).slice(0, 10) },
     Logger: { log: (m) => logs.push(String(m)) },
-    UrlFetchApp: { fetch: fetchImpl },
+    UrlFetchApp: { fetch: (url, options) => { urls.push(url); return fetchImpl(url, options); } },
     Date: class extends RealDate {
       constructor(...a) { return a.length ? new RealDate(...a) : new RealDate(now); }
       static now() { return new RealDate(now).getTime(); }
     },
   });
   vm.runInContext(fs.readFileSync('mailer/Code.gs', 'utf8'), c);
-  return { c, logs };
+  return { c, logs, urls };
 }
 const ok = (body) => () => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify(body) });
 
 // ── 정상 렌더 ──
-let { c } = ctx('2026-07-27T00:00:00Z', ok(SNAPSHOT));
+let { c, urls } = ctx('2026-07-27T00:00:00Z', ok(SNAPSHOT));
 let q = vm.runInContext('quotes_()', c);
 assert.strictEqual(q.asof, '2026-07-24');
+assert(/\?v=\d+$/.test(urls[0]), 'GitHub Pages 10분 캐시를 우회해야 함');
 let html = vm.runInContext('quotesHtml_(' + JSON.stringify(SNAPSHOT) + ')', c);
 assert((html.match(/<tr>/g) || []).length === 2, '3행이면 2열 2행(마지막은 한 칸)');
 assert((html.match(/<td/g) || []).length === 4, '홀수 행은 빈 칸으로 채워야 함');
-assert(html.includes('미 증시 07-24 마감 기준'), '기준 거래일을 명시해야 함');
+assert(html.includes('07-27 아침 기준 · 미 증시 07-24 마감'), '한국 브리핑일과 미국 거래일을 함께 명시해야 함');
 assert(html.includes('#C9342F') && html.includes('-0.6%'), '하락은 danger 색');
 assert(html.includes('#12733E') && html.includes('+3bp'), '상승은 success 색');
 assert(html.includes('#5F6B7A') && html.includes('+0.0%'), '보합은 muted 색');
@@ -61,6 +63,11 @@ skip.forEach(([name, impl]) => {
   assert.strictEqual(vm.runInContext('quotesHtml_(null)', t.c), '', name + ' → 블록 생략');
 });
 
+// ── 한국 기준 당일 생성본만 허용: 갱신 실패 시 전일 데이터 대신 블록 생략 ──
+const priorBriefing = ctx('2026-07-28T00:00:00Z', ok(SNAPSHOT));
+assert.strictEqual(vm.runInContext('quotes_()', priorBriefing.c), null, '전일 briefing_date는 차단');
+assert(priorBriefing.logs.some((m) => m.includes('전일 데이터 차단')), '차단 이유 로그');
+
 // ── 신선도: 연휴는 통과, 파이프 고장은 차단 ──
 const staleCases = [
   ['2026-07-27T00:00:00Z', 3, true],   // 월요일 아침의 금요일 마감 = 정상
@@ -68,7 +75,8 @@ const staleCases = [
   ['2026-07-30T00:00:00Z', 6, false],  // 6일 = 파이프 고장으로 보고 차단
 ];
 staleCases.forEach(([now, days, shouldPass]) => {
-  const t = ctx(now, ok(SNAPSHOT));
+  const current = Object.assign({}, SNAPSHOT, { briefing_date: now.slice(0, 10) });
+  const t = ctx(now, ok(current));
   const got = vm.runInContext('quotes_()', t.c);
   assert.strictEqual(!!got, shouldPass, days + '일 전 asof → ' + (shouldPass ? '통과' : '차단'));
 });
