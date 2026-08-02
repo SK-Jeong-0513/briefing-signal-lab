@@ -40,6 +40,19 @@ public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시
 
 - 구독: `public/assets/content/site.js`의 `SUBSCRIBE_FORM`(구독 전용 폼 id·entry). 유료 문의 링크만 `LINKS.paidForm`.
 
+## 일일 시황 지표 당일 아침 갱신 (2026-07-31)
+
+07:40 KST 일일 메일보다 먼저 최신 미국장 마감 지표를 준비하도록 별도 경량 파이프라인을 추가했다.
+
+- `.github/workflows/daily-quotes.yml`: 평일 06:10 KST에 `python3 scripts/fetch_dashboard.py --quotes-only` 실행
+- `quotes.json`: 한국 기준 브리핑 날짜 `briefing_date`와 실제 미국장 기준일 `asof`를 분리
+- 메일러: GitHub Pages 캐시를 우회하고 `briefing_date`가 한국 기준 당일이 아니면 전일 지표 블록을 생략
+- 표시: `MM-DD 아침 기준 · 미 증시 MM-DD 마감`
+- 검증: Python 31건, JS 8개 테스트 파일, YAML 파싱, `git diff --check`, Yahoo 실데이터 21/21 수집 통과
+- 반영 커밋: `95c379c` (`main`, 원격 푸시 완료)
+
+⚠️ 저장소의 `mailer/Code.gs`는 운영 Apps Script에 자동 반영되지 않는다. 운영본의 실제 `CFG`를 보존하고 지표 블록만 수동 교체해야 하며, 자세한 절차는 [mailer/README.md](mailer/README.md)를 따른다.
+
 ## 구독 경로 (2026-07-28)
 
 랜딩 CTA에서 **이메일 + 수신동의**만 받아 구독 전용 Google Form에 직접 POST한다(새 탭 이동 없음).

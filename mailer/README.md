@@ -81,13 +81,46 @@ Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필�
 
 ⚠️ **Apps Script 시간 트리거는 지정 시각 ±15분 오차가 있다**(정확한 시각 지정 불가). 종전에는 `atHour(8)`만 있고 `nearMinute()`가 없어 08:00~09:00 사이 **임의 시각**에 실행됐고, 그래서 KRX 장전 단일가(08:30) 이후에 도착하는 일이 있었다. 목표 도착 시각보다 여유를 두고 지정할 것. 텔레그램 `장전` 요약 생성(07:00 KST, 별도 레포)보다 뒤여야 그날 상세 본문이 담긴다.
 
-## 주요 시장 지표 블록 (2026-07-27)
+## 주요 시장 지표 블록 (2026-07-31 갱신)
 
 일일 메일 상단에 지표 21개를 2열 11행으로 넣는다. 표시 문자열은 `scripts/fetch_dashboard.py`가 `public/assets/data/quotes.json`에 미리 만들어 두고, 메일러는 `quotes_()`로 **한 번 읽어 그리기만** 한다(메일러는 수동 붙여넣기 배포라 티커·포맷 변경이 여기 닿지 않게 하기 위함).
 
+- `.github/workflows/daily-quotes.yml`이 평일 06:10 KST에 `--quotes-only`로 지표만 먼저 갱신한다. 기존 전체 대시보드 파이프와 분리해 07:40 KST 메일보다 앞서 배포될 여유를 둔다.
+- `briefing_date`는 **한국 기준 브리핑 날짜**, `asof`는 **미국장 마감 기준일**이다. 메일에는 `MM-DD 아침 기준 · 미 증시 MM-DD 마감`으로 둘을 함께 표시한다.
+- `quotes_()`는 `?v=현재시각`을 붙여 GitHub Pages의 최대 10분 캐시를 우회한다.
+- `briefing_date`가 한국 기준 당일이 아니면 전일 스냅샷을 사용하지 않고 **지표 블록만 생략**한다.
 - 실패·낡음은 전부 **블록만 생략**하고 메일은 정상 발송한다. `asof`가 `QUOTES_STALE_DAYS`(5일)를 넘으면 생략 — 연휴 3~4일은 통과하고 파이프 고장만 잡는다.
 - `asof`는 발송일이 아니라 **어느 장의 숫자인가**다. 월요일 아침에 금요일 마감이 찍히는 게 정상.
 - 티커·라벨·소수자리를 바꾸려면 `fetch_dashboard.py`의 `QUOTES`만 고친다. 메일러는 건드리지 않는다.
+
+### 운영 Apps Script 반영
+
+저장소를 푸시해도 운영 Apps Script의 `Code.gs`는 자동 갱신되지 않는다. 저장소 사본의 `CFG`에는 플레이스홀더가 있으므로 **파일 전체를 붙여넣지 않는다.**
+
+1. 메일러 연결 Google Sheet에서 **확장 프로그램 → Apps Script → Code.gs**를 연다.
+2. 현재 운영 코드를 프로젝트 외부에 백업한다. 같은 Apps Script 프로젝트 안에 `.gs` 복사본을 만들면 함수명이 중복되므로 피한다.
+3. 운영본의 실제 `CFG` 값(`TEST_MODE`, `WEBAPP_URL`, `SALT`, `SHEET_ID`, `MARKET_SHEET_ID` 등)은 그대로 둔다.
+4. 저장소 `mailer/Code.gs`의 **580~648행 전체**만 복사해 운영본의 같은 블록과 교체한다.
+   - 시작: `// ── 주요 시장 지표 (quotes.json)`
+   - 끝: `quotesPlain_()`의 닫는 중괄호 `}`
+   - 제외: 650행 `function dailyHtml_(...)`
+   - 649행 빈 줄은 포함 여부와 무관
+5. 저장한다. 이번 변경은 시간 트리거가 실행하는 최신 저장 코드를 바꾸는 것이므로 **웹 앱 재배포와 `createDailyTrigger()` 재실행은 필요 없다.**
+
+안전 확인이 필요하면 아래 임시 함수를 추가해 실행 로그만 확인한 뒤 삭제한다. `sendDailyMarket()`은 `TEST_MODE=false`일 때 전체 발송되므로 진단용으로 실행하지 않는다.
+
+```javascript
+function testQuotesToday_() {
+  var q = quotes_();
+  Logger.log(JSON.stringify({
+    briefing_date: q && q.briefing_date,
+    asof: q && q.asof,
+    rows: q && q.rows && q.rows.length
+  }));
+}
+```
+
+정상 예시는 `briefing_date=2026-07-31`, `asof=2026-07-30`, `rows=21`이다. 날짜는 실행 당일과 직전 미국 거래일에 맞춰 달라진다.
 
 ## 이모지 등 비-BMP 문자 (2026-07-27)
 
