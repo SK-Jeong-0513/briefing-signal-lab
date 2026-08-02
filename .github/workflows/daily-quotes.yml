@@ -4,7 +4,8 @@ on:
   schedule:
     # 21:10 UTC = 06:10 KST. 미 동부 겨울 장 마감 10분 후이며,
     # GitHub 예약 지연이 약 1시간이어도 07:25(메일 트리거 최초 시각) 전에 완료할 여유를 둔다.
-    - cron: "10 21 * * 1-5"
+    # 요일은 UTC 기준이라 KST로 하루 밀린다 — KST 평일을 덮으려면 UTC 일~목(0-4).
+    - cron: "10 21 * * 0-4"
   workflow_dispatch:
 
 permissions:

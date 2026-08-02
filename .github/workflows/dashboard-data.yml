@@ -2,7 +2,7 @@ name: Update dashboard data
 
 on:
   schedule:
-    - cron: "30 21 * * 1-5"   # 평일 21:30 UTC (~06:30 KST, 미 증시 마감 후)
+    - cron: "30 21 * * 0-4"   # UTC 일~목 21:30 = KST 평일 06:30 (미 증시 마감 후)
   workflow_dispatch:
 
 permissions:
