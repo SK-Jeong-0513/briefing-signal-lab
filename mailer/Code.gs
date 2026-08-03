@@ -536,7 +536,9 @@ function resubscribed_(pref, respTs) {
 // 시트를 실제 상태와 맞춘다(이후 unsubSet_·주간 루프는 그대로 읽기만 한다).
 function syncResubscribes_() {
   var resp = respLatestTs_(), n = 0;
-  if (!Object.keys(resp).length) return 0;
+  // 응답 시각을 하나도 못 읽었다 = 타임스탬프 열을 못 찾았거나 형식이 바뀐 것.
+  // 안전하게 복구를 건너뛰되, 기능이 통째로 죽은 걸 모르고 지나가지 않도록 남긴다.
+  if (!Object.keys(resp).length) { Logger.log("[재구독] 응답 타임스탬프를 읽지 못해 복구 판정 생략 — 시트 1열 확인 필요"); return 0; }
   CATS.forEach(function (c) {
     var m = prefMap_(c.prefSheet);
     Object.keys(m).forEach(function (em) {

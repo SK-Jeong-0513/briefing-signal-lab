@@ -130,10 +130,14 @@ stubSync({
 assert.strictEqual(run('syncResubscribes_()'), 1);
 assert.deepStrictEqual(runJ('__ups')[0].doms, allLabels, '빈 분야는 가동 분야 전체로 복원');
 
-// 응답 맵이 비면 아무것도 쓰지 않는다(시트 조회 실패 등)
+// 응답 맵이 비면 아무것도 쓰지 않는다(타임스탬프 열을 못 찾은 경우 등)
+// — 안전하게 건너뛰되, 기능이 죽은 걸 모르고 지나가지 않게 로그는 남겨야 한다.
+vm.runInContext('globalThis.__logs = []; Logger = { log: function (m) { __logs.push(String(m)); } };', c);
 stubSync({ [sheets[0]]: { 'back@x.com': { email: 'back@x.com', domains: [], status: '수신거부', updated: '2026-07-28' } } }, {});
 assert.strictEqual(run('syncResubscribes_()'), 0);
 assert.strictEqual(runJ('__ups').length, 0, '판별 불가면 쓰기 0회');
+assert.ok(runJ('__logs').some((m) => m.indexOf('[재구독]') === 0),
+  '조용히 넘어가면 복구가 통째로 죽어도 알 수 없다 — 로그 필수');
 
 // ── 배선: 두 발송 경로 모두에서 차단 목록/선호도를 읽기 전에 돌아야 한다 ──────
 const daily = src.slice(src.indexOf('function sendDailyMarket('));
