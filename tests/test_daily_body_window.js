@@ -122,10 +122,18 @@ const FULL = [
   assert.strictEqual(run(c, 'marketBody_()'), '오늘분');
 }
 
-// ── topicPart_: 마커 없으면 길이로 묶는다 ──────────────────────────────────
+// ── topicPart_: 옛 '채널별'과 새 '분야별' 을 둘 다 받는다 ──────────────────
+// 2026-08-04 에 프롬프트가 핸들 노출을 막으려 채널별 → 분야별로 바뀌었다.
+// 창이 어제 행까지 읽으므로 전환 기간엔 두 문구가 섞인다. 하나만 보면 그 슬롯이
+// 통째로 전문으로 실려 Gmail 잘림에 걸린다.
 {
   const c = ctx(NOW, [HEAD]);
-  assert.strictEqual(run(c, 'topicPart_(' + JSON.stringify(FULL) + ')').includes('채널별'), false);
+  const NEW = FULL.replace('채널별', '분야별');
+  assert.strictEqual(run(c, 'topicPart_(' + JSON.stringify(NEW) + ')').includes('분야별'), false,
+    "새 '분야별' 마커에서 잘려야 한다");
+  assert(run(c, 'topicPart_(' + JSON.stringify(NEW) + ')').includes('토픽별'), '토픽 섹션은 남는다');
+  assert.strictEqual(run(c, 'topicPart_(' + JSON.stringify(FULL) + ')').includes('채널별'), false,
+    "옛 '채널별' 행도 계속 잘려야 한다");
   const long = 'x'.repeat(2000);
   const cut = run(c, 'topicPart_(' + JSON.stringify(long) + ')');
   assert(cut.length < 1300 && cut.endsWith('…'),
