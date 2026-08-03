@@ -401,6 +401,8 @@ ul { margin: 0; padding: 0; list-style: none; }
 .cta__title { font-size: clamp(1.5rem, 3.4vw, 2.25rem); font-weight: 700; letter-spacing: -0.01em; max-width: 20ch; margin-inline: auto; }
 .cta__sub { color: rgba(255,255,255,0.86); margin: var(--s-md) auto 0; max-width: 54ch; }
 .cta__actions { display: flex; flex-wrap: wrap; gap: var(--s-md); justify-content: center; margin-top: var(--s-xl); }
+/* display:flex 가 브라우저 기본 [hidden] 을 이기므로 명시해야 감춰진다(.btn[hidden] 과 같은 이유). */
+.cta__actions[hidden] { display: none; }
 .cta .btn--primary { background: var(--surface); color: var(--primary); }
 .cta .btn--primary:hover { background: var(--primary-soft); }
 .cta .btn--ghost { border-color: rgba(255,255,255,0.5); color: var(--surface); }

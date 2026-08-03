@@ -405,7 +405,12 @@ const SUBSCRIBE_FORM = {
 /* 외부 링크 — Google Form (사전 채움: 무료 버튼→무료 선택, 유료 버튼→유료 선택) */
 const LINKS = {
   freeForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EB%AC%B4%EB%A3%8C+%EC%83%98%ED%94%8C+%EA%B5%AC%EB%8F%85",
-  paidForm: "https://docs.google.com/forms/d/e/1FAIpQLSfHbfam4SIVNT7QNqSyQA8wM9iCLr86ti13PpDC8XW5VplenQ/viewform?usp=pp_url&entry.1513874908=%EC%9C%A0%EB%A3%8C+%EC%A0%84%EC%B2%B4+%EB%B8%8C%EB%A6%AC%ED%95%91+%EB%AC%B8%EC%9D%98",
+  // 유료 문의 폼은 비워 둔다(2026-08-03). 여기 있던 URL은 freeForm 과 폼 ID가 같은
+  // 옛 'Biz Signal Lab'(AI 사업 진단, 필수 15문항) 폼이라, 유료 문의를 누른 사람이
+  // 브리핑과 무관한 컨설팅 설문을 만나고 있었다. 잘못된 곳으로 보내느니 감춘다.
+  // ⚠️ 비어 있으면 유료 CTA가 전부 숨겨진다(랜딩 CTA·기술/금융/경제 유료 섹션·요금제 비교).
+  //    유료 대기자 폼을 만들면 여기에 URL만 넣으면 버튼이 그대로 다시 나타난다.
+  paidForm: "",
 };
 
 /* 공개 주간 발행 스냅샷: BSL_market의 '주간-발행항목' 탭 게시 CSV.

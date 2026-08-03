@@ -24,10 +24,21 @@
     });
   }
 
-  /* 외부 링크 주입 */
+  /* 외부 링크 주입. LINKS 값이 비면 갈 곳 없는 버튼을 남기지 않고 감춘다
+   * (유료 폼 준비 중 등). URL을 다시 넣으면 그대로 되살아난다. */
   function applyLinks() {
     document.querySelectorAll("[data-link]").forEach(function (el) {
-      el.setAttribute("href", LINKS[el.getAttribute("data-link")] || "#");
+      var url = LINKS[el.getAttribute("data-link")];
+      el.hidden = !url;
+      if (url) el.setAttribute("href", url);
+      else el.removeAttribute("href");   // 숨긴 버튼이 탭 이동으로 잡히지 않게
+    });
+  }
+  /* 버튼이 전부 감춰진 액션 줄은 컨테이너까지 감춘다(빈 여백만 남는 것 방지). */
+  function hideEmptyActions() {
+    document.querySelectorAll(".cta__actions").forEach(function (box) {
+      var visible = Array.prototype.filter.call(box.children, function (el) { return !el.hidden; });
+      box.hidden = !visible.length;
     });
   }
 
@@ -230,14 +241,18 @@
         var on = paid ? r.paid : r.free;
         return '<div class="plan__row' + (on ? "" : " plan__row--off") + '">' + markSvg(on) + "<span>" + t(r.label) + "</span></div>";
       }).join("");
+      // 링크가 비어 있으면 CTA 자체를 그리지 않는다(applyLinks의 data-link 버튼과 같은 규칙).
+      var url = LINKS[paid ? "paidForm" : "freeForm"];
+      var cta = url
+        ? '<a class="btn ' + (paid ? "btn--primary" : "btn--ghost") + '" href="' + url +
+          '" target="_blank" rel="noopener">' + t(paid ? c.paidCta : c.freeCta) + "</a>"
+        : "";
       return (
         '<div class="plan' + (paid ? " plan--paid" : "") + '">' +
           '<div class="plan__name">' + t(paid ? c.paidTitle : c.freeTitle) + "</div>" +
           '<div class="plan__price">' + t(paid ? c.paidPrice : c.freePrice) + "</div>" +
           '<div class="plan__list">' + rows + "</div>" +
-          '<a class="btn ' + (paid ? "btn--primary" : "btn--ghost") + '" href="' +
-            (LINKS[paid ? "paidForm" : "freeForm"] || "#") + '" target="_blank" rel="noopener">' +
-            t(paid ? c.paidCta : c.freeCta) + "</a>" +
+          cta +
         "</div>"
       );
     }
@@ -1008,6 +1023,7 @@
     try { var saved = localStorage.getItem("bsl-lang"); if (saved === "en" || saved === "ko") lang = saved; } catch (e) {}
     applyLinks();
     initSubscribe();
+    hideEmptyActions();   // initSubscribe가 중복 무료 버튼을 감춘 뒤라야 정확하다
     setLang(lang);
     if (document.getElementById("calendar")) loadCalSheet();
     loadReport();
