@@ -164,7 +164,7 @@ function testQuotesToday() {          // ⚠️ 이름 끝에 _ 를 붙이면 �
 
 1. **`prefMap_()` 교체** — 155~165행. (`갱신` 열과 원래 대소문자 이메일을 함께 읽도록 바뀜)
 2. **`prefUpsert_()` 교체** — 166~179행. (`갱신`을 날짜+시각으로 저장)
-3. **재구독 복구 블록 추가** — 480~554행을 통째로 복사해 `// 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.` **바로 앞에** 붙여넣는다.
+3. **재구독 복구 블록 추가** — **480~577행**을 통째로 복사해 `// 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.` **바로 앞에** 붙여넣는다. 끝의 운영자 진단 `checkResubscribe()`(556~577행)까지 포함한다 — 임시 함수가 아니라 상시 도구다.
    - 시작: `// ===== 재구독 복구 =====`
    - 끝: `syncResubscribes_()`의 닫는 중괄호 `}`
 4. **호출 1줄씩 추가** — `sendDailyMarket()`의 `var unsub = unsubSet_();` 바로 위, `sendWeeklyUnlocked_()`의 `var maps = {};` 바로 위에 각각:
@@ -178,31 +178,12 @@ function testQuotesToday() {          // ⚠️ 이름 끝에 _ 를 붙이면 �
 
 ⚠️ **`TEST_MODE`는 재구독 복구를 막지 못한다.** `TEST_MODE`는 메일 수신자만 운영자로 돌리는 스위치이고, `syncResubscribes_()`는 그와 무관하게 시트에 쓴다. 그래서 **읽기 전용 진단을 먼저** 돌린다.
 
-1. 아래 임시 함수를 붙여넣고 `checkResubscribe()`를 실행해 **누가 복구 대상인지만** 확인한다(아무것도 바꾸지 않는다).
+1. **`checkResubscribe()`** 를 실행해 **누가 복구 대상인지만** 확인한다(아무것도 바꾸지 않는다). 위 3번 블록에 포함돼 있으므로 따로 붙여넣을 필요가 없다.
 
-⚠️ **임시 함수 이름 끝에 `_`를 붙이지 말 것.** Apps Script는 `_`로 끝나는 함수를 private으로 취급해 **실행 드롭다운에 표시하지 않는다**(트리거·`google.script.run`도 불가). 같은 이유로 `syncResubscribes_()`도 직접 고를 수 없어 아래 `runResubscribe()` 래퍼로 실행한다. 함수 **안에서** `_` 함수를 호출하는 것은 제한되지 않는다.
+⚠️ **임시 함수를 만들 때 이름 끝에 `_`를 붙이지 말 것.** Apps Script는 `_`로 끝나는 함수를 private으로 취급해 **실행 드롭다운에 표시하지 않는다**(트리거·`google.script.run`도 불가). 같은 이유로 `syncResubscribes_()`도 직접 고를 수 없어, 강제 실행이 필요하면 아래 래퍼를 임시로 붙였다가 지운다. 함수 **안에서** `_` 함수를 호출하는 것은 제한되지 않는다.
 
 ```javascript
-// 진단만 — 아무것도 바꾸지 않는다
-function checkResubscribe() {
-  var resp = respLatestTs_();
-  Logger.log("[진단] 응답 시각을 읽은 이메일: " + Object.keys(resp).length + "명");
-  var found = 0;
-  CATS.forEach(function (c) {
-    var m = prefMap_(c.prefSheet);
-    Object.keys(m).forEach(function (em) {
-      if (m[em].status !== "수신거부") return;
-      found++;
-      Logger.log("[진단] " + c.prefSheet + " | " + em
-        + " | 해지=" + m[em].updated
-        + " | 최근응답=" + (resp[em] ? Utilities.formatDate(new Date(resp[em]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "없음")
-        + " | 복구대상=" + resubscribed_(m[em], resp[em]));
-    });
-  });
-  Logger.log("[진단] 수신거부 상태 " + found + "명 — 복구대상=true 만 다음 발송부터 재개된다");
-}
-
-// 실제 반영 — 시트의 상태를 '구독'으로 되돌린다
+// 임시 — 발송을 기다리지 않고 지금 복구를 반영하고 싶을 때. 확인 후 삭제한다.
 function runResubscribe() {
   Logger.log("[재구독] 복구 " + syncResubscribes_() + "건");
 }
@@ -213,6 +194,6 @@ function runResubscribe() {
 
 2. `runResubscribe()`를 실행해 실제로 반영한다 — 로그 `[재구독] 수신거부 해제 N건`, 시트의 `상태`가 `구독`으로 바뀐다.
 3. `TEST_MODE=true`로 `sendDailyMarket()` 1회 — 운영자에게 미리보기 1통. 그날 `시장-일일`에 행이 없으면 **조기 return** 되어 `syncResubscribes_()`까지 가지 않는다. 첫 발송 후 `break` 하므로 복구된 사람이 첫 대상이 아니면 그 사람 메일은 오지 않는다(배선 확인용이지 복구 검증용이 아니다).
-4. `TEST_MODE=false`로 되돌리고 임시 함수를 삭제한다.
+4. `TEST_MODE=false`로 되돌리고 임시 함수를 삭제한다. **`checkResubscribe()`는 남긴다** — "구독했는데 메일이 안 와요" 문의 때 쓰는 상시 진단이다.
 
 `TEST_MODE=false`에서 `sendDailyMarket()`을 진단용으로 실행하지 말 것 — 전체 발송된다.

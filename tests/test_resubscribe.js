@@ -152,4 +152,21 @@ assert.ok(weekly.indexOf('syncResubscribes_()') >= 0 &&
 // 갱신 기록에 시각이 남아야 앞으로의 '같은 날 해지→재신청'을 구분할 수 있다
 assert.ok(src.includes('"yyyy-MM-dd HH:mm:ss"'), 'prefUpsert_ 는 날짜+시각을 저장해야 한다');
 
+// ── 운영자 진단 checkResubscribe() ──────────────────────────────────────────
+// 이름에 _ 가 붙으면 Apps Script 실행 드롭다운에서 사라져 운영자가 쓸 수 없다.
+assert.ok(/\nfunction checkResubscribe\(\)/.test(src), '실행 가능한 이름이어야 한다(끝에 _ 금지)');
+const diag = src.slice(src.indexOf('function checkResubscribe()'));
+const diagBody = diag.slice(0, diag.indexOf('\nfunction '));
+assert.ok(diagBody.indexOf('prefUpsert_') < 0 && diagBody.indexOf('syncResubscribes_') < 0,
+  '진단은 읽기 전용이어야 한다 — 쓰기 함수를 부르면 안 된다');
+
+// 실제로 돌려서 예외 없이 완주하는지(시트는 위 stubSync 의 스텁을 그대로 쓴다)
+vm.runInContext('globalThis.__logs = [];', c);
+stubSync({
+  [sheets[0]]: { 'back@x.com': { email: 'back@x.com', domains: [], status: '수신거부', updated: '2026-07-28 14:00:00' } },
+}, { 'back@x.com': T(2026, 7, 29, 9, 0, 0) });
+run('checkResubscribe()');
+assert.strictEqual(runJ('__ups').length, 0, '진단은 시트에 쓰지 않는다');
+assert.ok(runJ('__logs').some((m) => m.indexOf('복구대상=true') >= 0), '복구 대상을 표시한다');
+
 console.log('resubscribe tests: OK');

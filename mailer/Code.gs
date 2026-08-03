@@ -553,6 +553,29 @@ function syncResubscribes_() {
   return n;
 }
 
+// 운영자 진단 — "구독했는데 메일이 안 와요" 문의가 오면 이걸 실행한다.
+// 그 사람이 차단 상태인지, 재구독 복구 대상인지, 응답 시각을 읽고 있는지 한 번에 보여준다.
+// ⚠️ 읽기 전용이다. 상태를 실제로 되돌리는 것은 발송 직전의 syncResubscribes_() 몫.
+// ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 는 _ 로 끝나는 함수를 private 으로 취급해
+//    실행 드롭다운에 표시하지 않는다(트리거·google.script.run 도 불가).
+function checkResubscribe() {
+  var resp = respLatestTs_();
+  Logger.log("[진단] 응답 시각을 읽은 이메일: " + Object.keys(resp).length + "명");
+  var found = 0;
+  CATS.forEach(function (c) {
+    var m = prefMap_(c.prefSheet);
+    Object.keys(m).forEach(function (em) {
+      if (m[em].status !== "수신거부") return;
+      found++;
+      Logger.log("[진단] " + c.prefSheet + " | " + em
+        + " | 해지=" + m[em].updated
+        + " | 최근응답=" + (resp[em] ? Utilities.formatDate(new Date(resp[em]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "없음")
+        + " | 복구대상=" + resubscribed_(m[em], resp[em]));
+    });
+  });
+  Logger.log("[진단] 수신거부 상태 " + found + "명 — 복구대상=true 만 다음 발송부터 재개된다");
+}
+
 // 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.
 function unsubSet_() {
   var set = {};
