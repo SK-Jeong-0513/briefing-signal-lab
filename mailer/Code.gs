@@ -433,10 +433,58 @@ function marketRows_() {
   }
   return out;
 }
-// 그날 시장-일일 행을 경제/금융/기술 순으로 그룹핑. 없으면 [].
+// ── 일일 메일이 담는 3슬롯 창 ──────────────────────────────────────────────
+//
+// 07:40 발송 시점엔 그날 07:00(장전) 슬롯만 존재한다. '오늘'만 보면 하루 산출물의
+// 1/3만 나가고 전날 13:00·19:00 분은 시트에 쌓인 채 아무도 읽지 않는다.
+//
+// 더 중요한 건 단일 실패점 제거다. 2026-08-03 에 장전 슬롯이 통째로 빠지자
+// (텔레그램쪽 full_summary 가 비어 write_market_body 가 no-op) 장중 775자가
+// 시트에 멀쩡히 있는데도 메일엔 상세 브리핑이 아예 안 붙었다.
+// 세 슬롯을 보면 하나가 빠져도 나머지가 그날을 구제한다.
+//
+// 순서는 최신 먼저 — 사이트 시장 탭의 mktPeriodRank 와 같은 방향이다.
+function dailyWindow_() {
+  var tz = "Asia/Seoul", now = new Date().getTime();
+  var d = function (days) {
+    return Utilities.formatDate(new Date(now + days * 86400000), tz, "yyyy-MM-dd");
+  };
+  return [
+    { date: d(0),  period: "장전", full: true  },   // 당일 아침 — 전문
+    { date: d(-1), period: "마감", full: false },   // 전일 저녁 — 토픽만
+    { date: d(-1), period: "장중", full: false }    // 전일 오후 — 토픽만
+  ];
+}
+
+// 시장-일일 제목 접두사에서 시간대를 뽑는다. 파이프가 "[장전] 제목" 으로 쓰고
+// 별도 컬럼이 없다(접두사가 시간대 표시이자 사이트 정렬 키). 접두사 없는 레거시
+// 행은 "" — 오늘 것이면 그대로 싣고 어제 것만 걸러낸다.
+function slotOf_(title) {
+  var m = String(title || "").match(/^\s*\[(장전|장중|마감)\]/);
+  return m ? m[1] : "";
+}
+
+// 상세 본문에서 '토픽별 통합 브리핑' 부분만 남긴다(채널별 요약 헤더에서 자름).
+// 마커가 없으면 — 빈 응답 폴백으로 만들어진 본문에는 헤더가 없다 — 앞부분만 잘라
+// 길이를 묶는다. 3슬롯을 통째로 실으면 Gmail 잘림(102KB)에 걸린다.
+function topicPart_(text) {
+  var s = String(text || "");
+  var i = s.search(/^#{1,6}\s*[^\n]*채널별/m);
+  if (i > 0) return s.slice(0, i).trim();
+  return s.length > 1200 ? s.slice(0, 1200).trim() + " …" : s;
+}
+
+// 3슬롯 창의 시장-일일 행을 경제/금융/기술 순으로 그룹핑. 없으면 [].
 function dailyGroups_() {
-  var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
-  var rows = marketRows_().filter(function (o) { return o.date === today && o.title; });
+  var win = dailyWindow_(), today = win[0].date, yday = win[1].date;
+  var rows = marketRows_().filter(function (o) {
+    if (!o.title) return false;
+    if (o.date === today) return true;                       // 오늘 것은 시간대 불문 전부
+    if (o.date === yday) return slotOf_(o.title) !== "장전";  // 어제 장전은 어제 이미 나갔다
+    return false;
+  }).sort(function (a, b) {
+    return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0); // 날짜 최신 먼저(같은 날은 시트 순서)
+  });
   var groups = [];
   CFG.DAILY_CATS.forEach(function (cat) {
     var items = rows.filter(function (o) { return o.cat === cat; });
@@ -446,7 +494,8 @@ function dailyGroups_() {
   if (!groups.length && rows.length) groups.push({ label: "", items: rows });
   return { today: today, groups: groups };
 }
-// 그날 '장전' 상세 본문(텔레그램 요약, §6 마스킹됨). 없으면 "".
+// 3슬롯 상세 본문(텔레그램 요약, §6 마스킹됨). 장전은 전문, 전일 오후·저녁은 토픽만.
+// 창에 든 슬롯이 하나도 없으면 "".
 function marketBody_() {
   if (!CFG.MARKET_SHEET_ID) return "";
   var sh = SpreadsheetApp.openById(CFG.MARKET_SHEET_ID).getSheetByName(CFG.MARKET_BODY_TAB);
@@ -455,15 +504,31 @@ function marketBody_() {
   var H = (values[0] || []).map(function (h) { return String(h).trim(); });
   var iDt = H.indexOf("날짜"), iPd = H.indexOf("시간대"), iBd = H.indexOf("본문");
   if (iBd < 0) return "";
-  var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
-  var body = "";
-  for (var r = 1; r < values.length; r++) {
-    var c = values[r];
-    if (ymd_(c[iDt]) === today && (iPd < 0 || String(c[iPd]).trim() === "장전")) {
-      body = String(c[iBd] || "");  // 마지막(최신) 장전 본문
+
+  // 시간대 열이 없는 레거시 시트면 옛 동작(그날 마지막 행)으로 물러난다.
+  if (iPd < 0) {
+    var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd"), legacy = "";
+    for (var k = 1; k < values.length; k++) {
+      if (ymd_(values[k][iDt]) === today) legacy = String(values[k][iBd] || "");
     }
+    return legacy;
   }
-  return body;
+
+  // 같은 (날짜, 시간대) 가 두 번 기록될 수 있다 — 뒤(최신)가 이긴다. 빈 본문은 무시한다.
+  var pick = {};
+  for (var r = 1; r < values.length; r++) {
+    var c = values[r], t = String(c[iBd] || "");
+    if (t.trim()) pick[ymd_(c[iDt]) + "|" + String(c[iPd] || "").trim()] = t;
+  }
+
+  var out = [];
+  dailyWindow_().forEach(function (w) {
+    var t = pick[w.date + "|" + w.period];
+    if (!t) return;
+    out.push("## " + w.period + " · " + w.date);
+    out.push(w.full ? t.trim() : topicPart_(t));
+  });
+  return out.join("\n\n");
 }
 function boldMd_(s) { return s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>"); }
 // 마크다운풍 상세 본문 → 이메일 HTML(헤더/볼드/줄바꿈).
