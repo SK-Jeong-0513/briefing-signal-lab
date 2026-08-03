@@ -110,7 +110,7 @@ Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필�
 안전 확인이 필요하면 아래 임시 함수를 추가해 실행 로그만 확인한 뒤 삭제한다. `sendDailyMarket()`은 `TEST_MODE=false`일 때 전체 발송되므로 진단용으로 실행하지 않는다.
 
 ```javascript
-function testQuotesToday_() {
+function testQuotesToday() {          // ⚠️ 이름 끝에 _ 를 붙이면 실행 드롭다운에 안 나온다
   var q = quotes_();
   Logger.log(JSON.stringify({
     briefing_date: q && q.briefing_date,
@@ -178,10 +178,13 @@ function testQuotesToday_() {
 
 ⚠️ **`TEST_MODE`는 재구독 복구를 막지 못한다.** `TEST_MODE`는 메일 수신자만 운영자로 돌리는 스위치이고, `syncResubscribes_()`는 그와 무관하게 시트에 쓴다. 그래서 **읽기 전용 진단을 먼저** 돌린다.
 
-1. 아래 임시 함수를 붙여넣고 실행해 **누가 복구 대상인지만** 확인한다(아무것도 바꾸지 않는다).
+1. 아래 임시 함수를 붙여넣고 `checkResubscribe()`를 실행해 **누가 복구 대상인지만** 확인한다(아무것도 바꾸지 않는다).
+
+⚠️ **임시 함수 이름 끝에 `_`를 붙이지 말 것.** Apps Script는 `_`로 끝나는 함수를 private으로 취급해 **실행 드롭다운에 표시하지 않는다**(트리거·`google.script.run`도 불가). 같은 이유로 `syncResubscribes_()`도 직접 고를 수 없어 아래 `runResubscribe()` 래퍼로 실행한다. 함수 **안에서** `_` 함수를 호출하는 것은 제한되지 않는다.
 
 ```javascript
-function checkResubscribe_() {
+// 진단만 — 아무것도 바꾸지 않는다
+function checkResubscribe() {
   var resp = respLatestTs_();
   Logger.log("[진단] 응답 시각을 읽은 이메일: " + Object.keys(resp).length + "명");
   var found = 0;
@@ -198,12 +201,17 @@ function checkResubscribe_() {
   });
   Logger.log("[진단] 수신거부 상태 " + found + "명 — 복구대상=true 만 다음 발송부터 재개된다");
 }
+
+// 실제 반영 — 시트의 상태를 '구독'으로 되돌린다
+function runResubscribe() {
+  Logger.log("[재구독] 복구 " + syncResubscribes_() + "건");
+}
 ```
 
 - `응답 시각을 읽은 이메일: 0명` → 타임스탬프 열을 못 찾은 것. 응답 시트 1열을 확인한다.
 - `수신거부 상태 0명` → 지금 차단된 사람이 없다는 뜻이지 고장이 아니다.
 
-2. `syncResubscribes_()`를 실행해 실제로 반영한다 — 로그 `[재구독] 수신거부 해제 N건`, 시트의 `상태`가 `구독`으로 바뀐다.
+2. `runResubscribe()`를 실행해 실제로 반영한다 — 로그 `[재구독] 수신거부 해제 N건`, 시트의 `상태`가 `구독`으로 바뀐다.
 3. `TEST_MODE=true`로 `sendDailyMarket()` 1회 — 운영자에게 미리보기 1통. 그날 `시장-일일`에 행이 없으면 **조기 return** 되어 `syncResubscribes_()`까지 가지 않는다. 첫 발송 후 `break` 하므로 복구된 사람이 첫 대상이 아니면 그 사람 메일은 오지 않는다(배선 확인용이지 복구 검증용이 아니다).
 4. `TEST_MODE=false`로 되돌리고 임시 함수를 삭제한다.
 
