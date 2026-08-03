@@ -174,10 +174,37 @@ function testQuotesToday_() {
 
 ⚠️ **웹앱 재배포가 필요하다.** `doGet`(수신거부·분야 토글)이 `prefUpsert_()`를 쓰고 `doPost`가 `sendWeekly()`를 호출하는데, 웹앱은 시간 트리거와 달리 **배포된 버전**으로 실행된다. 배포 → 배포 관리 → ✏️ → 버전: 새 버전 → 배포. URL은 유지되므로 `CFG.WEBAPP_URL`과 GitHub Secret은 그대로.
 
-확인용 임시 함수(실행 후 삭제). `TEST_MODE=false`에서 `sendDailyMarket()`을 진단용으로 실행하지 말 것 — 전체 발송된다.
+### 배포 후 확인
+
+⚠️ **`TEST_MODE`는 재구독 복구를 막지 못한다.** `TEST_MODE`는 메일 수신자만 운영자로 돌리는 스위치이고, `syncResubscribes_()`는 그와 무관하게 시트에 쓴다. 그래서 **읽기 전용 진단을 먼저** 돌린다.
+
+1. 아래 임시 함수를 붙여넣고 실행해 **누가 복구 대상인지만** 확인한다(아무것도 바꾸지 않는다).
 
 ```javascript
-function testResubscribe_() {
-  Logger.log("복구 " + syncResubscribes_() + "건 · 차단 " + Object.keys(unsubSet_()).length + "명");
+function checkResubscribe_() {
+  var resp = respLatestTs_();
+  Logger.log("[진단] 응답 시각을 읽은 이메일: " + Object.keys(resp).length + "명");
+  var found = 0;
+  CATS.forEach(function (c) {
+    var m = prefMap_(c.prefSheet);
+    Object.keys(m).forEach(function (em) {
+      if (m[em].status !== "수신거부") return;
+      found++;
+      Logger.log("[진단] " + c.prefSheet + " | " + em
+        + " | 해지=" + m[em].updated
+        + " | 최근응답=" + (resp[em] ? Utilities.formatDate(new Date(resp[em]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "없음")
+        + " | 복구대상=" + resubscribed_(m[em], resp[em]));
+    });
+  });
+  Logger.log("[진단] 수신거부 상태 " + found + "명 — 복구대상=true 만 다음 발송부터 재개된다");
 }
 ```
+
+- `응답 시각을 읽은 이메일: 0명` → 타임스탬프 열을 못 찾은 것. 응답 시트 1열을 확인한다.
+- `수신거부 상태 0명` → 지금 차단된 사람이 없다는 뜻이지 고장이 아니다.
+
+2. `syncResubscribes_()`를 실행해 실제로 반영한다 — 로그 `[재구독] 수신거부 해제 N건`, 시트의 `상태`가 `구독`으로 바뀐다.
+3. `TEST_MODE=true`로 `sendDailyMarket()` 1회 — 운영자에게 미리보기 1통. 그날 `시장-일일`에 행이 없으면 **조기 return** 되어 `syncResubscribes_()`까지 가지 않는다. 첫 발송 후 `break` 하므로 복구된 사람이 첫 대상이 아니면 그 사람 메일은 오지 않는다(배선 확인용이지 복구 검증용이 아니다).
+4. `TEST_MODE=false`로 되돌리고 임시 함수를 삭제한다.
+
+`TEST_MODE=false`에서 `sendDailyMarket()`을 진단용으로 실행하지 말 것 — 전체 발송된다.
