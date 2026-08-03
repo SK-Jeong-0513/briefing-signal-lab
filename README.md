@@ -72,13 +72,13 @@ public/assets/content/calendar.js   캘린더 이벤트(CAL_EVENTS) + 구글 시
 주간 초안의 `approved`는 편집 승인이고 공개 상태가 아니다. 공개 사이트와 주간 메일은 `BSL_market`의 발행 원장을 기준으로 한다.
 
 - 일요일 06:00 초안 생성
-- 화요일 17:00 수동 마감, 17:05 조건부 자동 승인
-- 화요일 20:00 고정 공개·메일 발송
+- 일요일 24:00 수동 마감, 월요일 04:00 조건부 자동 승인
+- 월요일 09:00 고정 공개·메일 발송 (2026-08-03 화→월 이동)
 - 자동 검수 통과 1건 이상 발행, 0건 `skipped`
 - 발행 후 늦은 승인분은 웹판 `rev.2+`로 추가하며 이메일은 재발송하지 않음
 - 일일 브리핑 파이프는 별도이며 변경하지 않음
 
-라이브 운영에는 Actions Secret `WEEKLY_DRAFT_CSV`(초안), `WEEKLY_RELEASE_CSV`(발행 원장), `WEEKLY_RELEASE_ITEMS_CSV`(발행항목)가 필요하다. Pages 배포가 발행항목 CSV를 `site.js`의 공개 설정에 주입한다. 메일러는 Apps Script 속성 `WEEKLY_CRON_TOKEN`과 동일한 Actions Secret `WEEKLY_MAILER_TOKEN`, 웹 앱 주소 `WEEKLY_MAILER_URL`을 사용한다. 화요일 20:00 고정 호출은 `weekly-send.yml`이 담당하고 Apps Script 트리거는 재시도 경로다.
+라이브 운영에는 Actions Secret `WEEKLY_DRAFT_CSV`(초안), `WEEKLY_RELEASE_CSV`(발행 원장), `WEEKLY_RELEASE_ITEMS_CSV`(발행항목)가 필요하다. Pages 배포가 발행항목 CSV를 `site.js`의 공개 설정에 주입한다. 메일러는 Apps Script 속성 `WEEKLY_CRON_TOKEN`과 동일한 Actions Secret `WEEKLY_MAILER_TOKEN`, 웹 앱 주소 `WEEKLY_MAILER_URL`을 사용한다. 월요일 09:00 정시 발송은 Apps Script 트리거가 담보하고, `weekly-send.yml`은 백스톱이다(GitHub Actions cron 은 상시 1~2시간 지연된다).
 
 ### 운영 검증 현황
 

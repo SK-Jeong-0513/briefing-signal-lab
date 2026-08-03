@@ -31,6 +31,6 @@ jobs:
           # 과거 수집·발행분 대조용(선택, 기존 시크릿 재사용). 같은 기사가 여러 주에 반복 게재되는 것을 막는다.
           WEEKLY_DRAFT_CSV: ${{ secrets.WEEKLY_DRAFT_CSV }}
           WEEKLY_RELEASE_ITEMS_CSV: ${{ secrets.WEEKLY_RELEASE_ITEMS_CSV }}
-          WEEKLY_COLLECT_DAYS: "7"   # 발행 게이트 freshness(10일)보다 짧게 — 일 수집 → 화 발행 시차 2일.
+          WEEKLY_COLLECT_DAYS: "7"   # 발행 게이트 freshness(10일)보다 짧게 — 일 수집 → 월 발행 시차 1일.
         # 수동 실행 dry=true(기본): --dry로 로그만. dry=false 또는 cron: 시트에 실제 write.
         run: python3 scripts/fetch_weekly.py ${{ inputs.dry && '--dry' || '' }}

@@ -3,7 +3,7 @@
 무료 구독자에게 **기술·금융·경제 3개 카테고리를 한 통**으로 발송하고, 이메일 링크로 선호도/수신거부를 카테고리별 시트에 반영하는 메일러.
 
 - **경로:** Google Apps Script. 사이트 호스팅과 독립.
-- **발송:** 화요일 20:00 `sendWeekly()` 트리거(구독자당 1통, 구독한 카테고리·분야 섹션만).
+- **발송:** 월요일 09:00 `sendWeekly()` 트리거(구독자당 1통, 구독한 카테고리·분야 섹션만).
 - **위치:** 배포 안 됨(사이트는 `public/`만 서빙). 버전관리·복사용 원본.
 
 ## 시트 구조 (응답 1 + 선호도 3)
@@ -39,7 +39,7 @@
 ## 매주 발송
 
 - 콘텐츠는 `BSL_market/주간-발행항목` rev.1 스냅샷을 사용한다. 코드의 정적 `CATS[].issues`는 주간 발송 소스가 아니다.
-- 화요일 20:00 트리거가 `sendWeekly()`를 실행하며, 실패 후 재실행은 성공 수신자를 제외한다.
+- 월요일 09:00 트리거가 `sendWeekly()`를 실행하며, 실패 후 재실행은 성공 수신자를 제외한다.
 
 ## 개인정보/발송 규칙
 
@@ -51,7 +51,7 @@
 
 주간 메일은 코드에 고정된 `CATS[].issues`가 아니라 `BSL_market`의 발행 원장과 발행항목을 읽는다.
 
-- 화요일 20:00 KST 고정 발송
+- 월요일 09:00 KST 고정 발송 (2026-08-03 화 20:00 → 월 09:00 이동)
 - `published` 상태이며 발행항목이 1건 이상인 호만 대상
 - 호·리비전·수신자 해시별 성공 로그가 있으면 재발송하지 않음
 - 부분 실패 재시도는 실패 수신자만 대상
@@ -65,8 +65,8 @@ Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필�
 1. `CFG.MARKET_SHEET_ID`에 BSL_market ID를 설정하고 Apps Script 속성 `WEEKLY_CRON_TOKEN`에 긴 임의 토큰을 저장한다.
 2. `admin/`으로 `주간-발행`·`주간-발행항목`·`주간-발송로그` 탭을 먼저 만든다.
 3. Apps Script에 `mailer/Code.gs`를 다시 붙여넣고 `TEST_MODE=true`로 `sendWeekly()` 미리보기 1건을 확인한다. 테스트 모드는 원장과 발송 로그를 변경하지 않는다.
-4. `TEST_MODE=false`로 바꾸고 웹앱을 새 버전으로 재배포한다. GitHub Secret `WEEKLY_MAILER_URL`에는 이 웹앱 URL, `WEEKLY_MAILER_TOKEN`에는 위 스크립트 속성과 같은 값을 넣는다. `.github/workflows/weekly-send.yml`이 화요일 20:00 KST에 정확히 호출한다.
-5. `createWeeklyTriggers()`를 한 번 실행해 일·월·화 알림과 Apps Script 재시도용 발송 트리거를 만든다. Apps Script 트리거는 시각 오차가 있을 수 있지만 수신자 로그가 GitHub 호출과의 중복을 막는다.
+4. `TEST_MODE=false`로 바꾸고 웹앱을 새 버전으로 재배포한다. GitHub Secret `WEEKLY_MAILER_URL`에는 이 웹앱 URL, `WEEKLY_MAILER_TOKEN`에는 위 스크립트 속성과 같은 값을 넣는다. `.github/workflows/weekly-send.yml`이 월요일 09:00 KST에 호출한다(지연 있음 — 정시성은 Apps Script 트리거가 담보).
+5. `createWeeklyTriggers()`를 한 번 실행해 알림 3개(일 09:00·일 20:00·월 10:00)와 월요일 09:00 발송 트리거를 만든다. **정시 발송은 이 Apps Script 트리거가 담보한다** — GitHub Actions cron 은 상시 1~2시간 지연되므로 백스톱으로 본다. 먼저 도는 쪽이 발송하고 나중 쪽은 수신자 로그를 보고 중복을 막는다.
 6. 기존 `createDailyTrigger()`는 그대로 유지한다. 다만 아래 "일일 시황 발송 시각" 변경 후에는 한 번 다시 실행해 동기화 트리거를 만든다.
 
 ## 일일 시황 발송 시각 (2026-07-27)

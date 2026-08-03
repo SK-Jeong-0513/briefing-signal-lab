@@ -6,7 +6,7 @@
  *
  * [설치] 응답 시트에서 확장 프로그램→Apps Script→이 파일 붙여넣기(bound 아니면 CFG.SHEET_ID).
  *   CFG의 SALT·MARKET_SHEET_ID 확인 → 웹앱 재배포 → TEST_MODE 미리보기 → createWeeklyTriggers() 1회.
- * [발송] 화요일 20:00 sendWeekly(). 콘텐츠는 BSL_market 주간-발행/주간-발행항목 rev.1에서 읽는다.
+ * [발송] 월요일 09:00 sendWeekly(). 콘텐츠는 BSL_market 주간-발행/주간-발행항목 rev.1에서 읽는다.
  * [개인정보] 이메일은 링크에 넣지 않음(해시 토큰만). 수신거부 필수.
  *
  * [일일 시황 메일 — Stage 4] sendDailyMarket(): 텔레그램 파이프가 '시장' 스프레드시트의
@@ -306,17 +306,22 @@ function weeklyAlert_(label, addDays) {
   var msg = bundle ? bundle.issueKey + " 상태 " + bundle.ledgerRow.state + " · " + bundle.items.length + "건" : issueKey + " 발행 준비 원장 없음";
   GmailApp.sendEmail(CFG.OPERATOR_EMAIL, "[BSL 주간 승인 알림] " + label, msg + "\n관리자 콘솔에서 승인/발행 예약 상태를 확인하세요.");
 }
-function weeklyAlertSunday() { weeklyAlert_("일요일 09:00", 1); }
-function weeklyAlertMonday() { weeklyAlert_("월요일 18:00", 0); }
-function weeklyAlertTuesday() { weeklyAlert_("화요일 12:00", 0); }
+// addDays 는 weeklyIsoIssue_ 의 기준일 보정이다. ISO 주는 월~일이라 **일요일은 끝나는 주**에
+// 속한다 — 일요일 알림에서 0을 쓰면 지난 호를 조회한다. 그래서 일요일만 +1(월요일)로 민다.
+function weeklyAlertDraft()    { weeklyAlert_("일요일 09:00 · 초안 확인", 1); }
+function weeklyAlertDeadline() { weeklyAlert_("일요일 20:00 · 승인 마감 8시간 전", 1); }
+function weeklyAlertResult()   { weeklyAlert_("월요일 10:00 · 발송 결과", 0); }
 function createWeeklyTriggers() {
-  var names = ["weeklyAlertSunday","weeklyAlertMonday","weeklyAlertTuesday","sendWeekly"];
+  // 옛 이름을 목록에 남겨둔다 — 빼면 화요일 트리거가 사라진 함수를 계속 호출해
+  // 매주 Apps Script 오류 메일이 온다(재설치해도 자기 이름만 지우므로 고아가 된다).
+  var names = ["weeklyAlertDraft","weeklyAlertDeadline","weeklyAlertResult","sendWeekly",
+               "weeklyAlertSunday","weeklyAlertMonday","weeklyAlertTuesday"];
   ScriptApp.getProjectTriggers().forEach(function (tr) { if (names.indexOf(tr.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(tr); });
-  ScriptApp.newTrigger("weeklyAlertSunday").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
-  ScriptApp.newTrigger("weeklyAlertMonday").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(18).nearMinute(0).inTimezone("Asia/Seoul").create();
-  ScriptApp.newTrigger("weeklyAlertTuesday").timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(12).nearMinute(0).inTimezone("Asia/Seoul").create();
-  ScriptApp.newTrigger("sendWeekly").timeBased().onWeekDay(ScriptApp.WeekDay.TUESDAY).atHour(20).nearMinute(0).inTimezone("Asia/Seoul").create();
-  Logger.log("주간 알림 3개 + 화요일 20:00 발송 트리거 생성");
+  ScriptApp.newTrigger("weeklyAlertDraft").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("weeklyAlertDeadline").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(20).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("weeklyAlertResult").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(10).nearMinute(0).inTimezone("Asia/Seoul").create();
+  ScriptApp.newTrigger("sendWeekly").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
+  Logger.log("주간 알림 3개 + 월요일 09:00 발송 트리거 생성");
 }
 
 // ===== 이메일 HTML (테이블·인라인·SVG 없음) =====
@@ -797,7 +802,7 @@ function dailyPlain_(dg, detail, quotes) {
   return lines.join("\n");
 }
 
-// ===== GitHub Actions 고정시각 호출(화요일 20:00 KST) =====
+// ===== GitHub Actions 고정시각 호출(월요일 09:00 KST) =====
 function doPost(e) {
   var expected = PropertiesService.getScriptProperties().getProperty("WEEKLY_CRON_TOKEN") || "";
   var data = {};

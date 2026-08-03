@@ -1,10 +1,15 @@
 name: Weekly briefing publish and email
 
-# 화요일 20:00 KST 고정 호출. Apps Script 내부 발송 로그가 재시도 중복을 막는다.
+# 월요일 09:00 KST 고정 호출. Apps Script 내부 발송 로그가 재시도 중복을 막는다.
+#
+# 실제 09:00 정시성은 Apps Script 시간 트리거(sendWeekly, 월 09:00)가 담보한다.
+# 이 워크플로는 백스톱이다 — GitHub Actions cron 은 상시 1~2시간 지연되고
+# 00:00 UTC 는 가장 혼잡한 슬롯이라 정시 도착을 여기에 기대면 안 된다.
+# 먼저 도는 쪽이 발송하고 나중 쪽은 발송로그를 보고 no-op 한다.
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 11 * * 2"   # 화 11:00 UTC = 화 20:00 KST
+    - cron: "0 0 * * 1"   # 월 00:00 UTC = 월 09:00 KST
 
 jobs:
   send:

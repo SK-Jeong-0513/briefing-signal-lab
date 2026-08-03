@@ -88,10 +88,14 @@ Phase 2 핵심 산출물. 지금 흩어진 운영 수작업(주간 초안 승인
 일정:
 
 1. 일요일 06:00 초안 생성
-2. 일요일 09:00·월요일 18:00·화요일 12:00 운영자 알림
-3. 화요일 17:00 수동 마감
-4. 화요일 17:05 미완료 호 자동 분류·검수
-5. 화요일 20:00 사이트 공개·주간 이메일 발송
+2. 일요일 09:00·일요일 20:00·월요일 10:00 운영자 알림
+3. 일요일 24:00 수동 마감
+4. 월요일 04:00 미완료 호 자동 분류·검수
+5. 월요일 09:00 사이트 공개·주간 이메일 발송
+
+4→5 버퍼 5시간은 GitHub Actions 지연을 흡수하기 위한 값이다(2026-07-28 실측 지연
+release 2h38m·send 1h51m). 순서가 뒤집히면 rev.1 원장이 없어 호가 통째로 생략된다.
+`tests/test_weekly_schedule.py`가 이 순서와 버퍼를 잠근다.
 
 자동 승인은 출처 URL·원문 제목·최신성·원문 제목 수준의 사실 일치·금지 표현·중복·분류 신뢰도와 별도 검수 점수 85 이상을 모두 요구한다. 기사 전문을 가져오지 않으므로 사실 일치 게이트는 원문 제목과 후보 카드의 일치 검수이며 전문 팩트체크로 과장하지 않는다. 통과 1건 이상이면 발행하고 0건이면 `skipped` 처리한다.
 
@@ -99,8 +103,8 @@ Phase 2 핵심 산출물. 지금 흩어진 운영 수작업(주간 초안 승인
 
 ### 로컬 구현 완료(2026-07-27)
 
-- `scripts/prepare_weekly_release.py` + `weekly-release.yml`: 화요일 17:05 조건부 자동 준비/skip
-- `weekly-send.yml` + `scripts/trigger_weekly_mailer.py`: 화요일 20:00 Apps Script 고정 호출
+- `scripts/prepare_weekly_release.py` + `weekly-release.yml`: 월요일 04:00 조건부 자동 준비/skip
+- `weekly-send.yml` + `scripts/trigger_weekly_mailer.py`: 월요일 09:00 Apps Script 고정 호출
 - `admin/Code.gs`·`index.html`: 수동 발행 예약, 원장 상태, 발행 후 rev.2+ 웹 업데이트
 - `mailer/Code.gs`: rev.1 원장 발송, 수신자 해시별 성공 로그, 부분 실패 재시도, 동시 실행 잠금
 - `public/assets/script.js`: published 발행항목만 렌더, 초판/업데이트 시각과 rev 배지

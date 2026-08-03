@@ -1,10 +1,15 @@
 name: Weekly briefing release gate
 
-# 화요일 17:05 KST: 수동 발행 예약이 없는 호만 독립 LLM 검수 후 auto_ready/skipped 기록.
+# 월요일 04:00 KST: 수동 발행 예약이 없는 호만 독립 LLM 검수 후 auto_ready/skipped 기록.
+#
+# ⚠️ 발송(월 09:00)보다 반드시 먼저 끝나야 한다 — 순서가 뒤집히면 rev.1 원장이 없어
+# 그 호가 통째로 생략된다. 화 17:05/20:00 시절 버퍼는 2h55m 였는데 2026-07-28 실측
+# 지연이 release 2h38m·send 1h51m 라 17분밖에 안 남았다. 그래서 버퍼를 5시간으로 넓혔다.
+# 이 값을 09:00 쪽으로 다시 당기지 말 것.
 on:
   workflow_dispatch:
   schedule:
-    - cron: "5 8 * * 2"   # 화 08:05 UTC = 화 17:05 KST
+    - cron: "0 19 * * 0"   # 일 19:00 UTC = 월 04:00 KST
 
 jobs:
   prepare:
