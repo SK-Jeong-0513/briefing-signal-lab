@@ -581,6 +581,47 @@ function checkResubscribe() {
   Logger.log("[진단] 수신거부 상태 " + found + "명 — 복구대상=true 만 다음 발송부터 재개된다");
 }
 
+// 일일 메일에 '상세 브리핑'이 안 붙을 때 30초 진단(읽기 전용).
+//
+// marketBody_()가 ""를 돌려주는 원인은 셋 중 하나인데 눈으로는 구분이 안 된다.
+//   (a) 시장-본문 탭에 행 자체가 없다        → 텔레그램쪽 쓰기 문제
+//   (b) 행은 있는데 오늘 날짜가 없다          → 그날 파이프가 안 돌았거나 no-op
+//   (c) 오늘 행은 있는데 시간대가 '장전'이 아님 → 읽기 필터 문제
+// 이름에 밑줄을 붙이지 말 것 — Apps Script는 _로 끝나는 함수를 실행 드롭다운에서 숨긴다.
+function checkMarketBody() {
+  if (!CFG.MARKET_SHEET_ID) { Logger.log("[진단] CFG.MARKET_SHEET_ID 가 비어 있다 — 여기서 끝"); return; }
+  var sh = SpreadsheetApp.openById(CFG.MARKET_SHEET_ID).getSheetByName(CFG.MARKET_BODY_TAB);
+  if (!sh) { Logger.log("[진단] 탭 '" + CFG.MARKET_BODY_TAB + "' 없음 — 원인 확정"); return; }
+
+  var values = sh.getDataRange().getValues();
+  var H = (values[0] || []).map(function (h) { return String(h).trim(); });
+  Logger.log("[진단] 탭 OK · 헤더=[" + H.join(" | ") + "] · 데이터 " + Math.max(0, values.length - 1) + "행");
+
+  var iDt = H.indexOf("날짜"), iPd = H.indexOf("시간대"), iBd = H.indexOf("본문");
+  if (iBd < 0) { Logger.log("[진단] '본문' 열이 없다 — marketBody_ 가 즉시 \"\" 반환. 원인 확정"); return; }
+
+  var today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+  Logger.log("[진단] 오늘(KST)=" + today);
+
+  // 최근 것부터 12행 — 날짜·시간대 값이 기대와 같은지, 본문에 내용이 있는지 본다.
+  var shown = 0, todayRows = 0;
+  for (var r = values.length - 1; r >= 1 && shown < 12; r--) {
+    var c = values[r];
+    var d = ymd_(c[iDt]), p = iPd < 0 ? "(열없음)" : String(c[iPd] || "").trim();
+    var n = String(c[iBd] || "").length;
+    if (d === today) todayRows++;
+    Logger.log("[진단] " + r + "행 | 날짜='" + d + "' | 시간대='" + p + "' | 본문 " + n + "자"
+      + (d === today && p === "장전" ? "  <-- marketBody_ 가 집는 행" : ""));
+    shown++;
+  }
+  Logger.log("[진단] 오늘 날짜 행 " + todayRows + "개");
+
+  var body = marketBody_();
+  Logger.log("[진단] marketBody_() 반환 " + body.length + "자"
+    + (body ? " — 정상. 메일에 상세 브리핑이 붙어야 한다" : " — 비어 있음(위 표에서 원인 확인)"));
+  if (body) Logger.log("[진단] 앞 120자: " + body.slice(0, 120).replace(/\n/g, " "));
+}
+
 // 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.
 function unsubSet_() {
   var set = {};
