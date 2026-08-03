@@ -394,20 +394,38 @@ def draft_domain(domain, week, used=None):
 
 
 def post_rows(rows):
+    """초안을 시트에 쓴다. 성공하면 True.
+
+    ⚠️ 예전엔 실패를 print 만 하고 넘어가 **워크플로가 초록불로 끝났다**.
+    2026-08-02 실제로 `[write] 실패: The read operation timed out` 이 나고도
+    run 이 success 로 남아, 2026-W32 초안 40행이 통째로 유실된 걸 다음 주에야
+    알았다. 40행 append 는 Apps Script 쪽이 30초를 넘길 때가 있어 재시도가 필요하다.
+    """
     url = os.environ.get("WEEKLY_WEBAPP_URL", "").strip()
     if not url:
         print("[write] WEEKLY_WEBAPP_URL 없음. dry-run(출력만)")
         for r in rows:
             print("  ", json.dumps(r, ensure_ascii=False))
-        return
+        return True
     payload = {"token": os.environ.get("WEEKLY_WEBAPP_TOKEN", ""), "tab": "주간-초안", "rows": rows}
-    req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
-                                 headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            print("[write] POST %s: %s" % (r.status, r.read().decode("utf-8", "replace")[:120]))
-    except Exception as e:
-        print("[write] 실패: %s" % e)
+    last = ""
+    for attempt in range(1, 4):
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                print("[write] POST %s: %s" % (r.status, r.read().decode("utf-8", "replace")[:120]))
+                return True
+        except Exception as e:
+            last = str(e)
+            print("[write] 시도 %d/3 실패: %s" % (attempt, last))
+            if attempt < 3:
+                time.sleep(10 * attempt)
+    # 타임아웃이어도 시트에는 들어갔을 수 있다 — 재시도가 중복 append 를 만들 수 있으니
+    # 실패로 끝났으면 시트를 눈으로 확인하고 필요하면 중복 행을 지우라고 알린다.
+    print("[ERROR] 초안 %d행 쓰기 3회 실패: %s" % (len(rows), last))
+    print("[ERROR] '주간-초안' 탭을 확인하세요 — 타임아웃이라도 일부/중복 기록됐을 수 있습니다.")
+    return False
 
 
 def main():
@@ -438,9 +456,10 @@ def main():
     if dry:
         for r in rows:
             print("  ", json.dumps(r, ensure_ascii=False))
-    else:
-        post_rows(rows)
+        return 0
+    # 쓰기 실패는 반드시 빨간 run 으로 끝낸다 — 초록불이면 초안이 없는 걸 아무도 모른다.
+    return 0 if post_rows(rows) else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

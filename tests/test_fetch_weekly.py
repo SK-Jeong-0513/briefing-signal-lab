@@ -74,3 +74,56 @@ class FetchWeeklyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DraftWriteFailureTests(unittest.TestCase):
+    """초안 쓰기 실패는 반드시 빨간 run 으로 끝나야 한다.
+
+    2026-08-02 실제 사고: `[write] 실패: The read operation timed out` 이 났는데
+    post_rows 가 예외를 삼키고 main 이 정상 종료해 **run 이 success 로 남았다.**
+    그 결과 2026-W32 초안 40행이 시트에 없는 걸 아무도 모른 채 한 주가 지났다.
+    """
+
+    ENV = {"WEEKLY_WEBAPP_URL": "https://example.com/exec", "WEEKLY_WEBAPP_TOKEN": "t"}
+
+    def test_write_failure_returns_false_after_retries(self):
+        with patch.dict(fetch_weekly.os.environ, self.ENV, clear=False), \
+             patch.object(fetch_weekly.urllib.request, "urlopen", side_effect=OSError("timed out")) as up, \
+             patch.object(fetch_weekly.time, "sleep"):
+            self.assertFalse(fetch_weekly.post_rows([{"a": 1}]))
+        self.assertEqual(up.call_count, 3, "재시도 없이 한 번만 시도했다")
+
+    def test_transient_failure_then_success(self):
+        class Resp:
+            status = 200
+            def read(self): return b"ok"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        with patch.dict(fetch_weekly.os.environ, self.ENV, clear=False), \
+             patch.object(fetch_weekly.urllib.request, "urlopen",
+                          side_effect=[OSError("timed out"), Resp()]), \
+             patch.object(fetch_weekly.time, "sleep"):
+            self.assertTrue(fetch_weekly.post_rows([{"a": 1}]))
+
+    def test_missing_url_is_dry_run_not_a_failure(self):
+        env = {"WEEKLY_WEBAPP_URL": "", "WEEKLY_WEBAPP_TOKEN": ""}
+        with patch.dict(fetch_weekly.os.environ, env, clear=False):
+            self.assertTrue(fetch_weekly.post_rows([{"a": 1}]))
+
+    def test_main_exits_nonzero_when_write_fails(self):
+        with patch.object(fetch_weekly, "post_rows", return_value=False), \
+             patch.object(fetch_weekly, "used_keys", return_value=set()), \
+             patch.object(fetch_weekly, "draft_domain", return_value=[]), \
+             patch.object(fetch_weekly.toggle, "pipeline_enabled", return_value=True), \
+             patch.object(fetch_weekly.time, "sleep"), \
+             patch.object(fetch_weekly.sys, "argv", ["fetch_weekly.py", "--limit=1"]):
+            self.assertEqual(fetch_weekly.main(), 1)
+
+    def test_main_exits_zero_when_write_succeeds(self):
+        with patch.object(fetch_weekly, "post_rows", return_value=True), \
+             patch.object(fetch_weekly, "used_keys", return_value=set()), \
+             patch.object(fetch_weekly, "draft_domain", return_value=[]), \
+             patch.object(fetch_weekly.toggle, "pipeline_enabled", return_value=True), \
+             patch.object(fetch_weekly.time, "sleep"), \
+             patch.object(fetch_weekly.sys, "argv", ["fetch_weekly.py", "--limit=1"]):
+            self.assertEqual(fetch_weekly.main(), 0)
