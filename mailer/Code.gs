@@ -154,19 +154,21 @@ function prefTable_(name) {
 }
 function prefMap_(name) {
   var t = prefTable_(name);
-  var iE = idx_(t.header, CFG.PREF_COL.email), iD = idx_(t.header, CFG.PREF_COL.domains), iS = idx_(t.header, CFG.PREF_COL.status);
+  var iE = idx_(t.header, CFG.PREF_COL.email), iD = idx_(t.header, CFG.PREF_COL.domains), iS = idx_(t.header, CFG.PREF_COL.status), iU = idx_(t.header, CFG.PREF_COL.updated);
   var map = {};
   t.rows.forEach(function (r) {
     var em = String(r.cells[iE] || "").trim().toLowerCase();
     if (!em) return;
-    map[em] = { domains: String(r.cells[iD] || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean), status: String(r.cells[iS] || "구독").trim() };
+    map[em] = { email: String(r.cells[iE] || "").trim(), domains: String(r.cells[iD] || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean), status: String(r.cells[iS] || "구독").trim(), updated: iU >= 0 ? r.cells[iU] : "" };
   });
   return map;
 }
 function prefUpsert_(name, email, domainLabels, status) {
   var t = prefTable_(name);
   var iE = idx_(t.header, CFG.PREF_COL.email), iD = idx_(t.header, CFG.PREF_COL.domains), iS = idx_(t.header, CFG.PREF_COL.status), iU = idx_(t.header, CFG.PREF_COL.updated);
-  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  // 재구독 판정이 '같은 날 해지→재신청'을 구분해야 해서 시각까지 남긴다.
+  // 옛 날짜-only 행도 계속 읽힌다(unsubTime_ 가 그날 끝으로 해석).
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   var low = String(email).trim().toLowerCase(), rowIndex = 0;
   for (var i = 0; i < t.rows.length; i++) { if (String(t.rows[i].cells[iE] || "").trim().toLowerCase() === low) { rowIndex = t.rows[i].rowIndex; break; } }
   if (!rowIndex) rowIndex = t.sh.getLastRow() + 1;
@@ -266,6 +268,7 @@ function sendWeeklyUnlocked_() {
   var releaseCats = weeklyReleaseCats_(bundle.items);
   var rt = tableOf_(CFG.RESP_SHEET), iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent), iK = idx_(rt.header, CFG.RESP_COL.keywords);
   if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
+  syncResubscribes_();          // 재신청자를 먼저 '구독'으로 되돌린 뒤 선호도를 읽는다
   var maps = {}; releaseCats.forEach(function (c) { maps[c.key] = prefMap_(c.prefSheet); });
   var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, bundle.issueKey, 1);
   var sent = 0, skipped = 0, failed = 0, seen = {};
@@ -474,6 +477,80 @@ function renderBody_(text) {
     '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.muted + ';padding-left:8px;margin:0 0 10px">상세 브리핑</div>' +
     lines + "</div>";
 }
+// ===== 재구독 복구 =====
+// 수신거부자가 구독 폼으로 다시 신청해도 pref 상태가 '수신거부'로 남아 영구 차단되던 문제.
+// 구독 폼은 '메일 수신 동의' 체크가 필수라 재제출 = 새로운 명시적 동의로 본다.
+// 판별이 불가능한 경우(타임스탬프 열 없음·파싱 실패·동률)는 수신거부를 유지한다 — 안전 쪽.
+
+// 폼 응답 시트의 타임스탬프 열. 로케일에 따라 제목이 다르고 질문 제목이 바뀌어도
+// 1열은 항상 폼이 만든 타임스탬프라 마지막에 0열로 폴백한다.
+// (0열이 타임스탬프가 아니면 toTime_ 가 전부 null → 복구 없이 현행 동작 유지)
+function respTsIdx_(header) {
+  var names = ["타임스탬프", "Timestamp"];
+  for (var i = 0; i < names.length; i++) { var k = idx_(header, names[i]); if (k >= 0) return k; }
+  return 0;
+}
+// 시트 값 → epoch ms. Date 객체 / "yyyy-MM-dd" / "yyyy-MM-dd HH:mm:ss" 모두 받는다.
+// 시각이 없으면 endOfDay=true 일 때 그날 끝으로 본다(수신거부 시각용).
+function toTime_(v, endOfDay) {
+  if (v instanceof Date) {
+    var t = v.getTime();
+    if (isNaN(t)) return null;
+    // 옛 행은 날짜만 저장돼 시트가 자정 Date 로 바꿔 놓는다 — 그날 끝으로 해석.
+    if (endOfDay && v.getHours() === 0 && v.getMinutes() === 0 && v.getSeconds() === 0) return t + 86399999;
+    return t;
+  }
+  var s = String(v || "").trim();
+  if (!s) return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) { var p = Date.parse(s); return isNaN(p) ? null : p; }
+  var hasTime = m[4] != null;
+  var d = new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  return (endOfDay && !hasTime) ? d.getTime() + 86399999 : d.getTime();
+}
+// 수신거부 시각. 시각 도입 전 행은 날짜만 있어 그날 끝으로 본다 —
+// 같은 날 먼저 제출된 응답이 해지보다 나중이라고 잘못 판정되는 것을 막는다.
+function unsubTime_(v) { return toTime_(v, true); }
+// 응답 시트의 이메일별 '가장 최근' 제출 시각.
+// ⚠️ 발송 루프는 seen[email] 로 첫(=가장 오래된) 행만 취하므로 여기서 따로 최댓값을 구한다.
+function respLatestTs_() {
+  var rt = tableOf_(CFG.RESP_SHEET);
+  var iE = idx_(rt.header, CFG.RESP_COL.email), iT = respTsIdx_(rt.header);
+  var map = {};
+  if (iE < 0 || iT < 0) return map;
+  rt.rows.forEach(function (r) {
+    var em = String(r.cells[iE] || "").trim().toLowerCase();
+    if (!em) return;
+    var ts = toTime_(r.cells[iT], false);
+    if (ts != null && (map[em] == null || ts > map[em])) map[em] = ts;
+  });
+  return map;
+}
+// 수신거부 이후에 폼을 다시 제출했는가.
+function resubscribed_(pref, respTs) {
+  if (!pref || pref.status !== "수신거부" || respTs == null) return false;
+  var u = unsubTime_(pref.updated);
+  return u == null ? false : respTs > u;
+}
+// 재구독자를 pref 시트에서 '구독'으로 되돌린다. 발송 직전에 한 번 돌려
+// 시트를 실제 상태와 맞춘다(이후 unsubSet_·주간 루프는 그대로 읽기만 한다).
+function syncResubscribes_() {
+  var resp = respLatestTs_(), n = 0;
+  if (!Object.keys(resp).length) return 0;
+  CATS.forEach(function (c) {
+    var m = prefMap_(c.prefSheet);
+    Object.keys(m).forEach(function (em) {
+      if (!resubscribed_(m[em], resp[em])) return;
+      // 분야를 모두 끈 뒤 해지한 경우가 있어, 비어 있으면 가동 분야 전체로 되살린다.
+      var doms = m[em].domains.length ? m[em].domains : c.domains.map(function (d) { return d.label; });
+      prefUpsert_(c.prefSheet, m[em].email || em, doms, "구독");
+      n++;
+    });
+  });
+  if (n) Logger.log("[재구독] 수신거부 해제 " + n + "건");
+  return n;
+}
+
 // 수신거부(모든 pref 시트 상태=수신거부)한 이메일 집합.
 function unsubSet_() {
   var set = {};
@@ -490,6 +567,7 @@ function sendDailyMarket() {
   var rt = tableOf_(CFG.RESP_SHEET);
   var iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent);
   if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
+  syncResubscribes_();          // 재신청자를 먼저 '구독'으로 되돌린 뒤 차단 목록을 만든다
   var unsub = unsubSet_();
   var subject = CFG.DAILY_SUBJECT + " " + dg.today;
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
