@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Evaluate and prepare weekly release
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DATA_GO_DEEPSEEK }}

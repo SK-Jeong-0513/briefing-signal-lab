@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Run AI engine test (stdlib only)
         env:
           # 사용자 시크릿 이름 → 코드가 읽는 내부 이름으로 매핑
