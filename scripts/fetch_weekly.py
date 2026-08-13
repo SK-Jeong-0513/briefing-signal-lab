@@ -52,6 +52,20 @@ ATOM = {"a": "http://www.w3.org/2005/Atom"}
 # 일요일 수집 → 화요일 발행이므로 발행 게이트 freshness(WEEKLY_FRESH_DAYS=10)보다 짧아야 한다.
 COLLECT_DAYS = int(os.environ.get("WEEKLY_COLLECT_DAYS", "7"))
 
+# 원료 규모 — 2026-08-14 상향. 전부 env 로 조절 가능하게 두어 코드 수정 없이 되돌린다.
+#
+# 상향 근거: 초안은 '후보'일 뿐이고 품질은 게이트가 거른다(base_gates + LLM 심사 85점).
+# 후보를 적게 만들면 게이트가 고를 게 없다. 실측으로 도메인당 12건을 수집하면서
+# 카드는 5건까지만 만들었고, 그 결과 11개 도메인 이론 최대가 55건, 실제 39건이었다.
+# commodity·flows 는 매주 0건이라 사이트의 해당 분야가 늘 '준비 중'으로 떴다.
+#
+# ⚠️ CARDS_PER_DOMAIN 을 올리면 DRAFT_MAX_TOKENS 도 같이 올려야 한다. 카드 하나에
+#    제목ko/en·한줄ko/en·밸류체인이 들어가 1200 토큰으로는 5장이 이미 빠듯하다.
+#    안 올리면 응답이 잘려 _parse_cards 가 [] 를 내고 그 도메인이 통째로 빈다.
+COLLECT_LIMIT = int(os.environ.get("WEEKLY_COLLECT_LIMIT", "20"))
+CARDS_PER_DOMAIN = int(os.environ.get("WEEKLY_CARDS_PER_DOMAIN", "8"))
+DRAFT_MAX_TOKENS = int(os.environ.get("WEEKLY_DRAFT_MAX_TOKENS", "2600"))
+
 # 시트 헤더 순서(웹앱이 헤더명으로 매핑하므로 시트 첫 행과 정확히 일치해야 함).
 HEADER = ["분야", "발행주", "유형", "제목ko", "제목en", "한줄ko", "한줄en",
           "밸류체인", "출처URL", "원문제목", "원문일시", "수집일시", "생성엔진", "선행도", "status"]
@@ -145,20 +159,28 @@ DOMAINS = [
         "id": "commodity",
         "label": {"ko": "원자재·대체", "en": "Commodities & Alts"},
         "hint": "에너지·금속·원자재 가격·수급 등 원자재/대체자산의 국면 변화를 시사하는 항목",
+        # 2026-08-14: 매주 카드 0건이라 영문 쿼리를 더했다. 원자재는 공급·재고·정책이
+        # 해외에서 먼저 보도돼 한글 쿼리만으로는 '가격 변동' 기사에 치우친다.
         "feeds": [
             ("gnews", "국제유가 원유 에너지 가격"),
             ("gnews", "구리 금 은 금속 원자재 가격"),
             ("gnews", "천연가스 LNG 원자재 수급"),
+            ("gnews", "commodity supply disruption inventory"),
+            ("gnews", "critical minerals export controls"),
         ],
     },
     {
         "id": "flows",
         "label": {"ko": "펀드·자금흐름", "en": "Funds & Flows"},
         "hint": "ETF 자금유출입·기관 수급·패시브/액티브 포지셔닝 등 자금흐름의 국면 변화를 시사하는 항목",
+        # 2026-08-14: 수집 자체가 9건으로 가장 적고 카드는 매주 0건이었다. 자금흐름
+        # 데이터(EPFR·ETF flows)는 영문 보도가 원천이라 한글 쿼리로는 잘 안 잡힌다.
         "feeds": [
             ("gnews", "ETF 자금 유입 유출 수급"),
             ("gnews", "펀드 자금흐름 기관 포지셔닝"),
             ("gnews", "외국인 수급 패시브 액티브 자금"),
+            ("gnews", "ETF fund flows inflows outflows"),
+            ("gnews", "investor positioning rotation equity funds"),
         ],
     },
     # ── 경제(economy) — 단일 매크로 다이제스트. 분야 id="macro"(site.js economy sheetDomain) ──
@@ -290,7 +312,7 @@ def used_keys():
 
 
 def collect(domain, used=None):
-    """도메인 feeds에서 헤드라인 수집 → 이번 실행 내 중복 + 과거 사용분 제거, 최대 12건."""
+    """도메인 feeds에서 헤드라인 수집 → 이번 실행 내 중복 + 과거 사용분 제거, COLLECT_LIMIT까지."""
     used = used or set()
     heads, seen, skipped = [], set(), 0
     for kind, query in domain["feeds"]:
@@ -307,7 +329,7 @@ def collect(domain, used=None):
         time.sleep(1)  # 소스 rate-limit 완화
     if skipped:
         print("[dedup] %s: 과거 사용 기사 %d건 제외" % (domain["id"], skipped))
-    return heads[:12]
+    return heads[:COLLECT_LIMIT]
 
 
 def _parse_cards(text):
@@ -338,18 +360,25 @@ def draft_domain(domain, week, used=None):
     hint = domain.get("hint", "경제지 헤드라인보다 앞서 밸류체인 압력·병목·구조 변화를 시사하는 항목")
     user = (
         "다음은 '%s' 분야 관련 최근 헤드라인입니다(번호·출처유형 포함).\n"
-        "이 중 '선행 신호'(%s)가 될 만한 것을 최대 5개 고르고, 각각을 후보 신호 카드로 만드세요. "
+        "이 중 '선행 신호'(%s)가 될 만한 것을 최대 %d개 고르고, 각각을 후보 신호 카드로 만드세요. "
         "일반 뉴스여도 위 관점으로 재해석할 수 있으면 신호로 만드세요. 전문 요약이 아니라 후보만 만듭니다.\n"
+        # 여기 만드는 것은 '후보'다. 최종 게재는 별도 게이트(사실 검증 + 검수 점수 85)가 정하므로,
+        # 애매한 항목을 버리기보다 선행도를 낮게 매겨 넘기는 편이 낫다. 실제로 commodity·flows 가
+        # 매주 [] 를 반환해 그 분야가 사이트에서 늘 '준비 중'으로 떴다.
+        "애매하면 버리지 말고 선행도를 낮게(1~2) 매겨 포함하세요 — 최종 게재 여부는 다음 단계의 "
+        "검수 게이트가 정합니다. 가격·수급의 국면 변화도 그 분야에서는 충분한 신호입니다. "
+        "정말로 아무 항목도 해당하지 않을 때만 빈 배열을 내세요.\n"
         "규칙: 투자판단(매수·매도·목표가·비중) 표현 절대 금지. 관련 기업/자산은 '관찰'로만. 모르면 비워두세요.\n"
         "  '매수세·매도세·목표가·비중·베팅·저가 매수'는 단어 자체를 쓰지 마세요(자동 린트에서 카드가 통째로 버려집니다). "
-        "자금 흐름은 '순매수·순매도·순유입·순유출·수급' 같은 사실 표현으로 쓰세요.\n"
+        "자금 흐름은 '순매수·순매도·순유입·순유출·수급' 같은 사실 표현으로 쓰세요. "
+        "금지어가 걱정돼 카드를 포기하지 말고, 표현만 바꿔서 만드세요.\n"
         "아래 JSON 배열로만 출력(설명·코드펜스 없이):\n"
         '[{"출처n": <헤드라인 번호>, "제목ko": "...", "제목en": "...", '
         '"한줄ko": "메커니즘/관찰 1줄", "한줄en": "...", '
         '"밸류체인": "관련 밸류체인/종목/자산 후보", "선행도": <1~5, 경제지보다 앞선 정도>}]\n'
-        "선행 신호가 없으면 [] 만 출력.\n\n헤드라인:\n%s" % (domain["label"]["ko"], hint, block)
+        "\n헤드라인:\n%s" % (domain["label"]["ko"], hint, CARDS_PER_DOMAIN, block)
     )
-    text, engine = ai.chat(ai.GUARD_SYSTEM, user, max_tokens=1200)
+    text, engine = ai.chat(ai.GUARD_SYSTEM, user, max_tokens=DRAFT_MAX_TOKENS)
     if not text:
         print("[skip] %s: LLM 응답 없음" % domain["id"])
         return []
