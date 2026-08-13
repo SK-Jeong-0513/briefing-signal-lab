@@ -110,20 +110,63 @@ class DraftWriteFailureTests(unittest.TestCase):
         with patch.dict(fetch_weekly.os.environ, env, clear=False):
             self.assertTrue(fetch_weekly.post_rows([{"a": 1}]))
 
-    def test_main_exits_nonzero_when_write_fails(self):
-        with patch.object(fetch_weekly, "post_rows", return_value=False), \
-             patch.object(fetch_weekly, "used_keys", return_value=set()), \
-             patch.object(fetch_weekly, "draft_domain", return_value=[]), \
+    # 아래 두 테스트는 '쓰기' 경로를 보는 것이므로 draft_domain 이 행을 내놓아야 한다.
+    # 빈 리스트를 두면 main 이 0건 검사에서 먼저 끝나 쓰기 경로에 닿지도 않는다.
+    CARD = [{"분야": "ai-infra", "제목ko": "카드"}]
+
+    def _main(self, **patches):
+        with patch.object(fetch_weekly, "used_keys", return_value=set()), \
              patch.object(fetch_weekly.toggle, "pipeline_enabled", return_value=True), \
              patch.object(fetch_weekly.time, "sleep"), \
-             patch.object(fetch_weekly.sys, "argv", ["fetch_weekly.py", "--limit=1"]):
-            self.assertEqual(fetch_weekly.main(), 1)
+             patch.object(fetch_weekly.sys, "argv", ["fetch_weekly.py", "--limit=1"]), \
+             patch.object(fetch_weekly, "draft_domain", return_value=patches.pop("drafts", self.CARD)), \
+             patch.object(fetch_weekly, "post_rows", return_value=patches.pop("written", True)):
+            return fetch_weekly.main()
+
+    def test_main_exits_nonzero_when_write_fails(self):
+        self.assertEqual(self._main(written=False), 1)
 
     def test_main_exits_zero_when_write_succeeds(self):
-        with patch.object(fetch_weekly, "post_rows", return_value=True), \
-             patch.object(fetch_weekly, "used_keys", return_value=set()), \
-             patch.object(fetch_weekly, "draft_domain", return_value=[]), \
+        self.assertEqual(self._main(written=True), 0)
+
+
+class EmptyDraftTests(unittest.TestCase):
+    """전 도메인 0건은 빨간 run 으로 끝나야 한다.
+
+    2026-08-08 실행에서 LLM 키 3종이 모두 죽어 11개 도메인이 전부 '응답 없음'으로
+    0건이 됐는데 워크플로가 초록으로 끝났다. 그 주 사이트가 통째로 빈 것을 일주일
+    뒤에야 알았다. 주간은 주 1회 단발이라 그 순간 실패하면 메울 기회가 없다.
+    """
+
+    CARD = [{"분야": "ai-infra", "제목ko": "카드"}]
+
+    def _main(self, drafts, argv=None):
+        with patch.object(fetch_weekly, "used_keys", return_value=set()), \
              patch.object(fetch_weekly.toggle, "pipeline_enabled", return_value=True), \
              patch.object(fetch_weekly.time, "sleep"), \
-             patch.object(fetch_weekly.sys, "argv", ["fetch_weekly.py", "--limit=1"]):
-            self.assertEqual(fetch_weekly.main(), 0)
+             patch.object(fetch_weekly.sys, "argv", argv or ["fetch_weekly.py", "--limit=1"]), \
+             patch.object(fetch_weekly, "draft_domain", return_value=drafts), \
+             patch.object(fetch_weekly, "post_rows", return_value=True) as post:
+            return fetch_weekly.main(), post
+
+    def test_all_domains_empty_is_a_failure(self):
+        code, _ = self._main([])
+        self.assertEqual(code, 1)
+
+    def test_all_domains_empty_does_not_write_to_the_sheet(self):
+        """빈 결과를 써봐야 얻을 게 없고, 원장에 잘못된 흔적만 남는다."""
+        _, post = self._main([])
+        post.assert_not_called()
+
+    def test_any_row_is_a_success(self):
+        """일부 도메인만 0건인 것은 실패로 보지 않는다 — 어떤 주는 실제로 신호가 없다.
+        그것까지 빨간불로 만들면 경보가 무뎌져 진짜 사고를 놓친다."""
+        code, post = self._main(self.CARD)
+        self.assertEqual(code, 0)
+        post.assert_called_once()
+
+    def test_dry_run_stays_zero_even_with_no_rows(self):
+        """--dry 는 품질 확인용이다. 0건이라고 빨간불이면 확인 자체를 못 한다."""
+        code, post = self._main([], argv=["fetch_weekly.py", "--limit=1", "--dry"])
+        self.assertEqual(code, 0)
+        post.assert_not_called()
