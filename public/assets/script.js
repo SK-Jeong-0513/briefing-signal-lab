@@ -291,6 +291,56 @@
       : '<p class="section-sub">' + t(UI.library.empty) + "</p>";
   }
 
+  /* 서재 캐러셀 — 3장 창을 고정하고 나머지는 옆으로 민다.
+     항목이 늘수록 카드가 세로로 쌓여 페이지가 끝없이 길어지던 문제를 없앤다.
+
+     위치는 스크롤이 진실이다. 별도 인덱스를 두면 리사이즈·스와이프·탭 이동으로
+     실제 스크롤과 어긋나 버튼이 엉뚱하게 동작한다. scrollLeft 만 읽고 쓴다. */
+  function mountRail(grid) {
+    if (!grid || grid.parentElement.classList.contains("lib-rail")) return refreshRail(grid);
+    if (!grid.querySelector(".lib-card")) return;   // 빈 상태 문구뿐이면 레일이 필요 없다
+
+    var rail = document.createElement("div");
+    rail.className = "lib-rail";
+    grid.parentNode.insertBefore(rail, grid);
+    rail.appendChild(grid);
+
+    [["prev", "이전", "M15 5 L8 12 L15 19"], ["next", "다음", "M9 5 L16 12 L9 19"]].forEach(function (spec) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "lib-rail__nav lib-rail__nav--" + spec[0];
+      b.setAttribute("aria-label", spec[1] + " 자료 보기");
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + spec[2] + '"/></svg>';
+      b.addEventListener("click", function () {
+        grid.scrollBy({ left: (spec[0] === "next" ? 1 : -1) * railStep(grid), behavior: "smooth" });
+      });
+      rail.appendChild(b);
+    });
+
+    grid.addEventListener("scroll", function () { refreshRail(grid); });
+    window.addEventListener("resize", function () { refreshRail(grid); });
+    refreshRail(grid);
+  }
+
+  /* 카드 1장 + 간격. 반응형으로 카드 폭이 바뀌므로 매번 실측한다. */
+  function railStep(grid) {
+    var card = grid.querySelector(".lib-card");
+    if (!card) return grid.clientWidth;
+    var gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+    return card.getBoundingClientRect().width + gap;
+  }
+
+  function refreshRail(grid) {
+    var rail = grid && grid.closest(".lib-rail");
+    if (!rail) return;
+    var max = grid.scrollWidth - grid.clientWidth;
+    var prev = rail.querySelector(".lib-rail__nav--prev");
+    var next = rail.querySelector(".lib-rail__nav--next");
+    // 1px 여유 — 브라우저가 소수점 스크롤을 남겨 '끝'인데 끝이 아닌 것으로 읽히는 것을 막는다.
+    if (prev) prev.hidden = grid.scrollLeft <= 1;
+    if (next) next.hidden = grid.scrollLeft >= max - 1;
+  }
+
   /* 서재 페이지(library.html): 필터 칩 + 리포트 그리드 + 노트 스트립 */
   function renderLibraryPage() {
     var repHost = document.querySelector("[data-lib-reports]");
@@ -308,10 +358,15 @@
     }
     var shown = libState.filter === "all" ? reports : reports.filter(function (r) { return r.category === libState.filter; });
     repHost.innerHTML = shown.length ? shown.map(libCard).join("") : '<p class="section-sub">' + t(LP.emptyReports) + "</p>";
+    // 필터를 바꾸면 목록이 통째로 바뀐다 — 보던 위치를 유지하면 엉뚱한 카드가 앞에 온다.
+    repHost.scrollLeft = 0;
+    mountRail(repHost);
     var noteHost = document.querySelector("[data-lib-notes]");
     if (noteHost) {
       var notes = libState.items.filter(function (x) { return x.type === "note"; });
       noteHost.innerHTML = notes.length ? notes.map(libCard).join("") : '<p class="section-sub">' + t(LP.emptyNotes) + "</p>";
+      noteHost.scrollLeft = 0;
+      mountRail(noteHost);
     }
   }
 
