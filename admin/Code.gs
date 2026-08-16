@@ -147,6 +147,46 @@ function weeklyDeleteRows(rows) {
   return { ok: true, deleted: _deleteRows_(sh, rows) };
 }
 
+/** 선택한 행들의 한 열을 같은 값으로 일괄 변경. 반환 = 실제 바뀐 행 수.
+ *
+ * 열 전체를 한 번 읽고 한 번 쓴다. 행마다 setValue 를 부르면 선택 48건에
+ * 왕복 48회가 나가 콘솔이 수십 초 멈춘다(운영자가 하나씩 누르던 것과 같은 비용).
+ * 대상이 흩어져 있어도 읽기 1회·쓰기 1회로 끝나는 것이 이 방식의 요점이다.
+ *
+ * ⚠️ 대상 열만 읽고 쓴다. 행 전체를 되쓰면 손대지 않은 열까지 재기록돼
+ *    날짜 서식 등이 흔들린다.
+ */
+function _weeklySetColumnBatch_(rows, colName, value) {
+  var sh = _openMarket_().getSheetByName(WEEKLY_TAB);
+  if (!sh) throw new Error('탭 없음: ' + WEEKLY_TAB);
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return 0;
+  var targets = (rows || []).map(Number).filter(function (r) { return r >= 2 && r <= lastRow; });
+  if (!targets.length) return 0;
+  var range = sh.getRange(2, _colIndex_(sh, colName), lastRow - 1, 1);
+  var values = range.getValues();
+  var changed = 0;
+  targets.forEach(function (r) {
+    var i = r - 2;
+    if (String(values[i][0]) !== String(value)) { changed++; }
+    values[i][0] = value;
+  });
+  range.setValues(values);
+  return changed;
+}
+
+function weeklySetStatusBatch(rows, status) {
+  _assertAuth_();
+  if (['draft', 'approved'].indexOf(String(status)) < 0) throw new Error('알 수 없는 status: ' + status);
+  return { ok: true, updated: _weeklySetColumnBatch_(rows, 'status', status), total: (rows || []).length };
+}
+
+function weeklySetTypeBatch(rows, type) {
+  _assertAuth_();
+  if (['signal', 'headliner'].indexOf(String(type)) < 0) throw new Error('알 수 없는 유형: ' + type);
+  return { ok: true, updated: _weeklySetColumnBatch_(rows, '유형', type), total: (rows || []).length };
+}
+
 // ───────────────────────── ①-b 주간 호 발행 예약/웹 리비전 ─────────────────────────
 var RELEASE_HEADER = ['issue_key','state','revision','manual_confirmed','auto_mode','published_at','emailed_at','content_hash','updated_at','message'];
 var RELEASE_ITEM_HEADER = ['issue_key','revision','분야','발행주','유형','제목ko','제목en','한줄ko','한줄en','밸류체인','출처URL','원문제목','원문일시','검수점수','검수사유','상태','published_at','updated_at'];

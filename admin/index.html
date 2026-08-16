@@ -56,6 +56,14 @@
   table{width:100%;border-collapse:collapse;font-size:.8125rem}
   th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
   th{font-weight:600;color:var(--muted);white-space:nowrap}
+  /* 정렬 가능한 열 — 기호는 첫 로드부터 항상 보인다. 아무 표시가 없으면
+     정렬되는 줄 모르고 지나친다. 비활성은 중립 기호를 얇고 흐리게, 활성은
+     방향 화살표를 굵고 진하게. 새 색·여백을 만들지 않고 기존 토큰만 쓴다. */
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{color:var(--text)}
+  th.sortable i.sort{font-style:normal;margin-left:var(--s-xs);opacity:.35;font-weight:400}
+  th.sortable.on{color:var(--primary)}
+  th.sortable.on i.sort{opacity:1;font-weight:700}
   tr.sel{background:var(--primary-soft)}
   .badge{display:inline-block;padding:1px 7px;border-radius:var(--sm);font-size:.75rem;font-weight:600;color:#fff}
   .badge.ok{background:var(--success)} .badge.draft{background:var(--warning)} .badge.head{background:var(--primary)}
@@ -92,16 +100,24 @@
     <section id="tab-weekly">
       <div class="panel">
         <div class="row">
-          <div><label class="f">발행주</label><select id="w-week" onchange="renderWeekly()"></select></div>
+          <div><label class="f">발행주</label><select id="w-week" onchange="wFilterChanged()"></select></div>
           <div><label class="f">상태</label>
-            <select id="w-status" onchange="renderWeekly()">
+            <select id="w-status" onchange="wFilterChanged()">
               <option value="">전체</option><option value="draft">draft</option><option value="approved">approved</option>
             </select></div>
           <div class="grow"></div>
           <div style="align-self:flex-end">
             <button class="btn" onclick="loadWeekly()">새로고침</button>
-            <button class="btn danger" onclick="weeklyDeleteSelected()">선택 삭제</button>
           </div>
+        </div>
+        <div class="row" style="margin-top:var(--s-md);padding-top:var(--s-sm);border-top:1px solid var(--border)">
+          <b class="small" id="w-count">선택 0건</b>
+          <button class="btn primary" onclick="wBulkStatus('approved')">✓ 선택 승인</button>
+          <button class="btn" onclick="wBulkStatus('draft')">↩ 선택 draft</button>
+          <button class="btn" onclick="wBulkType('headliner')">★ 선택 headliner</button>
+          <button class="btn" onclick="wBulkType('signal')">선택 signal</button>
+          <div class="grow"></div>
+          <button class="btn danger" onclick="weeklyDeleteSelected()">선택 삭제</button>
         </div>
         <p class="small muted" style="margin:8px 0 0">approved는 편집 승인입니다. 공개는 아래 “이번 호 발행 예약” 또는 월요일 새벽 자동 검수 후 발행 원장을 통해서만 진행됩니다.</p>
       </div>
@@ -252,7 +268,84 @@
 
   // ── ① 주간 초안 ──
   var _weekly={header:[],rows:[]};
+
+  // 정렬 대상 열 화이트리스트. 임의 컬럼명이 들어오지 못하게 여기서만 고른다.
+  var W_SORT_COLS=['발행주','분야','유형','제목ko','선행도','status'];
+  // key='' 은 기본 정렬 = 시트 행 순서. 되돌리기가 이 상태로 돌아온다.
+  var _wSort={key:'',dir:'asc'};
+  // 체크 상태는 정렬·재렌더 사이에 유지한다. 매번 풀리면 '전체 선택 → 정렬 →
+  // 일괄 처리'가 불가능해져 일괄 기능 자체가 무의미해진다.
+  var _wChecked={};
+
+  function wSort(key){
+    if(W_SORT_COLS.indexOf(key)<0)return;
+    if(_wSort.key===key){_wSort.dir=(_wSort.dir==='asc')?'desc':'asc';}
+    else{_wSort.key=key;_wSort.dir='asc';}
+    renderWeekly();
+  }
+  function wSortReset(){_wSort={key:'',dir:'asc'};renderWeekly();}
+
+  /** 안정 정렬(Array.prototype.sort 는 안정) — 동률은 시트 행 순서를 유지한다.
+      빈 값은 방향과 무관하게 항상 뒤로 보낸다. */
+  function wSortRows(rows){
+    if(!_wSort.key)return rows;
+    var k=_wSort.key, sign=(_wSort.dir==='desc')?-1:1;
+    return rows.slice().sort(function(a,b){
+      var x=String(a[k]==null?'':a[k]).trim(), y=String(b[k]==null?'':b[k]).trim();
+      if(!x&&!y)return 0;
+      if(!x)return 1;
+      if(!y)return -1;
+      var nx=Number(x), ny=Number(y);
+      if(!isNaN(nx)&&!isNaN(ny))return (nx-ny)*sign;
+      return x.localeCompare(y,'ko')*sign;
+    });
+  }
+
+  function wTh(label,key){
+    if(!key)return '<th>'+esc(label)+'</th>';
+    var on=_wSort.key===key;
+    var mark=on?(_wSort.dir==='asc'?'▲':'▼'):'⇅';
+    return '<th class="sortable'+(on?' on':'')+'" onclick="wSort(\''+key+'\')" '+
+      'title="클릭하여 정렬(다시 누르면 반대 방향)">'+esc(label)+'<i class="sort">'+mark+'</i></th>';
+  }
+
+  function wSelectedRows(){
+    return [].slice.call(document.querySelectorAll('.w-ck:checked')).map(function(c){return parseInt(c.value,10);});
+  }
+  function wCheck(cb){
+    if(cb.checked)_wChecked[cb.value]=1; else delete _wChecked[cb.value];
+    var tr=cb.parentNode.parentNode; if(tr&&tr.classList)tr.classList.toggle('sel',cb.checked);
+    wPaintCount();
+  }
+  function wPaintCount(){
+    document.getElementById('w-count').textContent='선택 '+wSelectedRows().length+'건';
+  }
+  function wRowById(row){return _weekly.rows.filter(function(x){return x._row===row;})[0];}
+
+  function wBulkStatus(st){
+    var rows=wSelectedRows();
+    if(!rows.length){toast('먼저 행을 체크하세요',true);return;}
+    if(!confirm(rows.length+'개 행의 status 를 '+st+' 로 바꿉니다. 진행할까요?'))return;
+    call('weeklySetStatusBatch',rows,st).then(function(r){
+      rows.forEach(function(row){var x=wRowById(row);if(x)x['status']=st;});
+      renderWeekly();toast(r.updated+'건 변경 → '+st+(r.total>r.updated?(' (이미 '+st+' 였던 '+(r.total-r.updated)+'건 포함)'):''));
+    }).catch(fail);
+  }
+  function wBulkType(ty){
+    var rows=wSelectedRows();
+    if(!rows.length){toast('먼저 행을 체크하세요',true);return;}
+    if(ty==='headliner'&&rows.length>3&&
+       !confirm(rows.length+'건을 모두 headliner 로 지정합니다. 헤드라이너는 보통 호당 1~2건입니다. 계속할까요?'))return;
+    call('weeklySetTypeBatch',rows,ty).then(function(r){
+      rows.forEach(function(row){var x=wRowById(row);if(x)x['유형']=ty;});
+      renderWeekly();toast(r.updated+'건 변경 → '+ty);
+    }).catch(fail);
+  }
+
+  function wFilterChanged(){_wChecked={};renderWeekly();}
+
   function loadWeekly(){
+    _wChecked={};
     document.getElementById('w-table').innerHTML='<div class="empty">불러오는 중…</div>';
     call('weeklyList').then(function(d){_weekly=d;
       var weeks=[];d.rows.forEach(function(r){var w=r['발행주'];if(w&&weeks.indexOf(w)<0)weeks.push(w);});
@@ -270,14 +363,25 @@
     var rows=_weekly.rows.filter(function(r){
       return (!fw||String(r['발행주'])===fw)&&(!fs||String(r['status']||'').trim()===fs);
     });
-    if(!rows.length){document.getElementById('w-table').innerHTML='<div class="empty">해당 조건의 초안이 없습니다.</div>';return;}
-    var html='<table><thead><tr><th><input type="checkbox" title="이 목록 전체 선택/해제" onclick="wToggleAll(this)"></th><th>발행주</th><th>분야</th><th>유형</th><th>제목(ko)</th><th>선행도</th><th>상태</th><th>액션</th></tr></thead><tbody>';
+    if(!rows.length){
+      document.getElementById('w-table').innerHTML='<div class="empty">해당 조건의 초안이 없습니다.</div>';
+      wPaintCount();return;
+    }
+    rows=wSortRows(rows);
+    var reset=_wSort.key
+      ? ' <a href="#" class="small" onclick="wSortReset();return false;">기본 정렬로 되돌리기</a>'
+      : '';
+    var html='<p class="small muted" style="margin:0 0 8px">열 제목을 클릭하면 정렬됩니다. '+
+      (_wSort.key?('현재 <b>'+esc(_wSort.key)+'</b> '+(_wSort.dir==='asc'?'오름차순':'내림차순')):'현재 기본 정렬(시트 순서)')+reset+'</p>';
+    html+='<table><thead><tr><th><input type="checkbox" title="이 목록 전체 선택/해제" onclick="wToggleAll(this)"></th>'+
+      wTh('발행주','발행주')+wTh('분야','분야')+wTh('유형','유형')+wTh('제목(ko)','제목ko')+
+      wTh('선행도','선행도')+wTh('상태','status')+'<th>액션</th></tr></thead><tbody>';
     rows.forEach(function(r){
       var st=String(r['status']||'draft').trim(), ty=String(r['유형']||'').trim();
       var stBadge=st==='approved'?'<span class="badge ok">approved</span>':'<span class="badge draft">'+esc(st||'draft')+'</span>';
       var tyBadge=ty==='headliner'?'<span class="badge head">headliner</span>':esc(ty);
-      html+='<tr data-row="'+r._row+'">'+
-        '<td><input type="checkbox" class="w-ck" value="'+r._row+'"></td>'+
+      html+='<tr data-row="'+r._row+'"'+(_wChecked[r._row]?' class="sel"':'')+'>'+
+        '<td><input type="checkbox" class="w-ck" value="'+r._row+'" onchange="wCheck(this)"'+(_wChecked[r._row]?' checked':'')+'></td>'+
         '<td>'+esc(r['발행주'])+'</td><td>'+esc(r['분야'])+'</td><td>'+tyBadge+'</td>'+
         '<td>'+esc(r['제목ko'])+'</td><td>'+esc(r['선행도'])+'</td><td>'+stBadge+'</td>'+
         '<td style="white-space:nowrap">'+
@@ -289,16 +393,22 @@
     });
     html+='</tbody></table>';
     document.getElementById('w-table').innerHTML=html;
+    wPaintCount();
   }
   function wStatus(row,st){call('weeklySetStatus',row,st).then(function(){
     var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['status']=st;renderWeekly();toast('status → '+st);}).catch(fail);}
   function wType(row,ty){call('weeklySetType',row,ty).then(function(){
     var r=_weekly.rows.filter(function(x){return x._row===row;})[0];if(r)r['유형']=ty;renderWeekly();toast('유형 → '+ty);}).catch(fail);}
   function wToggleAll(cb){
-    [].slice.call(document.querySelectorAll('.w-ck')).forEach(function(c){c.checked=cb.checked;});
+    [].slice.call(document.querySelectorAll('.w-ck')).forEach(function(c){
+      c.checked=cb.checked;
+      if(cb.checked)_wChecked[c.value]=1; else delete _wChecked[c.value];
+      var tr=c.parentNode.parentNode; if(tr&&tr.classList)tr.classList.toggle('sel',cb.checked);
+    });
+    wPaintCount();
   }
   function weeklyDeleteSelected(){
-    var rows=[].slice.call(document.querySelectorAll('.w-ck:checked')).map(function(c){return parseInt(c.value,10);});
+    var rows=wSelectedRows();
     if(!rows.length){toast('삭제할 행을 선택하세요',true);return;}
     if(!confirm(rows.length+'개 행을 삭제합니다. 되돌릴 수 없습니다.'))return;
     call('weeklyDeleteRows',rows).then(function(r){toast(r.deleted+'행 삭제');loadWeekly();}).catch(fail);
