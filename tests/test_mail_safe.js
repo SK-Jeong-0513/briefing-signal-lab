@@ -37,11 +37,20 @@ assert.strictEqual(safe('\uD83D'), '', '짝 없는 상위 서로게이트도 제
 assert.strictEqual(safe('\uDCCC'), '', '짝 없는 하위 서로게이트도 제거');
 assert.strictEqual(safe('a📌b🚀c'), 'abc', '여러 개 연속 제거');
 
-// ── 배선: 발송 직전 두 곳 모두 감싸야 한다(한쪽만 감싸면 평문/HTML 중 하나가 깨짐) ──
+// ── 배선 ──
+// 2026-08-16 이전에는 호출부마다 mailSafe_ 를 직접 감쌌고 이 테스트가 그 두 곳을 확인했다.
+// 지금은 sendMail_ 래퍼 한 곳이 감싼다 — 호출부가 늘어도(스페셜 리포트) 빠뜨릴 수 없다.
+// 검사할 불변식은 그대로다: "발송에 넘어가는 평문·HTML 이 반드시 mailSafe_ 를 거친다".
 const src = fs.readFileSync('mailer/Code.gs', 'utf8');
-assert(src.includes('mailSafe_(dailyPlain_(dg, detail, quotes))') &&
-       src.includes('mailSafe_(dailyHtml_(email, dg, detail, quotes))'), '일일 메일 평문·HTML 양쪽');
-assert(src.includes('mailSafe_(plain_(perCat, kw))') &&
-       src.includes('mailSafe_(html_(email, kw, perCat))'), '주간 메일 평문·HTML 양쪽');
+const wrapper = src.slice(src.indexOf('function sendMail_'), src.indexOf('function mailQuotaOk_'));
+assert(wrapper, 'sendMail_ 래퍼를 찾지 못함');
+assert(/mailSafe_\(plain\)/.test(wrapper), '평문이 mailSafe_ 를 거친다');
+assert(/mailSafe_\(htmlBody\)/.test(wrapper), 'HTML 이 mailSafe_ 를 거친다');
+// 제목은 예전 호출부에서 감싸지 않았다 — 래퍼로 모으면서 같이 막혔다.
+assert(/mailSafe_\(subject\)/.test(wrapper), '제목도 mailSafe_ 를 거친다');
+
+// 래퍼를 우회하는 발송이 있으면 그 경로만 조용히 깨진다. 직접 호출은 래퍼 안 1곳뿐이어야 한다.
+const direct = src.split('\n').filter((l) => /GmailApp\.sendEmail\(/.test(l) && !/^\s*\/\//.test(l));
+assert.strictEqual(direct.length, 1, 'GmailApp 직접 호출은 sendMail_ 안 1곳뿐: ' + direct.length);
 
 console.log('mail safe (non-BMP) tests: OK');

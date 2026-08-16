@@ -288,7 +288,7 @@ function sendWeeklyUnlocked_() {
     if (!perCat.length) { skipped++; continue; }
     var kw = iK >= 0 ? String(cells[iK] || "").trim() : "", recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
     try {
-      GmailApp.sendEmail(recipient, CFG.SUBJECT + " · " + bundle.issueKey, mailSafe_(plain_(perCat, kw)), { name: CFG.SENDER_NAME, htmlBody: mailSafe_(html_(email, kw, perCat)) });
+      sendMail_(recipient, CFG.SUBJECT + " · " + bundle.issueKey, plain_(perCat, kw), html_(email, kw, perCat));
       sent++;
       if (!CFG.TEST_MODE) { weeklyLog_(delivery, bundle.issueKey, 1, hash, "sent", ""); sentMap[hash] = 1; }
       if (CFG.TEST_MODE) break;
@@ -301,10 +301,246 @@ function sendWeeklyUnlocked_() {
   Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "[주간 " + bundle.issueKey + "] 발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
 }
 
+// ===== 스페셜 리포트 발송 =====
+// 서재 항목 하나를 골라 구독자에게 보낸다. 관리자 콘솔이 '스페셜-발송' 탭에 예약 행을 쓰고,
+// 여기 15분 트리거가 시각이 지난 행을 집어 발송한다.
+//
+// 왜 콘솔이 직접 보내지 않는가: 구독자 목록·동의 판정·수신거부·중복방지가 전부 이 파일에 있다.
+// 콘솔에 복제하면 규칙이 갈라지고, 갈라진 쪽이 통과시킨 사람에게 메일이 나간다.
+//
+// 수신자별 기록은 주간-발송로그를 그대로 쓴다(issue_key = "special:<발송id>").
+// 새 탭·새 헬퍼 없이 weeklySentMap_ · weeklyLog_ 가 재사용되고, 중간에 끊겨도 이어서 보낸다.
+var SPECIAL_TAB = "스페셜-발송";
+var SPECIAL_HEADER = ["발송id", "서재id", "메일제목", "리드", "대상카테고리", "예약시각",
+                      "상태", "발송수", "실패수", "created_at", "updated_at", "message"];
+var SPECIAL_LIBRARY_TAB = "서재";
+// 상태 전이: 대기 → 발송중 → 완료 / 부분 / (운영자가) 취소
+var SPECIAL_PENDING = "대기";
+
+function specialTable_(name) { return weeklyTable_(weeklyMarketSs_(), name); }
+
+/** '스페셜-발송' 행 + 서재 항목을 묶어 발송 단위로 만든다. 못 찾으면 null. */
+function specialBundle_(row) {
+  var libId = String(row["서재id"] || "").trim();
+  if (!libId) return null;
+  var lib = specialTable_(SPECIAL_LIBRARY_TAB).rows.filter(function (r) {
+    return String(r["id"] || "").trim() === libId;
+  })[0];
+  if (!lib) return null;
+  return { row: row, lib: lib, id: String(row["발송id"] || "").trim() };
+}
+
+/** 대상 카테고리 라벨 목록 → 받을 이메일 목록.
+ *
+ * 동의 게이트는 무조건 적용한다. 카테고리는 OR — 하나라도 구독중이면 받는다.
+ * 운영자가 "이 리포트는 두 분야 모두에 해당한다"고 판단해 고른 것이므로 그 의도에 맞고,
+ * AND 로 하면 고를수록 수신자가 줄어드는 거꾸로 된 동작이 된다.
+ */
+function specialRecipients_(catLabels) {
+  var cats = CATS.filter(function (c) { return catLabels.indexOf(c.label) >= 0; });
+  if (!cats.length) cats = CATS;                       // 대상 미지정이면 전 카테고리 기준
+  syncResubscribes_();                                  // 재구독자를 먼저 되살린 뒤 상태를 읽는다
+  var maps = cats.map(function (c) { return prefMap_(c.prefSheet); });
+  var rt = tableOf_(CFG.RESP_SHEET);
+  var iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent);
+  if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "'");
+  var out = [], seen = {};
+  rt.rows.forEach(function (r) {
+    var email = String(r.cells[iE] || "").trim().toLowerCase();
+    if (!email || email.indexOf("@") < 0 || seen[email]) return;
+    seen[email] = 1;
+    if (!consented_(r.cells[iC])) return;
+    // 고른 카테고리 중 하나라도 '수신거부'가 아니면 받는다. 선호도 행이 아직 없는 사람은
+    // 해지한 적이 없다는 뜻이므로 받는 쪽이다(주간의 기본 동작과 같다).
+    var live = maps.some(function (m) { var p = m[email]; return !p || p.status !== "수신거부"; });
+    if (live) out.push(email);
+  });
+  return out;
+}
+
+function specialPlain_(lib, lead) {
+  var lines = [String(lib["제목"] || "").trim(), ""];
+  if (lead) lines.push(lead, "");
+  var body = String(lib["본문"] || "").trim();
+  if (body) lines.push(body.replace(/^#{1,6}\s*/gm, "").replace(/\*\*/g, ""), "");
+  lines.push("사이트에서 보기: " + CFG.BASE + "read.html?id=" + encodeURIComponent(String(lib["id"] || "")),
+             "", "정보 제공·투자 조언 아님.");
+  return lines.join("\n");
+}
+
+function specialHtml_(email, lib, lead) {
+  var tok = token_(email);
+  var url = CFG.BASE + "read.html?id=" + encodeURIComponent(String(lib["id"] || ""));
+  var unsub = CFG.WEBAPP_URL ? link_(tok, "unsubscribe", "", "", "수신거부")
+    : '<a href="mailto:' + CFG.OPERATOR_EMAIL + '" style="color:' + C.muted + '">수신거부</a>';
+  var leadHtml = lead
+    ? '<p style="margin:0 0 16px;font-size:14px;color:' + C.text + ';line-height:1.7">' + esc_(lead) + "</p>"
+    : "";
+  // 본문은 서재 항목에서만 관리한다 — renderBody_ 가 일일 상세 브리핑과 같은 렌더러다.
+  var body = renderBody_(String(lib["본문"] || ""));
+  return [
+    '<div style="margin:0;padding:0;background:' + C.canvas + '">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.canvas + '"><tr><td align="center" style="padding:24px 12px">',
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:' + C.surface + ';border:1px solid ' + C.border + ';border-radius:12px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:' + C.text + '">',
+    '<tr><td style="padding:20px 24px;border-bottom:1px solid ' + C.border + '">',
+      '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.primary + '">BRIEFING SIGNAL LAB · 스페셜 리포트</div>',
+      '<div style="font-size:20px;font-weight:700;margin-top:4px">' + esc_(String(lib["제목"] || "")) + "</div>",
+    "</td></tr>",
+    '<tr><td style="padding:20px 24px">', leadHtml, body,
+      '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 4px"><tr><td style="border-radius:8px;background:' + C.primary + '">',
+        '<a href="' + url + '" style="display:inline-block;padding:12px 20px;font-size:14px;font-weight:600;color:#fff;text-decoration:none">사이트에서 전체 보기 →</a>',
+      "</td></tr></table>",
+    "</td></tr>",
+    '<tr><td style="padding:16px 24px;border-top:1px solid ' + C.border + ';font-size:12px;color:' + C.muted + ';line-height:1.6">',
+      "정보 제공·투자 조언 아님. 종목·자산은 공개 출처 기반 관찰로만 명시하며 매수·매도·목표가를 권유하지 않습니다.<br>",
+      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a> &nbsp;·&nbsp; ' + unsub,
+    "</td></tr>",
+    "</table></td></tr></table></div>",
+  ].join("");
+}
+
+function specialSet_(table, row, patch) {
+  Object.keys(patch).forEach(function (k) {
+    var col = table.header.indexOf(k);
+    if (col >= 0) table.sh.getRange(row._row, col + 1).setValue(patch[k]);
+  });
+}
+
+/** 예약 시각이 지난 '대기' 행 하나를 발송한다. 반환 = 결과 요약 문자열. */
+function specialSendRow_(table, row) {
+  var bundle = specialBundle_(row);
+  if (!bundle) {
+    specialSet_(table, row, { "상태": "실패", updated_at: weeklyNow_(),
+      message: "서재 id 를 찾지 못함: " + String(row["서재id"] || "") });
+    return "서재 항목 없음";
+  }
+  // 크래시로 '발송중'에 멈추면 다음 폴링이 다시 집지 않는다 — 중복 발송보다 멈추는 쪽이 낫다.
+  // 운영자가 상태를 '대기'로 되돌리면 발송로그 덕에 받은 사람은 건너뛰고 이어서 보낸다.
+  specialSet_(table, row, { "상태": "발송중", updated_at: weeklyNow_() });
+
+  var cats = String(row["대상카테고리"] || "").split(/[,·]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  var lead = String(row["리드"] || "").trim();
+  var subject = String(row["메일제목"] || "").trim() || ("[스페셜 리포트] " + String(bundle.lib["제목"] || ""));
+  var issueKey = "special:" + bundle.id;
+  var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, issueKey, 1);
+
+  var targets = specialRecipients_(cats).filter(function (em) { return !sentMap[token_(em)]; });
+  // 주간과 같다 — 발송로그가 있으므로 부분 발송을 허용한다. 한도로 끊겨도 다음에 이어서 간다.
+  var left = MailApp.getRemainingDailyQuota();
+  if (targets.length && left < targets.length) {
+    Logger.log("[WARN] 스페셜 " + bundle.id + " 한도 부족 — 필요 " + targets.length + " · 잔여 " + left + " (부분 발송 후 이어서 진행)");
+  }
+
+  var sent = 0, failed = 0;
+  for (var i = 0; i < targets.length; i++) {
+    var email = targets[i], hash = token_(email);
+    var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
+    try {
+      sendMail_(recipient, subject, specialPlain_(bundle.lib, lead), specialHtml_(email, bundle.lib, lead));
+      sent++;
+      if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "sent", "");
+      if (CFG.TEST_MODE) break;
+    } catch (e) {
+      failed++;
+      if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "failed", weeklySafeError_(e, email));
+      Logger.log("[ERROR] special recipient_hash=" + hash + " " + weeklySafeError_(e, email));
+    }
+  }
+  var prevSent = Number(row["발송수"] || 0);
+  // 실패가 남으면 '부분'으로 두어 운영자가 보고 판단하게 한다. 자동 재시도는 하지 않는다 —
+  // 실패 원인이 한도면 같은 날 다시 시도해도 같은 결과다.
+  var state = failed ? "부분" : "완료";
+  specialSet_(table, row, {
+    "상태": state, "발송수": prevSent + sent, "실패수": Number(row["실패수"] || 0) + failed,
+    updated_at: weeklyNow_(),
+    message: "발송 " + sent + " · 실패 " + failed + " · 이미받음 " + (specialRecipients_(cats).length - targets.length),
+  });
+  return bundle.id + " " + state + " (발송 " + sent + " · 실패 " + failed + ")";
+}
+
+/** 15분 트리거 진입점. 예약 시각이 지난 '대기' 행을 순서대로 발송한다. */
+function sendSpecialDue() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) { Logger.log("[스페셜] 다른 발송 실행 중 — 생략"); return; }
+  try {
+    var table = specialTable_(SPECIAL_TAB);
+    var now = new Date().getTime();
+    var due = table.rows.filter(function (r) {
+      if (String(r["상태"] || "").trim() !== SPECIAL_PENDING) return false;
+      var t = toTime_(r["예약시각"], false);
+      return t != null && t <= now;
+    });
+    if (!due.length) return;
+    // 한 번에 하나씩만 보낸다. Apps Script 실행 시간 상한(6분)을 넘기면 통째로 죽는데,
+    // 여러 건을 몰아 보내면 어디까지 갔는지가 상태에 안 남는다. 나머지는 15분 뒤에 간다.
+    Logger.log("[스페셜] 발송 대상 " + due.length + "건 — 이번 회차 1건 처리");
+    Logger.log("[스페셜] " + specialSendRow_(table, due[0]));
+  } finally { lock.releaseLock(); }
+}
+
+/** 설치 진단 — 콘솔에서 "unauthorized" 나 연결 오류가 날 때 여기서 실행한다.
+ *
+ * 콘솔 쪽 checkAdminProps 와 짝이다. 양쪽 길이를 맞대보면 토큰이 잘렸는지 다른 값인지
+ * 바로 갈린다 — 값을 눈으로 비교하려 들면 27자짜리 난수라 절대 못 찾는다.
+ *
+ * ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 는 _ 로 끝나는 함수를 실행 드롭다운에서 숨긴다.
+ * ⚠️ 토큰 값 자체는 찍지 않는다. 실행 기록에 평문으로 남는다.
+ */
+function checkMailerProps() {
+  var token = PropertiesService.getScriptProperties().getProperty("WEEKLY_CRON_TOKEN");
+  if (token == null) {
+    Logger.log("[진단] WEEKLY_CRON_TOKEN : 없음");
+    Logger.log("  ❌ 이 값이 없으면 doPost 가 **모든** 요청을 거부합니다 — 콘솔 테스트 발송뿐 아니라");
+    Logger.log("     GitHub Actions 의 월요일 주간 발송도 실패합니다. 값을 만들어 양쪽에 같이 넣으세요.");
+  } else if (String(token).trim() === "") {
+    Logger.log("[진단] WEEKLY_CRON_TOKEN : 있으나 빈 값 — 위와 같은 결과입니다");
+  } else {
+    Logger.log("[진단] WEEKLY_CRON_TOKEN : 설정됨 (" + String(token).length + "자)"
+      + (String(token) !== String(token).trim() ? "  ⚠️ 앞뒤 공백 있음 — 복사할 때 딸려온 것" : ""));
+    Logger.log("  → 콘솔 checkAdminProps 의 MAILER_TOKEN 자릿수와 같아야 합니다. 다르면 잘렸거나 다른 값입니다.");
+  }
+
+  // CFG.WEBAPP_URL 은 손으로 유지하는 상수라 실제 배포와 어긋날 수 있다.
+  // 어긋나면 구독자 메일의 수신거부·분야변경 링크가 엉뚱한 곳으로 간다.
+  //
+  // ⚠️ 자동 비교는 불가능하다. getService().getUrl() 은 **편집기에서 부르면 /dev**(개발용)를
+  //    돌려주고 그 배포 ID 는 운영 /exec 와 애초에 다르다. 비교하면 항상 불일치로 나온다
+  //    (2026-08-16 실제로 오탐을 냈다). 형식만 보고, 실물 확인은 사람이 브라우저로 한다.
+  if (!CFG.WEBAPP_URL) {
+    Logger.log("[진단] ⚠️ CFG.WEBAPP_URL 이 비어 있습니다 — 수신거부가 mailto 폴백으로 나갑니다");
+  } else if (CFG.WEBAPP_URL.indexOf("/exec") < 0) {
+    Logger.log("[진단] ❌ CFG.WEBAPP_URL 이 /exec 가 아닙니다 — 수신거부 링크가 깨집니다: " + CFG.WEBAPP_URL);
+  } else {
+    Logger.log("[진단] CFG.WEBAPP_URL = " + CFG.WEBAPP_URL);
+    Logger.log("  → 확인법: 이 주소를 브라우저에 붙여넣어 'BRIEFING SIGNAL LAB / 잘못된 요청입니다' 가 나오면 정상입니다.");
+    Logger.log("     JSON 이나 다른 화면이 나오면 시장·방문로그 웹앱을 가리키는 것이라 수신거부가 깨집니다.");
+  }
+
+  Logger.log("[진단] CFG.TEST_MODE = " + CFG.TEST_MODE
+    + (CFG.TEST_MODE ? "  ⚠️ true 면 구독자 대신 운영자에게만 1통 갑니다" : ""));
+  Logger.log("[진단] CFG.MARKET_SHEET_ID " + (CFG.MARKET_SHEET_ID ? "설정됨" : "❌ 비어 있음 — 주간·일일·스페셜 전부 멈춥니다"));
+  Logger.log("[진단] CFG.SALT " + (CFG.SALT && CFG.SALT.indexOf("CHANGE-ME") < 0 ? "설정됨" : "⚠️ 기본값 그대로 — 수신거부 토큰이 바뀌면 기존 링크가 죽습니다"));
+
+  var names = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); }).sort();
+  Logger.log("[진단] 설치된 트리거: [" + names.join(", ") + "]");
+  if (names.indexOf("sendSpecialDue") < 0) {
+    Logger.log("  ⚠️ sendSpecialDue 트리거가 없습니다 — createSpecialTrigger() 를 1회 실행하세요(예약해도 안 나갑니다)");
+  }
+}
+
+/** 15분 폴링 트리거 생성(1회 실행). 기존 동명 트리거는 지우고 다시 만든다. */
+function createSpecialTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (tr) {
+    if (tr.getHandlerFunction() === "sendSpecialDue") ScriptApp.deleteTrigger(tr);
+  });
+  ScriptApp.newTrigger("sendSpecialDue").timeBased().everyMinutes(15).create();
+  Logger.log("스페셜 발송 폴링 트리거 생성(15분)");
+}
+
 function weeklyAlert_(label, addDays) {
   var issueKey = weeklyIsoIssue_(addDays || 0), bundle = weeklyLatestBundle_(issueKey);
   var msg = bundle ? bundle.issueKey + " 상태 " + bundle.ledgerRow.state + " · " + bundle.items.length + "건" : issueKey + " 발행 준비 원장 없음";
-  GmailApp.sendEmail(CFG.OPERATOR_EMAIL, "[BSL 주간 승인 알림] " + label, msg + "\n관리자 콘솔에서 승인/발행 예약 상태를 확인하세요.");
+  sendMail_(CFG.OPERATOR_EMAIL, "[BSL 주간 승인 알림] " + label, msg + "\n관리자 콘솔에서 승인/발행 예약 상태를 확인하세요.", "");
 }
 // addDays 는 weeklyIsoIssue_ 의 기준일 보정이다. ISO 주는 월~일이라 **일요일은 끝나는 주**에
 // 속한다 — 일요일 알림에서 0을 쓰면 지난 호를 조회한다. 그래서 일요일만 +1(월요일)로 민다.
@@ -405,6 +641,39 @@ function esc_(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
 // 한글은 BMP라 무사하고 이모지만 깨지므로, 메일에 넘기기 직전 astral 문자를 제거한다.
 // LLM이 만든 본문·제목에 이모지가 섞여 들어오는 경로가 여럿이라 발송 직전 한 곳에서 막는다.
 function mailSafe_(s) { return String(s == null ? "" : s).replace(/[\uD800-\uDFFF]/g, ""); }
+
+// ===== 발송 단일 지점 =====
+// 모든 발송이 여기 한 곳을 지난다. 이유가 둘이다.
+//  (1) mailSafe_ 를 호출부마다 기억해 붙일 필요가 없다 — 빠뜨리면 이모지가 깨진 채 나간다.
+//  (2) Gmail 이 아닌 발송 수단으로 옮길 때 고칠 자리가 여기 하나다. 지금은 GmailApp 이지만
+//      한도(개인 계정 하루 100명)가 좁아 Workspace 나 전용 발송 서비스로 옮기게 된다.
+function sendMail_(to, subject, plain, htmlBody) {
+  var options = { name: CFG.SENDER_NAME };
+  // 빈 htmlBody 를 넘기면 Gmail 이 그 빈 HTML 을 본문으로 써서 메일이 백지로 간다.
+  // 운영자 알림처럼 평문만 있는 발송이 있으므로 여기서 걸러낸다.
+  if (htmlBody) options.htmlBody = mailSafe_(htmlBody);
+  GmailApp.sendEmail(mailSafe_(to), mailSafe_(subject), mailSafe_(plain), options);
+}
+
+// ===== 일일 발송 한도 가드 =====
+// 한도는 '하루 수신자 수'이고 계정 단위로 모든 스크립트가 같은 풀을 쓴다. 개인 계정은 100명.
+// 일일 시황이 매일 전 구독자에게 나가므로 주간과 겹치는 월요일이 2N 으로 병목이다(상한 50명).
+//
+// ⚠️ 부족하면 **보내지 않고 알린다.** 절반만 나가는 쪽이 더 나쁘다 — 일일 발송은 수신자별
+//    로그가 없어 누가 받았는지 알 수 없고, 재발송하면 받은 사람이 두 번 받는다.
+//    needed 를 모를 때(0)는 통과시킨다(fail-open) — 가드가 발송을 막는 주체가 되면 안 된다.
+function mailQuotaOk_(needed, label) {
+  var left = MailApp.getRemainingDailyQuota();
+  if (!needed || left >= needed) return true;
+  Logger.log("[ERROR] " + label + " 발송 한도 부족 — 필요 " + needed + " · 잔여 " + left);
+  try {
+    sendMail_(CFG.OPERATOR_EMAIL, "[BSL] 발송 한도 부족 — " + label + " 발송 보류",
+      label + " 발송에 " + needed + "명이 필요하나 오늘 남은 한도가 " + left + "명입니다.\n\n" +
+      "절반만 나가면 누가 받았는지 알 수 없어 재발송이 불가능하므로 발송하지 않았습니다.\n" +
+      "한도는 자정(태평양 표준시 기준)에 초기화됩니다. 반복되면 Google Workspace 계정으로 옮겨야 합니다(한도 1,500명).", "");
+  } catch (e) { Logger.log("[ERROR] 한도 부족 알림도 실패: " + e); }
+  return false;
+}
 
 // ===== 일일 시황 메일 (Stage 4) =====
 // '시장' 스프레드시트(구독자 시트와 별개)의 시장-일일 탭을 openById로 읽는다.
@@ -714,20 +983,28 @@ function sendDailyMarket() {
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
   var quotes = quotes_();       // 주요 시장 지표(실패·낡음이면 null → 블록만 생략)
 
-  var sent = 0, skipped = 0, failed = 0, seen = {};
+  // 대상을 먼저 확정한다 — 한도를 보려면 몇 명인지 알아야 한다.
+  var targets = [], skipped = 0, seen = {};
   for (var i = 0; i < rt.rows.length; i++) {
     var cells = rt.rows[i].cells;
     var email = String(cells[iE] || "").trim().toLowerCase();
     if (!email || email.indexOf("@") < 0) { skipped++; continue; }
     if (seen[email]) continue; seen[email] = 1;
     if (!consented_(cells[iC]) || unsub[email]) { skipped++; continue; }
+    targets.push(email);
+  }
+  // 일일만 하드 차단이다. 주간·스페셜은 발송로그가 있어 부분 발송 후 이어서 보낼 수 있지만,
+  // 일일은 수신자별 로그가 없어 절반만 나가면 누가 받았는지 알 수 없다 — 재발송도 못 한다.
+  if (!CFG.TEST_MODE && !mailQuotaOk_(targets.length, "일일 시황")) return;
 
-    var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
+  var sent = 0, failed = 0;
+  for (var n = 0; n < targets.length; n++) {
+    var to = targets[n], recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : to;
     try {
-      GmailApp.sendEmail(recipient, subject, mailSafe_(dailyPlain_(dg, detail, quotes)), { name: CFG.SENDER_NAME, htmlBody: mailSafe_(dailyHtml_(email, dg, detail, quotes)) });
+      sendMail_(recipient, subject, dailyPlain_(dg, detail, quotes), dailyHtml_(to, dg, detail, quotes));
       sent++;
       if (CFG.TEST_MODE) break;
-    } catch (e) { failed++; Logger.log("[ERROR] " + email + " → " + e); }
+    } catch (e) { failed++; Logger.log("[ERROR] " + to + " → " + e); }
   }
   Logger.log((CFG.TEST_MODE ? "[TEST] " : "") + "[일일 " + dg.today + "] 발송 " + sent + " · 건너뜀 " + skipped + " · 실패 " + failed);
 }
@@ -921,11 +1198,39 @@ function doPost(e) {
   if (!expected || String(data.token || "") !== expected) {
     return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unauthorized" })).setMimeType(ContentService.MimeType.JSON);
   }
-  if (String(data.action || "") !== "send_weekly") {
-    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unknown_action" })).setMimeType(ContentService.MimeType.JSON);
+  var action = String(data.action || "");
+  if (action === "send_weekly") {
+    sendWeekly();
+    return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
   }
-  sendWeekly();
-  return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+  // 스페셜 리포트 미리보기. 구독자 발송은 오직 sendSpecialDue() 폴링 경로 하나이고,
+  // 이건 운영자 본인에게 1통 보내 실제 Gmail 렌더링을 눈으로 보는 용도다.
+  //
+  // ⚠️ 수신자를 요청 본문에서 받지 않는다. CFG.OPERATOR_EMAIL 로 코드에 고정돼 있어
+  //    이 경로로는 구독자에게 보낼 수 없다 — 토큰이 새더라도 남의 메일함에 닿지 않는다.
+  if (action === "send_special_test") {
+    try {
+      var result = sendSpecialTest(String(data.libId || ""), String(data.lead || ""), String(data.subject || ""));
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: String(err).slice(0, 300) })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({ ok: false, error: "unknown_action" })).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** 운영자에게만 1통. 발송로그에 남기지 않는다 — 테스트가 실제 발송을 막으면 안 된다.
+ *  이름 끝에 _ 를 붙이지 말 것: Apps Script 는 _ 로 끝나는 함수를 숨겨 실행 드롭다운에
+ *  나오지 않는다(운영자가 편집기에서 직접 돌려볼 수 있어야 한다). */
+function sendSpecialTest(libId, lead, subject) {
+  var lib = specialTable_(SPECIAL_LIBRARY_TAB).rows.filter(function (r) {
+    return String(r["id"] || "").trim() === String(libId || "").trim();
+  })[0];
+  if (!lib) throw new Error("서재 id 를 찾지 못했습니다: " + libId);
+  var to = CFG.OPERATOR_EMAIL;                       // 고정 — 인자로 받지 않는다
+  var subj = String(subject || "").trim() || ("[스페셜 리포트] " + String(lib["제목"] || ""));
+  sendMail_(to, "[테스트] " + subj, specialPlain_(lib, lead), specialHtml_(to, lib, lead));
+  return { ok: true, to: to, subject: subj };
 }
 
 // ===== 링크 처리(웹앱) — 카테고리별 선호도 시트에 반영 =====

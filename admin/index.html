@@ -94,6 +94,7 @@
     <button data-tab="visits" onclick="showTab('visits')">④ 방문 통계</button>
     <button data-tab="dash" onclick="showTab('dash')">② 대시보드 수동</button>
     <button data-tab="engine" onclick="showTab('engine')">⑤ 엔진·발송시각</button>
+    <button data-tab="special" onclick="showTab('special')">⑥ 스페셜 발송</button>
   </nav>
   <main>
     <!-- ① 주간 초안 승인 -->
@@ -220,6 +221,34 @@
         <p class="small muted" style="margin:12px 0 0">⚠️ Apps Script 시간 트리거는 <b>±15분 오차</b>가 있어 정확한 시각 지정은 불가합니다. KRX 장전 단일가(08:30) 전 도착이 목적이면 그만큼 여유를 두세요. 텔레그램 장전 요약 생성(07:00)보다 뒤여야 그날 본문이 담깁니다.</p>
       </div>
     </section>
+    <!-- ⑥ 스페셜 리포트 발송 -->
+    <section id="tab-special" class="hidden">
+      <div class="panel">
+        <h2>스페셜 리포트 발송</h2>
+        <p class="small muted" style="margin:0 0 8px">본문은 <b>③ 서재 업로드</b>에서 작성한 항목을 그대로 씁니다 — 메일에는 본문 전체가 담기고, 아래 리드 문구가 맨 위에 붙습니다. 예약한 건은 메일러가 <b>15분 주기</b>로 확인해 보내므로 실제 발송은 예약 시각보다 최대 15~30분 늦을 수 있습니다.</p>
+        <div class="row">
+          <div class="grow"><label class="f">서재 항목</label><select id="sp-lib" onchange="spPreview()"></select></div>
+          <div><label class="f">예약 시각 (KST)</label><input id="sp-when" type="datetime-local"></div>
+        </div>
+        <label class="f">메일 제목 <span class="muted" style="font-weight:400">— 비우면 “[스페셜 리포트] 제목”</span></label>
+        <input id="sp-subject" placeholder="[스페셜 리포트] 2026년 2분기 13F 정리">
+        <label class="f">리드 문구 <span class="muted" style="font-weight:400">— 메일 맨 위 한두 문장</span></label>
+        <textarea id="sp-lead" style="min-height:56px" placeholder="이번 주 13F 보고가 모두 마감됐습니다. 주요 운용사의 포지션 변화를 정리했습니다."></textarea>
+        <label class="f">대상 카테고리 <span class="muted" style="font-weight:400">— 하나라도 구독중이면 받습니다</span></label>
+        <div class="row" id="sp-cats" style="gap:var(--s-md);margin-top:2px"></div>
+        <div class="row" style="margin-top:var(--s-md)">
+          <button class="btn" onclick="spTest()">✉ 나에게 테스트 발송</button>
+          <button class="btn primary" onclick="spSchedule()">발송 예약</button>
+          <button class="btn" onclick="loadSpecial()">새로고침</button>
+          <span class="muted small" id="sp-note"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>미리보기</h2>
+        <div id="sp-preview" class="small muted">서재 항목을 선택하세요.</div>
+      </div>
+      <div class="panel"><h2>예약·발송 내역</h2><div id="sp-table"><div class="empty">불러오는 중…</div></div></div>
+    </section>
   </main>
   <div id="toast"></div>
 
@@ -239,7 +268,7 @@
   function fail(e){toast((e&&e.message)||String(e),true);}
 
   function showTab(id){
-    ['weekly','library','visits','dash','engine'].forEach(function(k){
+    ['weekly','library','visits','dash','engine','special'].forEach(function(k){
       document.getElementById('tab-'+k).classList.toggle('hidden',k!==id);
     });
     document.querySelectorAll('nav.tabs button').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-tab')===id);});
@@ -247,6 +276,7 @@
     if(id==='visits'&&!_visLoaded)loadVisits();
     if(id==='dash'&&!_dashLoaded)loadDash();
     if(id==='engine'&&!_engLoaded)loadEngine();
+    if(id==='special'&&!_spLoaded)loadSpecial();
   }
 
   // ── 파이프 토글 ──
@@ -576,6 +606,134 @@
       toast('발송 시각 → '+r.time+' (다음 날 새벽 반영)');
       document.getElementById('s-note').textContent='현재: '+r.time;
     }).catch(fail);
+  }
+
+  // ── ⑥ 스페셜 리포트 발송 ──
+  var _spLoaded=false, _sp={sends:[],library:[],categories:[]};
+  var SP_SORT_COLS=['예약시각','메일제목','대상카테고리','상태','발송수'];
+  var _spSort={key:'',dir:'asc'};   // key='' = 기본 정렬(예약시각 최신순)
+
+  function spSort(key){
+    if(SP_SORT_COLS.indexOf(key)<0)return;
+    if(_spSort.key===key){_spSort.dir=(_spSort.dir==='asc')?'desc':'asc';}
+    else{_spSort.key=key;_spSort.dir='asc';}
+    spRender();
+  }
+  function spSortReset(){_spSort={key:'',dir:'asc'};spRender();}
+  function spTh(label,key){
+    if(!key)return '<th>'+esc(label)+'</th>';
+    var on=_spSort.key===key, mark=on?(_spSort.dir==='asc'?'▲':'▼'):'⇅';
+    return '<th class="sortable'+(on?' on':'')+'" onclick="spSort(\''+key+'\')" '+
+      'title="클릭하여 정렬(다시 누르면 반대 방향)">'+esc(label)+'<i class="sort">'+mark+'</i></th>';
+  }
+
+  function loadSpecial(){_spLoaded=true;
+    document.getElementById('sp-table').innerHTML='<div class="empty">불러오는 중…</div>';
+    call('specialList').then(function(d){
+      _sp=d;
+      document.getElementById('sp-lib').innerHTML='<option value="">— 선택 —</option>'+
+        d.library.slice().reverse().map(function(r){
+          return '<option value="'+esc(r['id'])+'">'+esc(r['발행일']||'')+' · '+esc(r['제목']||'')+'</option>';
+        }).join('');
+      document.getElementById('sp-cats').innerHTML=d.categories.map(function(c){
+        return '<label class="small" style="display:inline-flex;align-items:center;gap:4px;font-weight:600">'+
+          '<input type="checkbox" class="sp-cat" value="'+esc(c)+'" style="width:auto"> '+esc(c)+'</label>';
+      }).join('');
+      spPreview();spRender();
+    }).catch(function(e){_spLoaded=false;fail(e);});
+  }
+  function spLib(){
+    var id=document.getElementById('sp-lib').value;
+    return _sp.library.filter(function(r){return String(r['id'])===id;})[0]||null;
+  }
+  function spPreview(){
+    var r=spLib(), host=document.getElementById('sp-preview');
+    if(!r){host.className='small muted';host.textContent='서재 항목을 선택하세요.';return;}
+    // 분류를 대상 카테고리 기본값으로 잡는다 — 운영자가 매번 고르지 않아도 맞는 곳에 간다.
+    var cat=String(r['분류']||'').trim();
+    [].slice.call(document.querySelectorAll('.sp-cat')).forEach(function(c){c.checked=(c.value===cat);});
+    var body=String(r['본문']||'');
+    host.className='';
+    host.innerHTML='<div class="small muted">'+esc(r['발행일']||'')+' · '+esc(r['분류']||'')+' · '+esc(r['유형']||'')+
+      ' · 본문 '+body.length+'자'+(body.length>60000?' <b style="color:var(--danger)">(Gmail 이 접을 수 있는 길이)</b>':'')+'</div>'+
+      '<div style="font-size:1rem;font-weight:650;margin:6px 0">'+esc(r['제목']||'')+'</div>'+
+      '<div class="small" style="white-space:pre-wrap;max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:var(--sm);padding:var(--s-sm)">'+
+      esc(body.slice(0,4000)||'(본문 없음 — 서재에서 본문을 채워야 메일이 비어 나갑니다)')+
+      (body.length>4000?'\n\n… 이하 생략(미리보기만 자릅니다. 메일에는 전문이 들어갑니다)':'')+'</div>';
+  }
+  function spPayload(){
+    return {
+      '서재id':document.getElementById('sp-lib').value,
+      '메일제목':val('sp-subject'),
+      '리드':(document.getElementById('sp-lead').value||'').trim(),
+      '대상카테고리':[].slice.call(document.querySelectorAll('.sp-cat:checked')).map(function(c){return c.value;}),
+      '예약시각':val('sp-when').replace('T',' ')
+    };
+  }
+  function spTest(){
+    var p=spPayload();
+    if(!p['서재id']){toast('서재 항목을 선택하세요',true);return;}
+    document.getElementById('sp-note').textContent='테스트 발송 중…';
+    call('specialTestSend',p).then(function(r){
+      document.getElementById('sp-note').textContent='테스트 발송됨 → '+r.to;
+      toast('테스트 메일을 보냈습니다 → '+r.to);
+    }).catch(function(e){document.getElementById('sp-note').textContent='';fail(e);});
+  }
+  function spSchedule(){
+    var p=spPayload();
+    if(!p['서재id']){toast('서재 항목을 선택하세요',true);return;}
+    if(!p['예약시각']){toast('예약 시각을 지정하세요',true);return;}
+    if(!p['대상카테고리'].length){toast('대상 카테고리를 하나 이상 고르세요',true);return;}
+    if(!confirm('['+p['대상카테고리'].join(', ')+'] 구독자에게 '+p['예약시각']+' 에 발송을 예약합니다.\n'+
+                '실제 발송은 15분 주기 확인이라 최대 15~30분 늦을 수 있습니다.\n\n진행할까요?'))return;
+    call('specialSchedule',p).then(function(r){
+      toast('예약됨: '+r.id+' · '+r.when);_spLoaded=false;loadSpecial();
+    }).catch(fail);
+  }
+  function spCancel(row){
+    if(!confirm('이 예약을 취소합니다. 진행할까요?'))return;
+    call('specialCancel',row).then(function(){toast('취소됨');_spLoaded=false;loadSpecial();}).catch(fail);
+  }
+  function spRequeue(row){
+    if(!confirm('다시 발송 대기로 되돌립니다. 이미 받은 사람은 발송로그로 걸러지므로 중복되지 않습니다.\n\n진행할까요?'))return;
+    call('specialRequeue',row).then(function(){toast('대기로 되돌림');_spLoaded=false;loadSpecial();}).catch(fail);
+  }
+  function spRender(){
+    var host=document.getElementById('sp-table');
+    var rows=(_sp.sends||[]).slice();
+    if(!rows.length){host.innerHTML='<div class="empty">예약된 발송이 없습니다.</div>';return;}
+    // 기본 정렬 = 예약시각 최신순. 가장 최근에 한 일이 위에 있어야 한다.
+    rows.sort(function(a,b){return String(b['예약시각']||'').localeCompare(String(a['예약시각']||''));});
+    if(_spSort.key){
+      var k=_spSort.key, sign=(_spSort.dir==='desc')?-1:1;
+      rows.sort(function(a,b){
+        var x=String(a[k]==null?'':a[k]).trim(), y=String(b[k]==null?'':b[k]).trim();
+        if(!x&&!y)return 0; if(!x)return 1; if(!y)return -1;
+        var nx=Number(x), ny=Number(y);
+        if(!isNaN(nx)&&!isNaN(ny))return (nx-ny)*sign;
+        return x.localeCompare(y,'ko')*sign;
+      });
+    }
+    var reset=_spSort.key?' <a href="#" class="small" onclick="spSortReset();return false;">기본 정렬로 되돌리기</a>':'';
+    var html='<p class="small muted" style="margin:0 0 8px">열 제목을 클릭하면 정렬됩니다. '+
+      (_spSort.key?('현재 <b>'+esc(_spSort.key)+'</b> '+(_spSort.dir==='asc'?'오름차순':'내림차순')):'현재 기본 정렬(예약시각 최신순)')+reset+'</p>';
+    html+='<table><thead><tr>'+spTh('예약시각','예약시각')+spTh('메일제목','메일제목')+
+      spTh('대상','대상카테고리')+spTh('상태','상태')+spTh('발송','발송수')+'<th>액션</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var st=String(r['상태']||'').trim();
+      var badge=st==='완료'?'<span class="badge ok">완료</span>'
+        :(st==='대기'?'<span class="badge draft">대기</span>'
+        :'<span class="badge head">'+esc(st||'-')+'</span>');
+      var action=st==='대기'
+        ? '<button class="btn danger" onclick="spCancel('+r._row+')">취소</button>'
+        : (['발송중','부분','실패'].indexOf(st)>=0
+            ? '<button class="btn" onclick="spRequeue('+r._row+')">재시도</button>' : '');
+      html+='<tr><td>'+esc(r['예약시각'])+'</td><td>'+esc(r['메일제목'])+'</td><td>'+esc(r['대상카테고리'])+'</td>'+
+        '<td>'+badge+'</td><td>'+esc(r['발송수'])+(Number(r['실패수']||0)?' <span style="color:var(--danger)">실패 '+esc(r['실패수'])+'</span>':'')+'</td>'+
+        '<td style="white-space:nowrap">'+action+'</td></tr>';
+      if(r['message'])html+='<tr><td colspan="6" class="small muted" style="padding-top:0">'+esc(r['message'])+'</td></tr>';
+    });
+    host.innerHTML=html+'</tbody></table>';
   }
 
   function val(id){return (document.getElementById(id).value||'').trim();}

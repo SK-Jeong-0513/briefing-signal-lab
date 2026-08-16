@@ -29,6 +29,51 @@ var SETTINGS_TAB = 'settings';         // key·value (없으면 자동 생성)
 
 // ───────────────────────── config / auth ─────────────────────────
 function _prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
+/** 이 프로젝트에 실제로 설정된 스크립트 속성 '이름'만. 값은 비밀이라 절대 내보내지 않는다. */
+function _propNames_() { return PropertiesService.getScriptProperties().getKeys().sort(); }
+
+/** 설치 진단 — "속성을 넣었는데 안 된다"는 상황에서 편집기에서 직접 실행한다.
+ *
+ * 속성을 엉뚱한 프로젝트에 넣었거나, 이름에 공백이 섞였거나, 저장을 안 눌렀을 때를
+ * 눈으로 구분해준다. 세 경우 모두 증상이 "설정하세요" 하나로 같아서 추측으로는 못 찾는다.
+ *
+ * ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 는 _ 로 끝나는 함수를 실행 드롭다운에서 숨긴다.
+ * ⚠️ 값은 찍지 않는다. 로그가 실행 기록에 남으므로 토큰이 평문으로 보관된다.
+ */
+function checkAdminProps() {
+  var keys = _propNames_();
+  Logger.log('[진단] 이 프로젝트에 설정된 속성 ' + keys.length + '개: [' + keys.join(', ') + ']');
+  ['MARKET_ID', 'ANALYTICS_ID', 'MAILER_URL', 'MAILER_TOKEN', 'ADMIN_EMAILS'].forEach(function (k) {
+    var v = _prop_(k);
+    var note = (v == null) ? '없음'
+      : (String(v).trim() === '' ? '있으나 빈 값'
+      : (String(v) !== String(v).trim() ? '설정됨 (⚠️ 앞뒤 공백 있음 — 값을 다시 붙여넣으세요)'
+      : '설정됨 (' + String(v).length + '자)'));
+    Logger.log('  ' + k + ' : ' + note);
+  });
+  var url = String(_prop_('MAILER_URL') || '').trim();
+  if (url && url.indexOf('/exec') < 0) {
+    Logger.log('  ⚠️ MAILER_URL 이 /exec 로 끝나지 않습니다 — 배포 관리의 웹 앱 URL 을 쓰세요(/dev 는 안 됩니다)');
+  }
+  // 어느 웹앱이 응답하는지 확인한다. 이 저장소에 /exec 가 셋(메일러·시장·방문로그) 있어
+  // 형식은 맞는데 대상이 틀린 경우가 실제로 나온다 — 형식 검사만으로는 못 잡는다.
+  if (url && url.indexOf('/exec') >= 0) {
+    try {
+      var probe = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+      var text = probe.getContentText().slice(0, 400);
+      if (/market-webapp/.test(text)) {
+        Logger.log('  ❌ MAILER_URL 이 "시장" 웹앱을 가리킵니다 — BSL_mailer 의 배포 URL 로 바꾸세요');
+      } else if (/BRIEFING SIGNAL LAB|잘못된 요청/.test(text)) {
+        Logger.log('  ✅ MAILER_URL 이 메일러 웹앱에 연결됩니다');
+      } else {
+        Logger.log('  ⚠️ 응답이 메일러 같지 않습니다(앞 120자): ' + text.slice(0, 120).replace(/\s+/g, ' '));
+      }
+    } catch (e) {
+      Logger.log('  ⚠️ MAILER_URL 연결 확인 실패: ' + e);
+    }
+  }
+  Logger.log('[진단] MAILER_URL·MAILER_TOKEN 이 "없음"이면 이 프로젝트가 아니라 메일러 쪽에 넣었을 가능성이 큽니다.');
+}
 
 function _openMarket_() {
   var id = _prop_('MARKET_ID');
@@ -250,6 +295,137 @@ function weeklyPrepareRelease(issueKey) {
   return { ok: true, unchanged: false, issueKey: issueKey, state: ledgerState, revision: revision, count: items.length };
 }
 
+
+// ───────────────────────── ⑥ 스페셜 리포트 발송 ─────────────────────────
+// 콘솔은 예약 행만 쓴다. 실제 발송은 메일러(별도 프로젝트)의 sendSpecialDue() 15분 폴링이
+// 한다 — 구독자 목록·동의 판정·수신거부·중복방지가 전부 거기 있고, 여기 복제하면 규칙이
+// 갈라져 갈라진 쪽이 통과시킨 사람에게 메일이 나간다.
+//
+// 유일한 예외가 '나에게 테스트 발송'이다. 15분을 기다려서는 렌더링을 확인할 수 없으므로
+// 메일러 doPost 를 즉시 부른다. 그 경로는 수신자를 인자로 받지 않고 운영자 주소로 고정돼
+// 있어 구독자에게 닿지 못한다.
+var SPECIAL_TAB = '스페셜-발송';
+var SPECIAL_HEADER = ['발송id', '서재id', '메일제목', '리드', '대상카테고리', '예약시각',
+                      '상태', '발송수', '실패수', 'created_at', 'updated_at', 'message'];
+var SPECIAL_CATEGORIES = ['기술', '금융', '경제'];   // mailer CATS 의 label 과 동기 유지
+
+function _specialSheet_() { return _ensureTab_(_openMarket_(), SPECIAL_TAB, SPECIAL_HEADER); }
+
+/** 예약 목록 + 드롭다운용 서재 항목(본문 포함 — 미리보기에 쓴다). */
+function specialList() {
+  _assertAuth_();
+  var ss = _openMarket_();
+  _specialSheet_();
+  return {
+    sends: _readTab_(ss, SPECIAL_TAB).rows,
+    library: _readTab_(ss, LIBRARY_TAB).rows,
+    categories: SPECIAL_CATEGORIES,
+  };
+}
+
+/** 예약 생성. payload = { 서재id, 메일제목, 리드, 대상카테고리:[], 예약시각 } */
+function specialSchedule(payload) {
+  _assertAuth_();
+  var libId = String((payload && payload['서재id']) || '').trim();
+  if (!libId) throw new Error('서재 항목을 선택하세요');
+  var lib = _readTab_(_openMarket_(), LIBRARY_TAB).rows.filter(function (r) {
+    return String(r['id'] || '').trim() === libId;
+  })[0];
+  if (!lib) throw new Error('서재 항목을 찾을 수 없습니다: ' + libId);
+
+  var when = String((payload && payload['예약시각']) || '').trim();
+  // 콘솔은 KST 로 입력받는다. 메일러의 toTime_ 이 "yyyy-MM-dd HH:mm" 을 파싱하므로 그 형식으로 쓴다.
+  if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(when)) throw new Error('예약시각 형식은 YYYY-MM-DD HH:MM 입니다');
+  var cats = (payload && payload['대상카테고리']) || [];
+  cats = (Array.isArray(cats) ? cats : [cats]).map(function (s) { return String(s).trim(); })
+    .filter(function (s) { return SPECIAL_CATEGORIES.indexOf(s) >= 0; });
+  if (!cats.length) throw new Error('대상 카테고리를 하나 이상 고르세요');
+
+  var now = _nowKst_();
+  var id = 'sp-' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd-HHmmss');
+  _appendByHeader_(_specialSheet_(), {
+    '발송id': id, '서재id': libId,
+    '메일제목': String((payload && payload['메일제목']) || '').trim() || ('[스페셜 리포트] ' + String(lib['제목'] || '')),
+    '리드': String((payload && payload['리드']) || '').trim(),
+    '대상카테고리': cats.join(','), '예약시각': when.replace('T', ' '),
+    '상태': '대기', '발송수': 0, '실패수': 0,
+    created_at: now, updated_at: now, message: '',
+  });
+  return { ok: true, id: id, when: when, categories: cats };
+}
+
+/** 예약 취소. 이미 발송된 건은 되돌릴 수 없으므로 '대기'만 취소한다. */
+function specialCancel(row) {
+  _assertAuth_();
+  var sh = _specialSheet_();
+  var state = String(sh.getRange(row, _colIndex_(sh, '상태')).getValue() || '').trim();
+  if (state !== '대기') throw new Error("'대기' 상태만 취소할 수 있습니다 (현재: " + state + ')');
+  sh.getRange(row, _colIndex_(sh, '상태')).setValue('취소');
+  sh.getRange(row, _colIndex_(sh, 'updated_at')).setValue(_nowKst_());
+  return { ok: true };
+}
+
+/** '발송중'에 멈춘 행을 '대기'로 되돌린다. 발송로그가 이미 받은 사람을 걸러내므로
+ *  다시 보내도 중복되지 않는다 — 크래시 복구용이다. */
+function specialRequeue(row) {
+  _assertAuth_();
+  var sh = _specialSheet_();
+  var state = String(sh.getRange(row, _colIndex_(sh, '상태')).getValue() || '').trim();
+  if (['발송중', '부분', '실패'].indexOf(state) < 0) {
+    throw new Error("'발송중'·'부분'·'실패' 만 재시도할 수 있습니다 (현재: " + state + ')');
+  }
+  sh.getRange(row, _colIndex_(sh, '상태')).setValue('대기');
+  sh.getRange(row, _colIndex_(sh, 'updated_at')).setValue(_nowKst_());
+  return { ok: true };
+}
+
+/** 운영자 본인에게 테스트 메일 1통. 메일러 웹앱을 부른다(발송 로직은 그쪽에만 있다).
+ *  스크립트 속성 MAILER_URL·MAILER_TOKEN 이 필요하다 — 없으면 무엇을 넣어야 하는지 알린다. */
+function specialTestSend(payload) {
+  _assertAuth_();
+  var url = (_prop_('MAILER_URL') || '').trim(), token = (_prop_('MAILER_TOKEN') || '').trim();
+  // 어느 쪽이 빠졌는지 말해준다 — "둘 다 넣으라"고만 하면 하나만 틀렸을 때 찾지 못한다.
+  var missing = [];
+  if (!url) missing.push('MAILER_URL');
+  if (!token) missing.push('MAILER_TOKEN');
+  if (missing.length) {
+    throw new Error(
+      '이 콘솔 프로젝트(BSL_admin)의 스크립트 속성 ' + missing.join(' · ') + ' 이(가) 비어 있습니다. ' +
+      '⚙ 프로젝트 설정 → 맨 아래 스크립트 속성에 추가하세요. ' +
+      '메일러 프로젝트가 아니라 이 프로젝트에 넣어야 합니다. ' +
+      '현재 이 프로젝트에 설정된 속성: [' + _propNames_().join(', ') + ']');
+  }
+  if (url.indexOf('/exec') < 0) {
+    throw new Error('MAILER_URL 이 /exec 로 끝나야 합니다(현재 값의 끝: …' + url.slice(-12) + '). ' +
+      '/dev URL 은 배포본이 아니라 편집기 전용이라 doPost 가 동작하지 않습니다.');
+  }
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true, followRedirects: true,
+    payload: JSON.stringify({
+      token: token, action: 'send_special_test',
+      libId: String((payload && payload['서재id']) || '').trim(),
+      lead: String((payload && payload['리드']) || '').trim(),
+      subject: String((payload && payload['메일제목']) || '').trim(),
+    }),
+  });
+  var body = response.getContentText();
+  var parsed = {};
+  try { parsed = JSON.parse(body); } catch (e) {
+    throw new Error('메일러 응답을 해석하지 못했습니다: ' + body.slice(0, 200));
+  }
+  if (!parsed.ok) {
+    // 이 저장소에는 /exec 웹앱이 셋(메일러·시장·방문로그) 있어 URL 을 헷갈리기 쉽다.
+    // 시장 웹앱은 tab 필드를 요구하므로 'tab not found' 로 자기를 드러낸다 — 그대로
+    // "메일러 오류"라고 옮기면 메일러를 들여다보며 시간을 버린다.
+    if (/tab not found/i.test(String(parsed.error || ''))) {
+      throw new Error('MAILER_URL 이 메일러가 아니라 "시장" 웹앱을 가리키고 있습니다. ' +
+        'BSL_mailer 프로젝트(sendWeekly·sendDailyMarket 이 있는 것)의 배포 URL 로 바꾸세요. ' +
+        '메일러 CFG.WEBAPP_URL 에 같은 URL 이 들어 있습니다(수신거부 링크가 그 주소를 씁니다).');
+    }
+    throw new Error('메일러 오류: ' + (parsed.error || body.slice(0, 200)));
+  }
+  return parsed;
+}
 
 // ───────────────────────── ③ 서재 업로드 ─────────────────────────
 function libraryList() {
