@@ -362,7 +362,9 @@ function specialPlain_(lib, lead) {
   var lines = [String(lib["제목"] || "").trim(), ""];
   if (lead) lines.push(lead, "");
   var body = String(lib["본문"] || "").trim();
-  if (body) lines.push(body.replace(/^#{1,6}\s*/gm, "").replace(/\*\*/g, ""), "");
+  // 평문에서는 표를 파이프 그대로 둔다(그 편이 읽힌다). 다만 헤더 기호·볼드·
+  // 마크다운 이스케이프는 지운다 — "\-41.44%" 의 백슬래시가 그대로 보이면 안 된다.
+  if (body) lines.push(mdUnescape_(body.replace(/^#{1,6}\s*/gm, "").replace(/\*\*/g, "")), "");
   lines.push("사이트에서 보기: " + CFG.BASE + "read.html?id=" + encodeURIComponent(String(lib["id"] || "")),
              "", "정보 제공·투자 조언 아님.");
   return lines.join("\n");
@@ -805,21 +807,85 @@ function marketBody_() {
   return out.join("\n\n");
 }
 function boldMd_(s) { return s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>"); }
-// 마크다운풍 상세 본문 → 이메일 HTML(헤더/볼드/줄바꿈).
+
+// 마크다운 이스케이프 해제. LLM 이 표 안의 증감률을 "\-41.44%" 처럼 써 보내는데,
+// 사이트는 marked 가 해제해 주지만 여기서 안 하면 백슬래시가 그대로 메일에 찍힌다.
+function mdUnescape_(s) { return String(s).replace(/\\([\\`*_{}\[\]()#+\-.!|~>])/g, "$1"); }
+
+// 셀 내용 → 이메일 HTML. 순서가 중요하다: 이스케이프 해제 → HTML 이스케이프 → 볼드.
+// 뒤집으면 <b> 태그가 다시 이스케이프되거나 사용자 입력의 <  가 태그로 샌다.
+function mdInline_(s) { return boldMd_(esc_(mdUnescape_(s))); }
+
+function mdRowCells_(line) {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|")
+    .map(function (c) { return c.trim(); });
+}
+function isMdRow_(line) { return /^\s*\|.*\|\s*$/.test(line || ""); }
+// 구분행: | :--- | ---: | 처럼 하이픈과 콜론만 있는 줄. 이게 있어야 표로 본다.
+function isMdSep_(line) { return isMdRow_(line) && /^[\s|:\-]+$/.test(line) && line.indexOf("-") >= 0; }
+
+// 구분행의 콜론 위치 → 정렬. marked 와 같은 규칙이라 사이트와 메일이 같게 보인다.
+function mdAlign_(cell) {
+  var left = cell.charAt(0) === ":", right = cell.charAt(cell.length - 1) === ":";
+  return (left && right) ? "center" : (right ? "right" : "left");
+}
+
+/** 마크다운 표 블록 → 이메일 HTML 표.
+ *
+ * 메일에서는 CSS 클래스·미디어쿼리를 못 쓰므로 전부 인라인 스타일이다.
+ * 폭은 100%로 두고 폰트를 12px 로 낮춘다 — 600px 본문에 4열까지가 한계다.
+ * 그 이상은 어차피 어느 메일 클라이언트에서도 읽기 어려워 사이트 링크가 답이다.
+ */
+function mdTable_(block) {
+  var align = mdRowCells_(block[1]).map(mdAlign_);
+  var head = mdRowCells_(block[0]).map(function (c, i) {
+    return '<td style="padding:6px 8px;border-bottom:2px solid ' + C.border +
+      ';font-size:12px;font-weight:700;color:' + C.muted + ';text-align:' + (align[i] || "left") +
+      ';white-space:nowrap">' + mdInline_(c) + "</td>";
+  }).join("");
+  var body = block.slice(2).map(function (line) {
+    return "<tr>" + mdRowCells_(line).map(function (c, i) {
+      return '<td style="padding:6px 8px;border-bottom:1px solid ' + C.border +
+        ';font-size:12px;color:' + C.text + ';text-align:' + (align[i] || "left") + '">' +
+        mdInline_(c) + "</td>";
+    }).join("") + "</tr>";
+  }).join("");
+  return '<table width="100%" cellpadding="0" cellspacing="0" ' +
+    'style="width:100%;border-collapse:collapse;margin:10px 0">' +
+    "<tr>" + head + "</tr>" + body + "</table>";
+}
+
+// 마크다운풍 상세 본문 → 이메일 HTML(헤더/볼드/표/줄바꿈).
+//
+// ⚠️ 사이트는 marked 를 쓰고 여기는 손으로 만든 미니 렌더러다. 둘을 완전히 맞추려면
+//    메일러에 마크다운 라이브러리를 들여야 하는데, 메일러는 수동 붙여넣기 배포라
+//    외부 의존을 넣지 않는다. 실제 리포트에 나오는 구성만 지원한다.
 function renderBody_(text) {
   if (!text || !text.trim()) return "";
-  var lines = text.split(/\r?\n/).map(function (raw) {
-    var line = raw.trim();
-    if (!line || line === "---") return '<div style="height:6px"></div>';
-    if (/^#{1,6}\s/.test(line)) {
-      return '<div style="font-size:13px;font-weight:700;color:' + C.text + ';margin:14px 0 4px">' +
-        boldMd_(esc_(line.replace(/^#{1,6}\s*/, ""))) + "</div>";
+  var lines = String(text).split(/\r?\n/);
+  var out = [], i = 0;
+  while (i < lines.length) {
+    // 표는 여러 줄을 한 덩어리로 먹으므로 줄 단위 map 이 아니라 while 로 훑는다.
+    if (isMdRow_(lines[i]) && i + 1 < lines.length && isMdSep_(lines[i + 1])) {
+      var block = [];
+      while (i < lines.length && isMdRow_(lines[i])) { block.push(lines[i]); i++; }
+      out.push(mdTable_(block));
+      continue;
     }
-    return '<div style="font-size:13px;color:' + C.text + ';line-height:1.6;margin:2px 0">' + boldMd_(esc_(line)) + "</div>";
-  }).join("");
+    var line = lines[i].trim();
+    i++;
+    if (!line || line === "---") { out.push('<div style="height:6px"></div>'); continue; }
+    if (/^#{1,6}\s/.test(line)) {
+      out.push('<div style="font-size:13px;font-weight:700;color:' + C.text + ';margin:14px 0 4px">' +
+        mdInline_(line.replace(/^#{1,6}\s*/, "")) + "</div>");
+      continue;
+    }
+    out.push('<div style="font-size:13px;color:' + C.text + ';line-height:1.6;margin:2px 0">' +
+      mdInline_(line) + "</div>");
+  }
   return '<div style="margin-top:8px;padding-top:16px;border-top:1px solid ' + C.border + '">' +
     '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.muted + ';padding-left:8px;margin:0 0 10px">상세 브리핑</div>' +
-    lines + "</div>";
+    out.join("") + "</div>";
 }
 // ===== 재구독 복구 =====
 // 수신거부자가 구독 폼으로 다시 신청해도 pref 상태가 '수신거부'로 남아 영구 차단되던 문제.
