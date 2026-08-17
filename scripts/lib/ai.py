@@ -137,22 +137,42 @@ def chat(system, user, max_tokens=700, temperature=0.3, exclude_engines=None, mi
 
 
 def _test():
-    # guard는 같은 폴더에 있음(scripts/lib). 실행 시 sys.path[0]=scripts/lib.
+    """엔진을 **하나씩** 친다.
+
+    ⚠️ 예전에는 chat() 을 한 번 부르고 끝냈다. 그러면 주력 엔진이 답하는 순간 통과라
+    폴백 엔진의 고장이 안 보인다 — gemini-2.0-flash 가 404 로 죽은 걸 몇 주간 못 잡은
+    이유가 이것이다(deepseek 이 먼저 답했다). 검수 게이트는 생성 엔진을 제외하므로
+    폴백만 남는 경로가 실제로 있고, 그때 고장이 드러나면 이미 한 호를 잃은 뒤다.
+    """
     try:
         import guard
     except Exception:
         guard = None
     user = ("다음 사실을 2문장으로 요약해 주세요(투자판단 표현 없이, 관찰·메커니즘 중심): "
             "삼성전자가 OFC 2026에서 실리콘 포토닉스 파운드리 진입을 발표했고 224Gbps 변조기를 시연했다.")
-    text, engine = chat(GUARD_SYSTEM, user)
-    if not text:
-        print("TEST FAIL: 두 엔진 모두 응답 없음 (키/모델/네트워크 확인)")
+    names = [e[0] for e in _engines_ordered()]
+    ok, bad = [], []
+    for name in names:
+        others = set(names) - {name}
+        text, engine = chat(GUARD_SYSTEM, user, exclude_engines=others)
+        if not text:
+            print("[%s] FAIL — 응답 없음" % name)
+            bad.append(name)
+            continue
+        # 2문장 요약에 60자 미만이면 잘린 것이다(추론형 모델이 max_tokens 를 사고에 쓰는 경우).
+        short = len(text) < 60
+        print("[%s] %s %d자%s" % (name, "SHORT" if short else "OK", len(text),
+                                  "  ← 잘렸다. 모델을 바꾸거나 max_tokens 를 올릴 것" if short else ""))
+        print("    " + " ".join(text.split())[:160])
+        if guard:
+            clean, hits = guard.screen(text)
+            if not clean:
+                print("    §6 린트 위반: %s" % hits)
+        (bad if short else ok).append(name)
+    print("--- 정상 %d/%d: %s ---" % (len(ok), len(names), ", ".join(ok) or "없음"))
+    if bad:
+        print("TEST FAIL: %s" % ", ".join(bad))
         return 1
-    print("--- 엔진:", engine, "---")
-    print(text)
-    if guard:
-        clean, hits = guard.screen(text)
-        print("--- §6 린트: clean=%s hits=%s ---" % (clean, hits))
     print("TEST OK")
     return 0
 
