@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Briefing Signal Lab — 대시보드 데이터 수집기.
-공개 API: Yahoo Finance v8 chart + 미 재무부 Fiscal Data(DTS) + 관세청 수출(키 필요, 선택).
+공개 API: Yahoo Finance v8 chart + 미 재무부 Fiscal Data(DTS) + FRED CSV + 관세청 수출(키 필요, 선택).
 출력: public/assets/data/dashboard.json  (관계 페어 오버레이용 시계열).
 stdlib만 사용(Actions에서 pip 불필요). 실패한 시계열은 건너뛰고 로그.
+
+수집 실패는 죽이지 않는다(직전 데이터 보존). 대신 **보이게** 한다 —
+main()이 성적("페어 N/M · 섹터 X/Y")을 마지막 줄에 찍고 워크플로가 그걸 커밋 메시지에 넣으며,
+dashboard.json의 coverage 필드를 화면 하단이 읽어 결손을 표시한다.
+조용한 폴백이 몇 주씩 안 보이는 사고를 2026-08-17 에 겪었다(주간 검수 엔진 404).
 """
 import json, os, sys, time, urllib.request, urllib.parse, urllib.error
 import csv, io, datetime
@@ -43,6 +48,33 @@ QUOTES = [
     ("EWY(한국·야간)",  "EWY",       2, ""),
 ]
 
+# ── FRED (세인트루이스 연준) ────────────────────────────────────────────────
+# graph/fredgraph.csv 는 **API 키 없이** 받아진다. 시리즈 선택 기준은 '신선도'다.
+# 요청받았던 M2SL·TOTRESNS 는 둘 다 월별 + 발표지연 78일이라 차트 오른쪽이 두 달 반 비었다.
+# 같은 개념의 주간 시리즈(WM2NS·WRESBAL)가 지연 43일/6일이라 그쪽을 쓴다.
+# 국채금리는 Yahoo 에 3년물 지수 심볼이 아예 없어(404) FRED 가 유일한 경로다.
+# ⚠️ 한 페어 안에서는 소스를 섞지 말 것 — 드롭다운을 바꿀 때마다 차트 끝 날짜가 달라진다.
+FRED = {
+    "wm2ns":   ("M2 통화량(주간)",   "$B", "WM2NS"),
+    "wresbal": ("은행 준비금(주간)",  "$B", "WRESBAL"),
+    "dgs2":    ("미 2년물 금리",     "%",  "DGS2"),
+    "dgs3":    ("미 3년물 금리",     "%",  "DGS3"),
+    "dgs10":   ("미 10년물 금리",    "%",  "DGS10"),
+}
+
+# 미 섹터 ETF — 페어가 아니라 **카드**로 나란히 깐다("어느 섹터가 앞서나"는 오버레이로 못 본다).
+# ⚠️ 카드는 마지막 90개만 읽는다(dashboard.js 의 spark() 가 slice(-90), pctChg 가 -22).
+#    3년치를 담으면 663개가 한 번도 안 읽히고 파일만 150KB 불어난다.
+SECTOR_KEEP = 90
+SECTORS = [
+    ("xlk",  "IT (XLK)",           "XLK"),  ("xlf",  "금융 (XLF)",         "XLF"),
+    ("xly",  "경기소비재 (XLY)",     "XLY"),  ("xlp",  "필수소비재 (XLP)",    "XLP"),
+    ("xle",  "에너지 (XLE)",        "XLE"),  ("xlv",  "헬스케어 (XLV)",      "XLV"),
+    ("xli",  "산업재 (XLI)",        "XLI"),  ("xlu",  "유틸리티 (XLU)",      "XLU"),
+    ("xlb",  "소재 (XLB)",          "XLB"),  ("xlre", "리츠 (XLRE)",        "XLRE"),
+    ("xlc",  "커뮤니케이션 (XLC)",   "XLC"),
+]
+
 # 시계열 정의: key -> (이름, 단위, Yahoo 심볼)  (TGA/바스켓은 별도 처리)
 YAHOO = {
     # 관계 페어용 매크로·시장
@@ -65,6 +97,11 @@ YAHOO = {
     "mu":   ("마이크론 (MU)",        "$",  "MU"),
     "tsm":  ("TSMC (TSM)",          "$",  "TSM"),
     "sox":  ("필라델피아 반도체지수",  "pt", "%5ESOX"),
+    # 신규 페어용
+    "ixic": ("나스닥",     "pt", "%5EIXIC"),
+    "dji":  ("다우",       "pt", "%5EDJI"),
+    "wti":  ("WTI 유가",   "$",  "CL=F"),
+    "btc":  ("비트코인",   "$",  "BTC-USD"),
 }
 # 반도체 바스켓(동일가중, 리베이스100). 개별주는 위 YAHOO에서 이미 수집됨.
 BASKET = {"삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "한미반도체": "042700.KS",
@@ -72,6 +109,8 @@ BASKET = {"삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "한미반
 # 페어5 우축 드롭다운 옵션 [series_key, 표시명] (기본=맨 앞=삼성전자)
 KRSEMI_OPTIONS = [["samsung", "삼성전자"], ["hynix", "SK하이닉스"], ["hanmi", "한미반도체"],
                   ["joosung", "주성엔지니어링"], ["leeno", "리노공업"], ["krsemi", "반도체 바스켓(동일가중)"]]
+# 매크로 페어의 우축 공통 옵션(어느 지수에 견줄지)
+INDEX_OPTIONS = [["gspc", "S&P500"], ["ixic", "나스닥"]]
 # 밸류체인 지표(자동 프록시) — 카드로 표시
 VALUECHAIN = ["soxx", "smh", "mu", "tsm", "sox"]
 # 관계 페어(좌축 ↔ 우축)
@@ -82,6 +121,18 @@ PAIRS = [
     {"id": "metal-rate",   "label": "구리 ↔ 금리",               "left": "copper", "right": "tnx"},
     {"id": "ewy-krsemi",   "label": "미 야간(EWY) ↔ 한국 반도체",  "left": "ewy",    "right": "samsung",
      "rightOptions": KRSEMI_OPTIONS},
+    # ── 2026-08-18 추가분 ──────────────────────────────────────────────
+    {"id": "m2-index",       "label": "M2 통화량 ↔ 주가지수",   "left": "wm2ns",   "right": "gspc",
+     "rightOptions": INDEX_OPTIONS},
+    {"id": "reserves-index", "label": "은행 준비금 ↔ 주가지수",  "left": "wresbal", "right": "gspc",
+     "rightOptions": INDEX_OPTIONS},
+    {"id": "gold-btc",       "label": "금 ↔ 비트코인",          "left": "gold",    "right": "btc"},
+    {"id": "wti-rates",      "label": "WTI ↔ 미 국채금리",      "left": "wti",     "right": "dgs10",
+     "rightOptions": [["dgs2", "미 2년물"], ["dgs3", "미 3년물"], ["dgs10", "미 10년물"]]},
+    {"id": "volume",         "label": "거래량 (한국 ↔ 선택)",    "left": "kvol",    "right": "uvol",
+     "rightOptions": [["uvol", "미국 거래량"], ["ks11", "KOSPI"], ["gspc", "S&P500"], ["ixic", "나스닥"]]},
+    {"id": "breadth-index",  "label": "시장폭 ↔ 미국 지수",      "left": "breadth", "right": "gspc",
+     "rightOptions": INDEX_OPTIONS + [["dji", "다우"]]},
 ]
 
 
@@ -103,6 +154,99 @@ def yahoo(symbol):
         if v is not None:
             out_t.append(int(t))
             out_v.append(round(float(v), 4))
+    return out_t, out_v
+
+
+def _range_days():
+    """RANGE("3y"/"5y"/"400d") → 일수. FRED 절단 창을 Yahoo 와 한 곳에서 맞추기 위한 것.
+    RANGE 를 늘렸는데 FRED 만 3년이면 그 페어의 왼쪽이 잘려 보인다."""
+    n, unit = RANGE[:-1], RANGE[-1]
+    try:
+        n = int(n)
+    except ValueError:
+        return 1130
+    return n * 366 if unit == "y" else (n * 31 if unit == "mo"[0] else n)
+
+
+def yahoo_volume(symbol):
+    """(ts[], vol[]) — 일별 거래량. 이미 chart 응답에 들어 있던 값을 그동안 버리고 있었다."""
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?range=%s&interval=1d" % (symbol, RANGE)
+    res = get(url)["chart"]["result"][0]
+    q = res["indicators"]["quote"][0]
+    vols = q.get("volume") or []
+    out_t, out_v = [], []
+    for t, v in zip(res["timestamp"], vols):
+        if v:                       # None 과 0(휴장) 을 함께 배제 — 0 은 평균을 왜곡한다
+            out_t.append(int(t))
+            out_v.append(float(v))
+    return out_t, out_v
+
+
+def normalized_volume(symbol, window=20):
+    """거래량 → 직전 window 일 평균 대비 배수(1.0 = 평소 수준).
+
+    왜 원본을 안 쓰나: Yahoo 의 KOSPI 거래량은 천주 단위로, 미국은 주 단위로 온다(약 1000배 차이).
+    그대로 겹치면 한국 선이 바닥에 붙는다. 게다가 주식 '수' 는 시장 간 비교가 원래 무의미하다
+    (한국은 저가주가 많아 같은 돈에 주식 수가 부풀어난다). 평소 대비 배수로 바꾸면 둘이 같은
+    축에서 읽히고, 애초에 거래량에서 보고 싶은 것도 절대량이 아니라 '평소보다 달아올랐나' 다.
+    """
+    t, v = yahoo_volume(symbol)
+    if len(v) <= window:
+        return [], []
+    out_t, out_v = [], []
+    for i in range(window, len(v)):
+        base = sum(v[i - window:i]) / window
+        if base > 0:
+            out_t.append(t[i])
+            out_v.append(round(v[i] / base, 4))
+    return out_t, out_v
+
+
+def ratio_series(num_symbol, den_symbol):
+    """두 종가의 비율(공통 거래일만). 시장폭 RSP/SPY 용.
+
+    좌축 RSP·우축 SPY 로 원본을 나란히 놓으면 이중축이 각자 자동 스케일링해서 두 선이
+    거의 포개진다 — 발산이 눈에 안 보인다. 비율 한 줄로 만들어야 갈라지는 게 드러난다.
+    """
+    tn, vn = yahoo(num_symbol)
+    td, vd = yahoo(den_symbol)
+    den = dict(zip(td, vd))
+    out_t, out_v = [], []
+    for t, v in zip(tn, vn):
+        d = den.get(t)
+        if d:
+            out_t.append(t)
+            out_v.append(round(v / d, 6))
+    return out_t, out_v
+
+
+def fred(series_id):
+    """(ts[], val[]) — FRED 공개 CSV. API 키 불필요.
+
+    결측은 '.' 으로 오므로 걸러낸다. 날짜는 UTC 자정 epoch 으로 맞춘다 —
+    dashboard.js 의 aligned() 가 UTC 일(floor(t/86400)) 단위 내부조인을 하므로
+    여기서 로컬 시간대를 쓰면 하루가 밀려 교집합이 통째로 비는 수가 있다.
+
+    ⚠️ FRED 는 **전체 역사**를 준다(DGS10 은 1962년부터 16,140행). 그대로 담으면 다섯
+    시리즈가 741KB 를 차지하는데 대부분 화면에 그려지지 않는 구간이다. Yahoo 와 같은
+    RANGE 창으로 잘라야 한다.
+    """
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=%s" % series_id
+    rows = list(csv.reader(io.StringIO(_get_text(url))))
+    cutoff = time.time() - _range_days() * 86400
+    out_t, out_v = [], []
+    for row in rows[1:]:
+        if len(row) < 2 or row[1] in (".", ""):
+            continue
+        try:
+            d = datetime.datetime.strptime(row[0].strip(), "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+            ts = int(d.timestamp())
+            if ts < cutoff:
+                continue
+            out_t.append(ts)
+            out_v.append(round(float(row[1]), 4))
+        except ValueError:
+            continue
     return out_t, out_v
 
 
@@ -270,7 +414,11 @@ def _prev_all():
 
 
 def _get_text(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    # ⚠️ Accept 를 반드시 보낼 것. FRED(fredgraph.csv)는 Accept 가 없으면 응답 대신
+    #    연결을 끊는다(WinError 10054 / read timeout). 20초쯤 매달렸다가 실패해서
+    #    네트워크 문제처럼 보이는데, 헤더 한 줄 넣으면 0.2초에 200이 온다.
+    #    2026-08-18 첫 구현에서 FRED 5개가 전부 이것 때문에 조용히 빠졌다.
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "text/csv,text/plain,*/*"})
     with urllib.request.urlopen(req, timeout=25) as r:
         return r.read().decode("utf-8", "replace")
 
@@ -449,6 +597,45 @@ def main():
             print("[WARN] TGA 데이터 없음")
     except Exception as e:
         print("[WARN] TGA 실패: %s" % e)
+    for key, (name, unit, sid) in FRED.items():
+        try:
+            t, v = fred(sid)
+            if v:
+                series[key] = {"name": name, "unit": unit, "t": t, "v": v}
+                print("%s(FRED %s): %d pts" % (key, sid, len(v)))
+            else:
+                print("[WARN] %s(FRED %s) 빈 응답" % (key, sid))
+        except Exception as e:
+            print("[WARN] %s(FRED %s) 실패: %s" % (key, sid, e))
+
+    # 섹터는 카드 전용 — 마지막 SECTOR_KEEP 개만 남긴다(위 SECTORS 주석 참고).
+    for key, name, sym in SECTORS:
+        try:
+            t, v = yahoo(sym)
+            if v:
+                series[key] = {"name": name, "unit": "$", "t": t[-SECTOR_KEEP:], "v": v[-SECTOR_KEEP:]}
+                print("%s(%s): %d pts (섹터, %d일 절단)" % (key, sym, len(v), SECTOR_KEEP))
+        except Exception as e:
+            print("[WARN] 섹터 %s(%s) 실패: %s" % (key, sym, e))
+
+    for key, name, sym in [("kvol", "한국 거래량(20일평균 대비)", "%5EKS11"),
+                           ("uvol", "미국 거래량(20일평균 대비)", "%5EGSPC")]:
+        try:
+            t, v = normalized_volume(sym)
+            if v:
+                series[key] = {"name": name, "unit": "배", "t": t, "v": v}
+                print("%s(%s): %d pts" % (key, sym, len(v)))
+        except Exception as e:
+            print("[WARN] %s(%s) 실패: %s" % (key, sym, e))
+
+    try:
+        t, v = ratio_series("RSP", "SPY")
+        if v:
+            series["breadth"] = {"name": "시장폭 (동일가중/시총가중)", "unit": "비율", "t": t, "v": v}
+            print("breadth(RSP/SPY): %d pts" % len(v))
+    except Exception as e:
+        print("[WARN] breadth(RSP/SPY) 실패: %s" % e)
+
     print("반도체 바스켓 계산...")
     bt, bv = rebase_basket(BASKET)
     if bv:
@@ -486,12 +673,19 @@ def main():
         pairs.append({"id": "export-krsemi", "label": "수출 ↔ 반도체 종목", "left": "exports", "right": "samsung",
                       "rightOptions": [o for o in KRSEMI_OPTIONS if o[0] in series]})
     valuechain = [k for k in VALUECHAIN if k in series]
+    sectors = [k for k, _, _ in SECTORS if k in series]
+    # 결손을 화면이 읽을 수 있게 실어 보낸다. fail-safe 로 직전 데이터가 남아 그림은 멀쩡한데
+    # 실제로는 낡은 값인 상태를 사람이 알 방법이 여기 말고는 없다.
+    coverage = {"pairs": len(pairs), "pairsExpected": len(PAIRS) + 1,
+                "sectors": len(sectors), "sectorsExpected": len(SECTORS)}
     out = {
         "updated": time.strftime("%Y-%m-%d"),
-        "note": "공개 출처 실데이터(Yahoo Finance · 미 재무부). 정보 제공이며 투자 조언 아님.",
+        "note": "공개 출처 실데이터(Yahoo Finance · 미 재무부 · FRED). 정보 제공이며 투자 조언 아님.",
         "series": series,
         "pairs": pairs,
         "valuechain": valuechain,
+        "sectors": sectors,
+        "coverage": coverage,
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:
@@ -506,8 +700,16 @@ def main():
 
     # 수동 카드(대시보드-수동 시트 → valuechain_manual.json). env 없으면 no-op(기존 보존).
     manual_from_sheet()
-    if len(pairs) < 3:
-        print("[WARN] 페어 %d개 - 데이터 수집 확인 필요" % len(pairs))
+
+    # 성적표. 워크플로가 이 줄을 잡아 커밋 메시지에 넣는다 —
+    # 매일 남는 커밋 제목만 훑어도 언제부터 틀어졌는지 날짜가 잡힌다.
+    # 일부러 exit 1 을 하지 않는다: 수집 실패로 배포를 막으면 멀쩡한 나머지 지표까지 낡는다.
+    live = {q["id"] for q in pairs}
+    missing = [p["id"] for p in PAIRS if p["id"] not in live]
+    if missing:
+        print("[WARN] 누락 페어: %s" % ", ".join(missing))
+    print("SCORE 페어 %d/%d · 섹터 %d/%d"
+          % (coverage["pairs"], coverage["pairsExpected"], coverage["sectors"], coverage["sectorsExpected"]))
 
 
 def run(argv=None):

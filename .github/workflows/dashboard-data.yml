@@ -23,7 +23,13 @@ jobs:
         env:
           DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
           DASH_MANUAL_CSV: ${{ secrets.DASH_MANUAL_CSV }}   # '대시보드-수동' 탭 게시 CSV(선택; 없으면 기존 valuechain_manual.json 보존)
-        run: python3 scripts/fetch_dashboard.py
+        # SCORE 줄을 잡아 커밋 메시지에 넣는다. 수집 실패는 워크플로를 죽이지 않지만(fail-safe 로
+        # 직전 데이터가 남아 사이트는 계속 뜬다) 매일 남는 커밋 제목에 성적이 찍혀 있어야
+        # 언제부터 틀어졌는지 이력만 훑어도 날짜가 잡힌다.
+        run: |
+          set -o pipefail   # tee 가 종료코드를 삼켜 스크립트 크래시가 초록불이 되는 것을 막는다.
+          python3 scripts/fetch_dashboard.py | tee /tmp/dash.log
+          echo "SCORE=$(grep -m1 '^SCORE ' /tmp/dash.log | sed 's/^SCORE //')" >> "$GITHUB_ENV"
       - name: Commit, push & deploy if changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,7 +40,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "변경 없음 — 커밋 생략"
           else
-            git commit -m "chore(data): 대시보드 지표 자동 갱신"
+            git commit -m "chore(data): 대시보드 지표 자동 갱신 (${SCORE:-성적 미상})"
             git pull --rebase origin main
             git push origin HEAD:main
             # GITHUB_TOKEN 푸시는 배포를 자동 트리거하지 않으므로 명시적으로 배포 실행

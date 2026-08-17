@@ -112,6 +112,18 @@
     hostv.innerHTML = cards.join("") || '<p class="section-sub">밸류체인 지표를 준비 중입니다.</p>';
   }
 
+  /* 미 섹터 — 카드로 나란히. "어느 섹터가 앞서나"는 2계열 오버레이로는 볼 수 없다
+     (드롭다운을 11번 갈아끼워야 한다). vcCard 를 그대로 재사용한다. */
+  function renderSectors() {
+    var host2 = document.querySelector("[data-dash-sectors]");
+    if (!host2) return;
+    var cards = (state.data.sectors || []).map(function (k) {
+      var s = state.data.series[k];
+      return (s && s.v.length) ? vcCard(s.name, s.unit, s.v, false) : "";
+    }).join("");
+    host2.innerHTML = cards || '<p class="section-sub">섹터 지표를 준비 중입니다.</p>';
+  }
+
   function setPair(id) { state.pairId = id; renderChips(); renderChart(); }
   function setRange(d) { state.rangeDays = d; renderChips(); renderChart(); }
 
@@ -120,10 +132,18 @@
     if (!json.pairs || !json.pairs.length) { host.innerHTML = '<p class="section-sub">대시보드 데이터를 준비 중입니다.</p>'; return; }
     state.pairId = json.pairs[0].id;
     var meta = document.querySelector("[data-dash-updated]");
-    if (meta) meta.textContent = "업데이트: " + json.updated + " · 출처: Yahoo Finance · 미 재무부 · 정보 제공(투자 조언 아님)";
+    // 수집이 일부 실패해도 직전 데이터가 보존되어 그림은 멀쩡해 보인다. 그 상태를 사람이
+    // 알 방법이 화면 말고 없으므로, 결손이 있을 때만 한 조각 끼운다(평소엔 아무것도 안 보임).
+    var cov = json.coverage, gap = "";
+    if (cov && (cov.pairs < cov.pairsExpected || cov.sectors < cov.sectorsExpected)) {
+      gap = " · 지표 " + cov.pairs + "/" + cov.pairsExpected + "(일부 출처 지연)";
+    }
+    if (meta) meta.textContent = "업데이트: " + json.updated + gap +
+      " · 출처: Yahoo Finance · 미 재무부 · FRED · 정보 제공(투자 조언 아님)";
     renderChips();
     renderChart();
     renderValueChain();
+    renderSectors();
     host.addEventListener("click", function (e) {
       var pc = e.target.closest("[data-pair]");
       if (pc) { setPair(pc.getAttribute("data-pair")); return; }
