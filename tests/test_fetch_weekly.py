@@ -17,6 +17,20 @@ class FetchWeeklyTests(unittest.TestCase):
     def test_sunday_targets_next_tuesday_issue(self):
         self.assertEqual(fetch_weekly.week_kst(datetime(2026, 7, 26, 6, tzinfo=timezone.utc)), "2026-W31")
 
+    def test_non_dict_cards_are_dropped_not_crashed(self):
+        """엔진이 배열에 dict 아닌 원소를 섞어 보내도 도메인이 죽으면 안 된다.
+
+        2026-08-17 gemini-3.5-flash 가 int 를 섞어 보내 draft_domain 이 AttributeError 로
+        죽었고, main() 루프가 끊겨 그 회차 수집이 통째로 중단됐다. 카드 하나를 버리는 것과
+        그 주 초안을 전부 잃는 것은 비용이 다르다.
+        """
+        cards = fetch_weekly._parse_cards('[{"제목ko": "a"}, 3, null, "x", {"제목ko": "b"}]')
+        self.assertEqual(cards, [{"제목ko": "a"}, {"제목ko": "b"}])
+
+    def test_parse_cards_rejects_non_list_payloads(self):
+        self.assertEqual(fetch_weekly._parse_cards('{"제목ko": "a"}'), [])
+        self.assertEqual(fetch_weekly._parse_cards("설명만 있고 배열이 없음"), [])
+
     def test_google_news_preserves_source_metadata(self):
         xml = "<rss><channel><item><title>HBM update</title><link>https://example.com/hbm</link><pubDate>Sun, 26 Jul 2026 00:00:00 GMT</pubDate></item></channel></rss>"
         with patch.object(fetch_weekly, "_fetch", return_value=xml):

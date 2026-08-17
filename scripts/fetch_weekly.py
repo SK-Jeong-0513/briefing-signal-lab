@@ -344,10 +344,18 @@ def _parse_cards(text):
         return []
     try:
         arr = json.loads(s[a:b + 1])
-        return arr if isinstance(arr, list) else []
     except Exception as e:
         print("[card] JSON 파싱 실패: %s" % e)
         return []
+    if not isinstance(arr, list):
+        return []
+    # 엔진이 배열 안에 dict 아닌 원소를 섞어 보내는 경우가 있다(2026-08-17 gemini-3.5-flash 에서
+    # int 관측). 호출부가 c.get() 을 바로 부르므로 그 원소 하나가 AttributeError 로 도메인을
+    # 죽이고, 도메인 하나가 죽으면 main() 루프가 끊겨 그 주 수집이 통째로 끝난다.
+    cards = [c for c in arr if isinstance(c, dict)]
+    if len(cards) != len(arr):
+        print("[card] dict 아닌 원소 %d개 제외" % (len(arr) - len(cards)))
+    return cards
 
 
 def draft_domain(domain, week, used=None):
