@@ -73,20 +73,23 @@
       </div>
     </section>
 
-    <!-- ── 설정 종목 브리핑 ── -->
+    <!-- ── 일일 시황 · 경제/금융/기술 ──
+         이 페이지의 본문이다. 종목 카드를 앞에 두면 모바일에서 일일 브리핑이 화면 몇 개
+         아래로 밀려 "카드만 있는 페이지"로 보인다(2026-08-17 제보). 순서를 바꾸되
+         band--surface 는 그대로 둬 본문이 강조된 밴드에 오게 한다. -->
     <section class="band band--surface">
-      <div class="wrap">
-        <h2 class="section-title reveal" data-i18n="marketPage.tickersHeading"></h2>
-        <div class="lib-grid" data-market-tickers style="margin-top:var(--s-lg);"></div>
-      </div>
-    </section>
-
-    <!-- ── 일일 시황 · 경제/금융/기술 ── -->
-    <section class="band">
       <div class="wrap">
         <h2 class="section-title reveal" data-i18n="marketPage.dailyHeading"></h2>
         <div class="mkt-cattabs" data-market-cattabs role="tablist" style="margin-top:var(--s-md);"></div>
         <div class="mkt-daily" data-market-daily style="margin-top:var(--s-lg);"></div>
+      </div>
+    </section>
+
+    <!-- ── 설정 종목 브리핑 ── -->
+    <section class="band">
+      <div class="wrap">
+        <h2 class="section-title reveal" data-i18n="marketPage.tickersHeading"></h2>
+        <div class="lib-grid" data-market-tickers style="margin-top:var(--s-lg);"></div>
       </div>
     </section>
 

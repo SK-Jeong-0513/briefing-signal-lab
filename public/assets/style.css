@@ -529,7 +529,23 @@ ul { margin: 0; padding: 0; list-style: none; }
   .compare { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
-  .nav { display: none; }
+  /* 모바일 헤더 2단. 예전에는 .nav 를 통째로 숨겼는데, 그러면 헤더에 브랜드·언어·구독만
+     남아 기술·경제·금융·시장 어디로도 갈 수 없었다(2026-08-17 제보). 햄버거 대신 링크 줄을
+     따로 깔았다 — 탭이 한 번 적고, 열고 닫는 상태·포커스 트랩이 필요 없다.
+     좁은 화면에서는 가로로 흐르게 두어 링크가 잘려도 접근은 가능하게 한다. */
+  .header, .header__inner { height: auto; }
+  .header__inner { flex-wrap: wrap; gap: var(--s-sm); padding-block: var(--s-sm); }
+  /* 첫 줄(브랜드+언어+구독)은 지금 보이는 그대로 둔다. 브랜드만 줄어들게 해
+     둘이 갈라져 3단이 되는 것을 막는다 — nav 만 width:100% 로 다음 줄에 떨어진다. */
+  .brand { flex: 1 1 auto; min-width: 0; }
+  .header__actions { flex: 0 0 auto; margin-left: auto; }
+  .nav {
+    order: 3; width: 100%; margin-left: 0; gap: var(--s-md);
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .nav::-webkit-scrollbar { width: 0; height: 0; }
+  .nav__link { font-size: 0.875rem; white-space: nowrap; }
+
   .grid-3, .ind-grid, .lib-grid { grid-template-columns: 1fr; }
   .points { grid-template-columns: 1fr; }
   .hero__inner { padding-block: 64px 72px; }
