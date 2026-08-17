@@ -76,7 +76,8 @@ function quota(left, needed) {
   const ctx = vm.createContext({
     console, Logger: { log() {} },
     CFG: { OPERATOR_EMAIL: 'op@x.com', SENDER_NAME: 'BSL' },
-    MailApp: { getRemainingDailyQuota: () => left },
+    // left 에 함수를 주면 그 예외까지 흉내낸다(스코프 미승인 재현).
+    MailApp: { getRemainingDailyQuota: () => (typeof left === 'function' ? left() : left) },
     GmailApp: { sendEmail: (to, subj) => sent.push({ to, subj }) },
     mailSafe_: (s) => String(s == null ? '' : s),   // 추출 블록 밖에 정의돼 있다
   });
@@ -91,6 +92,11 @@ assert.strictEqual(short.alerts.length, 1, '차단하면 운영자에게 알린�
 assert(/한도 부족/.test(short.alerts[0].subj), '알림 제목에 사유');
 // needed 를 모를 때(0)는 가드가 발송을 막는 주체가 되면 안 된다.
 assert.strictEqual(quota(0, 0).ok, true, 'needed 미상이면 통과(fail-open)');
+// 한도 조회 자체가 실패해도 마찬가지다. MailApp 은 GmailApp 과 스코프가 달라 트리거가
+// 새 스코프를 승인받기 전이면 예외가 나는데, 2026-08-17 에 그게 일일 발송을 통째로 죽였다.
+const denied = quota(() => { throw new Error('does not have permission to call MailApp'); }, 21);
+assert.strictEqual(denied.ok, true, '한도 조회가 예외를 던져도 발송은 진행(fail-open)');
+assert.strictEqual(denied.alerts.length, 0, '조회 실패는 한도 부족이 아니므로 알림도 없다');
 
 // 빈 htmlBody 를 그대로 넘기면 Gmail 이 백지 메일을 보낸다.
 const opts = [];
@@ -130,6 +136,13 @@ assert(/"special:" \+ bundle\.id/.test(sendRow), 'issue_key 는 special:<발송i
 assert(/weeklySentMap_/.test(sendRow) && /weeklyLog_/.test(sendRow), '주간 발송로그 헬퍼 재사용');
 assert(/!sentMap\[token_\(em\)\]/.test(sendRow), '이미 받은 사람은 제외');
 assert(/"상태": "발송중"/.test(sendRow), '발송 전에 상태를 잠근다');
+// 크래시가 시트에 흔적을 남겨야 한다. 안 남기면 운영자에게는 '발송중 · 0건 · message 공란'만
+// 보이고 실행 기록을 뒤져야 원인을 안다 — 2026-08-17 에 실제로 그렇게 찾았다.
+assert(/message: "중단: " \+ String\(e\)/.test(sendRow), '루프 밖 크래시 사유를 행에 기록한다');
+assert(/"상태": "실패"[^]*중단/.test(sendRow), '크래시는 실패로 두어 폴링이 다시 집지 않게 한다');
+// 한도 조회는 경고 로그 전용이므로 발송을 죽이면 안 된다.
+assert(/try \{ left = MailApp\.getRemainingDailyQuota\(\); \}\s*\n\s*catch/.test(sendRow),
+  '한도 조회 실패가 스페셜 발송을 죽이지 않는다');
 
 // ── 콘솔: 예약 입력 검증 ──────────────────────────────────────────────
 const sched = block(admin, 'function specialSchedule', 'function specialCancel', 'specialSchedule');

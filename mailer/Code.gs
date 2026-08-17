@@ -420,44 +420,62 @@ function specialSendRow_(table, row) {
   // 운영자가 상태를 '대기'로 되돌리면 발송로그 덕에 받은 사람은 건너뛰고 이어서 보낸다.
   specialSet_(table, row, { "상태": "발송중", updated_at: weeklyNow_() });
 
-  var cats = String(row["대상카테고리"] || "").split(/[,·]/).map(function (s) { return s.trim(); }).filter(Boolean);
-  var lead = String(row["리드"] || "").trim();
-  var subject = String(row["메일제목"] || "").trim() || ("[스페셜 리포트] " + String(bundle.lib["제목"] || ""));
-  var issueKey = "special:" + bundle.id;
-  var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, issueKey, 1);
+  var prevSent = Number(row["발송수"] || 0), sent = 0, failed = 0;
+  try {
+    var cats = String(row["대상카테고리"] || "").split(/[,·]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var lead = String(row["리드"] || "").trim();
+    var subject = String(row["메일제목"] || "").trim() || ("[스페셜 리포트] " + String(bundle.lib["제목"] || ""));
+    var issueKey = "special:" + bundle.id;
+    var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, issueKey, 1);
 
-  var targets = specialRecipients_(cats).filter(function (em) { return !sentMap[token_(em)]; });
-  // 주간과 같다 — 발송로그가 있으므로 부분 발송을 허용한다. 한도로 끊겨도 다음에 이어서 간다.
-  var left = MailApp.getRemainingDailyQuota();
-  if (targets.length && left < targets.length) {
-    Logger.log("[WARN] 스페셜 " + bundle.id + " 한도 부족 — 필요 " + targets.length + " · 잔여 " + left + " (부분 발송 후 이어서 진행)");
-  }
-
-  var sent = 0, failed = 0;
-  for (var i = 0; i < targets.length; i++) {
-    var email = targets[i], hash = token_(email);
-    var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
-    try {
-      sendMail_(recipient, subject, specialPlain_(bundle.lib, lead), specialHtml_(email, bundle.lib, lead));
-      sent++;
-      if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "sent", "");
-      if (CFG.TEST_MODE) break;
-    } catch (e) {
-      failed++;
-      if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "failed", weeklySafeError_(e, email));
-      Logger.log("[ERROR] special recipient_hash=" + hash + " " + weeklySafeError_(e, email));
+    var targets = specialRecipients_(cats).filter(function (em) { return !sentMap[token_(em)]; });
+    // 주간과 같다 — 발송로그가 있으므로 부분 발송을 허용한다. 한도로 끊겨도 다음에 이어서 간다.
+    //
+    // ⚠️ 한도 조회는 경고 로그 전용이다. 발송을 막지 않는다. 그런데 MailApp 은 GmailApp 과
+    //    OAuth 스코프가 달라, 트리거가 새 스코프를 승인받기 전이면 이 줄에서 통째로 죽는다
+    //    (2026-08-17 스페셜·일일이 정확히 여기서 멈췄다). 진단이 발송을 죽이면 안 된다.
+    var left = null;
+    try { left = MailApp.getRemainingDailyQuota(); }
+    catch (e) { Logger.log("[WARN] 스페셜 " + bundle.id + " 잔여 한도 조회 실패 — 경고 생략: " + e); }
+    if (targets.length && left != null && left < targets.length) {
+      Logger.log("[WARN] 스페셜 " + bundle.id + " 한도 부족 — 필요 " + targets.length + " · 잔여 " + left + " (부분 발송 후 이어서 진행)");
     }
+
+    for (var i = 0; i < targets.length; i++) {
+      var email = targets[i], hash = token_(email);
+      var recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : email;
+      try {
+        sendMail_(recipient, subject, specialPlain_(bundle.lib, lead), specialHtml_(email, bundle.lib, lead));
+        sent++;
+        if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "sent", "");
+        if (CFG.TEST_MODE) break;
+      } catch (e) {
+        failed++;
+        if (!CFG.TEST_MODE) weeklyLog_(delivery, issueKey, 1, hash, "failed", weeklySafeError_(e, email));
+        Logger.log("[ERROR] special recipient_hash=" + hash + " " + weeklySafeError_(e, email));
+      }
+    }
+    // 실패가 남으면 '부분'으로 두어 운영자가 보고 판단하게 한다. 자동 재시도는 하지 않는다 —
+    // 실패 원인이 한도면 같은 날 다시 시도해도 같은 결과다.
+    var state = failed ? "부분" : "완료";
+    specialSet_(table, row, {
+      "상태": state, "발송수": prevSent + sent, "실패수": Number(row["실패수"] || 0) + failed,
+      updated_at: weeklyNow_(),
+      message: "발송 " + sent + " · 실패 " + failed + " · 이미받음 " + (specialRecipients_(cats).length - targets.length),
+    });
+    return bundle.id + " " + state + " (발송 " + sent + " · 실패 " + failed + ")";
+  } catch (e) {
+    // 여기까지 오면 발송 루프 밖에서 죽은 것이다. 사유를 행에 남기지 않으면 운영자에게는
+    // '발송중 · 0건 · message 공란'만 보이고, 실행 기록을 뒤져야 원인을 안다
+    // (2026-08-17 에 실제로 그렇게 찾았다). 상태는 '실패'로 두어 폴링이 다시 집지 않게 한다 —
+    // 운영자가 재시도를 누르면 발송로그가 이미 받은 사람을 걸러 이어서 간다.
+    specialSet_(table, row, {
+      "상태": "실패", "발송수": prevSent + sent, "실패수": Number(row["실패수"] || 0) + failed,
+      updated_at: weeklyNow_(), message: "중단: " + String(e).slice(0, 250),
+    });
+    Logger.log("[ERROR] 스페셜 " + bundle.id + " 중단(발송 " + sent + "건까지): " + e);
+    return bundle.id + " 실패 (" + String(e).slice(0, 120) + ")";
   }
-  var prevSent = Number(row["발송수"] || 0);
-  // 실패가 남으면 '부분'으로 두어 운영자가 보고 판단하게 한다. 자동 재시도는 하지 않는다 —
-  // 실패 원인이 한도면 같은 날 다시 시도해도 같은 결과다.
-  var state = failed ? "부분" : "완료";
-  specialSet_(table, row, {
-    "상태": state, "발송수": prevSent + sent, "실패수": Number(row["실패수"] || 0) + failed,
-    updated_at: weeklyNow_(),
-    message: "발송 " + sent + " · 실패 " + failed + " · 이미받음 " + (specialRecipients_(cats).length - targets.length),
-  });
-  return bundle.id + " " + state + " (발송 " + sent + " · 실패 " + failed + ")";
 }
 
 /** 15분 트리거 진입점. 예약 시각이 지난 '대기' 행을 순서대로 발송한다. */
@@ -664,8 +682,14 @@ function sendMail_(to, subject, plain, htmlBody) {
 // ⚠️ 부족하면 **보내지 않고 알린다.** 절반만 나가는 쪽이 더 나쁘다 — 일일 발송은 수신자별
 //    로그가 없어 누가 받았는지 알 수 없고, 재발송하면 받은 사람이 두 번 받는다.
 //    needed 를 모를 때(0)는 통과시킨다(fail-open) — 가드가 발송을 막는 주체가 되면 안 된다.
+//
+// ⚠️ 한도 조회 자체가 실패해도 같은 원칙으로 통과시킨다. MailApp 은 GmailApp 과 OAuth
+//    스코프가 달라 트리거가 새 스코프를 승인받기 전이면 여기서 예외가 나는데,
+//    2026-08-17 에 그 예외가 일일 시황 발송을 통째로 죽였다(가드가 발송을 막은 셈).
 function mailQuotaOk_(needed, label) {
-  var left = MailApp.getRemainingDailyQuota();
+  var left;
+  try { left = MailApp.getRemainingDailyQuota(); }
+  catch (e) { Logger.log("[WARN] " + label + " 잔여 한도 조회 실패 — 가드 생략하고 발송 진행: " + e); return true; }
   if (!needed || left >= needed) return true;
   Logger.log("[ERROR] " + label + " 발송 한도 부족 — 필요 " + needed + " · 잔여 " + left);
   try {
