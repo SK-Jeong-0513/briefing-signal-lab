@@ -386,9 +386,18 @@ def draft_domain(domain, week, used=None):
         '"밸류체인": "관련 밸류체인/종목/자산 후보", "선행도": <1~5, 경제지보다 앞선 정도>}]\n'
         "\n헤드라인:\n%s" % (domain["label"]["ko"], hint, CARDS_PER_DOMAIN, block)
     )
+    # ⚠️ 여기엔 min_chars 를 쓸 수 없다. 정상적인 "해당 없음" 응답이 `[]` 2자라
+    #    길이로는 절단과 구분되지 않는다. 대신 배열 자체가 없는 응답을 실패로 본다.
     text, engine = ai.chat(ai.GUARD_SYSTEM, user, max_tokens=DRAFT_MAX_TOKENS)
     if not text:
         print("[skip] %s: LLM 응답 없음" % domain["id"])
+        return []
+    # 빈 배열(정상)과 생성 실패(배열이 아예 없음)를 로그에서 갈라 놓는다. 예전에는 둘 다
+    # "후보 0건" 으로 찍혀, 2026-08-18 에 gemini 가 절단된 사고 조각을 뱉는데도 그냥
+    # 그 분야에 신호가 없는 것처럼 보였다(7개 도메인이 그렇게 통째로 비었다).
+    if "[" not in text or "]" not in text:
+        print("[skip] %s: 배열 없는 응답(%s, %d자) — 생성 실패로 처리: %r"
+              % (domain["id"], engine, len(text), text[:80]))
         return []
     cards = _parse_cards(text)
     rows = []

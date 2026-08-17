@@ -93,8 +93,17 @@ def _engines_ordered():
     return _ORDER
 
 
-def chat(system, user, max_tokens=700, temperature=0.3, exclude_engines=None):
-    """엔진 순서대로 시도. exclude_engines는 생성기와 다른 검수 엔진을 강제할 때 사용한다."""
+def chat(system, user, max_tokens=700, temperature=0.3, exclude_engines=None, min_chars=0):
+    """엔진 순서대로 시도. exclude_engines는 생성기와 다른 검수 엔진을 강제할 때 사용한다.
+
+    min_chars: 이보다 짧은 응답은 실패로 보고 다음 엔진으로 넘어간다.
+
+    ⚠️ 이게 없어서 2026-08-18 에 시장 종목 카드가 통째로 오염됐다. gemini-3.5 는 추론
+    토큰을 쓰는 모델이라 max_tokens 를 사고 과정에 다 쓰고 답변은 꼬리만 22~41자 남겼다
+    ("Draft 1:", "exactly 2 sentences):" 같은 자기 초안 조각이 그대로 시트에 실렸다).
+    chat() 이 '비어 있지 않으면 성공'으로 처리해 그 쓰레기가 폴백 없이 통과했다.
+    빈 응답만 걸러서는 부족하다 — **말이 안 되게 짧은 응답도 실패다.**
+    """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     excluded = set(exclude_engines or [])
     for name, base, model, keyvar in _engines_ordered():
@@ -111,6 +120,10 @@ def chat(system, user, max_tokens=700, temperature=0.3, exclude_engines=None):
                 "max_tokens": max_tokens, "temperature": temperature,
             })
             text = (j.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            if text and len(text) < min_chars:
+                print("[ai] %s(%s) 응답 %d자 — 기대 %d자 미만(잘렸거나 사고 조각). 폴백"
+                      % (name, model, len(text), min_chars))
+                continue
             if text:
                 print("[ai] %s(%s) 응답 %d자" % (name, model, len(text)))
                 return text, name

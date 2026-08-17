@@ -107,7 +107,9 @@ def brief_one(ticker, name):
         "관찰·메커니즘 중심으로 한국어 2문장 요약과 핵심 근거 1줄을 아래 JSON 형식으로만 출력하세요.\n"
         '형식: {"요약":"...","근거":"..."}\n\n헤드라인:\n%s' % (name, ticker, headlines)
     )
-    text, engine = ai.chat(ai.GUARD_SYSTEM, user, max_tokens=400)
+    # min_chars: 한국어 2문장 요약 + 근거 + JSON 껍데기면 최소 80자는 나온다.
+    # 그보다 짧으면 잘린 것이므로 다음 엔진에 기회를 준다.
+    text, engine = ai.chat(ai.GUARD_SYSTEM, user, max_tokens=400, min_chars=80)
     if not text:
         return None
     s = text.strip()
@@ -116,9 +118,18 @@ def brief_one(ticker, name):
     try:
         obj = json.loads(s[s.find("{"): s.rfind("}") + 1])
     except Exception:
-        obj = {"요약": text.strip(), "근거": ""}
+        # ⚠️ 예전에는 여기서 원문을 그대로 요약에 넣었다(`{"요약": text.strip()}`).
+        #    그게 2026-08-18 오염의 실제 경로다 — 파싱에 실패한 쓰레기가 '요약'이라는
+        #    이름을 달고 시트에 들어가 카드에 그대로 떴다. 파싱 실패 = 생성 실패다.
+        #    버리는 편이 낫다. 카드는 종목별 최신 1건만 쓰므로 하루 빠져도 옛 카드가 남는다.
+        print("[drop] %s(%s) JSON 파싱 실패(%s, %d자): %r"
+              % (name, ticker, engine, len(text), text[:80]))
+        return None
     summary = (obj.get("요약") or "").strip()
     basis = (obj.get("근거") or "").strip()
+    if not summary:
+        print("[drop] %s(%s) 요약 비어 있음(%s)" % (name, ticker, engine))
+        return None
     clean, hits = guard.screen(summary + " " + basis)
     if not clean:
         print("[drop] %s(%s) §6 위반: %s" % (name, ticker, hits))

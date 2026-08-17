@@ -101,7 +101,11 @@ def evaluate_row(row):
         "value_chain": row.get("밸류체인"),
         "required": {"score": "0..100", "critical": "boolean", "fact_match": "boolean", "predicted_domain": "one domain id", "classification_confidence": "0..1", "reason": "short"}
     }, ensure_ascii=False)
-    text, engine = ai.chat(system, user, max_tokens=350, temperature=0, exclude_engines={generator})
+    # min_chars: 요구한 JSON 객체(score·critical·fact_match·predicted_domain·confidence·reason)는
+    # 최소 60자다. 그보다 짧으면 잘린 것이라 파싱에 실패해 independent_evaluator 로 떨어지는데,
+    # 그러면 '검수 엔진 고장'과 '내용 탈락'이 같은 사유로 뭉개진다. 짧으면 다음 엔진에 넘긴다.
+    text, engine = ai.chat(system, user, max_tokens=350, temperature=0,
+                           exclude_engines={generator}, min_chars=60)
     obj = parse_object(text)
     if not obj or not engine or engine == generator:
         return None, "independent_evaluator"

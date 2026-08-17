@@ -508,6 +508,15 @@
   }
   function mktCol(o, names) { for (var i = 0; i < names.length; i++) if (o[names[i]]) return o[names[i]]; return ""; }
 
+  /* 종목코드 정규화. 국내 코드는 6자리인데 시트가 숫자로 인식해 앞자리 0을 떨어뜨린다
+   * ("005930" → 5930). 그래서 같은 종목이 옛 행은 005930, 새 행은 5930 으로 남아
+   * 중복 제거 키가 갈리고 **7월 카드가 8월 카드와 나란히 영원히 떴다**(2026-08-18 제보).
+   * 숫자로만 된 코드만 6자리로 채운다 — 미국 티커(문자)는 그대로 둔다. */
+  function mktTicker(o) {
+    var t = String(mktCol(o, ["티커", "ticker"]) || "").trim();
+    return /^\d+$/.test(t) ? ("000000" + t).slice(-6) : t;
+  }
+
   /* 일일 시황 정렬용 시간대 순위. 시간대는 제목 접두사 "[장전] …"에 이미 들어 있어
    * 별도 컬럼을 두지 않는다. 접두사 없는 레거시 행은 0으로 그 날짜의 맨 뒤. */
   var MKT_PERIOD_RANK = { "장전": 1, "장중": 2, "마감": 3 };
@@ -572,7 +581,7 @@
     if (th) {
       var tk = marketState.tickers.filter(function (o) { return mktCol(o, ["이름", "name", "티커", "ticker"]); });
       var byT = {};  // 종목별 최신 1건만(마지막 등장=최신)
-      tk.forEach(function (o) { byT[mktCol(o, ["티커", "ticker"])] = o; });
+      tk.forEach(function (o) { byT[mktTicker(o)] = o; });
       tk = Object.keys(byT).map(function (k) { return byT[k]; }).sort(function (a, b) {
         return (mktCol(b, ["날짜", "date"]) || "").localeCompare(mktCol(a, ["날짜", "date"]) || "");
       });
@@ -582,7 +591,7 @@
         var srcLink = src ? '<a class="lib__more" href="' + src + '" target="_blank" rel="noopener">' + t(M.source) + " →</a>" : "";
         var basis = mktCol(o, ["근거"]);
         return '<div class="lib-card">' +
-          '<div class="lib-card__top"><span class="lib-card__cat">' + mktCol(o, ["티커", "ticker"]) + '</span><span class="lib-card__date">' + mktCol(o, ["날짜", "date"]) + "</span></div>" +
+          '<div class="lib-card__top"><span class="lib-card__cat">' + mktTicker(o) + '</span><span class="lib-card__date">' + mktCol(o, ["날짜", "date"]) + "</span></div>" +
           '<h3 class="lib-card__title">' + mktCol(o, ["이름", "name"]) + "</h3>" +
           '<p class="lib-card__abstract">' + mktCol(o, ["요약", "summary"]) + "</p>" +
           (basis ? '<p class="section-sub">' + basis + "</p>" : "") +

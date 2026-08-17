@@ -23,6 +23,9 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DATA_GO_DEEPSEEK }}
           GEMINI_API_KEY: ${{ secrets.DATA_GO_GEMINI }}
+          # 모델 id 는 EOS 한다(2026-08-17 gemini-2.0-flash 404). 코드 수정 없이 바꾸려고 env 로 뺀다.
+          # ⚠️ 추론형 모델은 max_tokens 를 사고에 써버려 답변이 잘린다 — 바꾼 뒤 응답 길이를 반드시 확인할 것.
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
           # BSL_market 웹앱 재사용: '주간-초안' 탭이 BSL_market에 있어야 함(웹앱이 헤더로 매핑).
           # 없으면 dry-run. 별도 시트로 분리 시 이 두 줄을 WEEKLY_* 시크릿으로 교체.
           WEEKLY_WEBAPP_URL: ${{ secrets.MARKET_WEBAPP_URL }}
