@@ -22,9 +22,15 @@ import urllib.request
 import urllib.error
 
 # (이름, base_url, 기본 모델, 키 환경변수)
+#
+# ⚠️ 모델 id 는 EOS(퇴역)한다. 2026-08-17 에 gemini-2.0-flash 가 404
+# ("no longer available")로 죽어 2026-W34 주간 검수 121건 중 80건이 통과하지 못했다
+# — 생성엔진을 제외하는 독립 검수 규칙 때문에 gemini 가 유일 후보였던 행들이다.
+# 엔진이 죽어도 chat() 은 다음 엔진으로 폴백해 조용히 넘어가므로 겉으로 드러나지 않는다.
+# 교체 시 Gemini API v1beta/models 응답에서 generateContent 지원 목록을 확인할 것.
 ENGINES = [
     ("deepseek", "https://api.deepseek.com", os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"), "DEEPSEEK_API_KEY"),
-    ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai", os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"), "GEMINI_API_KEY"),
+    ("gemini", "https://generativelanguage.googleapis.com/v1beta/openai", os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"), "GEMINI_API_KEY"),
 ]
 
 # §6 무인 가드레일 시스템 프롬프트(모든 시장/종목 생성에 공용).
