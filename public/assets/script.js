@@ -222,9 +222,11 @@
           disc +
           '<div class="card__meta">' + tags + "</div>" +
           '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
+          // 자물쇠 배지였다(2026-08-18 교체). 전부 무료로 바뀌었는데 카드마다 잠금 아이콘이
+          // 붙어 있으면 정반대 신호를 준다 — 메일 아이콘 + 구독 안내로 바꿨다.
           '<div class="card__locked">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' +
-            t(s.lockedLabel) + "</div>" +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>' +
+            t(s.deliveryLabel) + "</div>" +
         "</article>"
       );
     }).join("");
@@ -235,28 +237,26 @@
     var host = document.getElementById("compare");
     if (!host) return;
     var c = UI.compare;
-    function plan(kind) {
-      var paid = kind === "paid";
-      var rows = c.rows.map(function (r) {
-        var on = paid ? r.paid : r.free;
-        return '<div class="plan__row' + (on ? "" : " plan__row--off") + '">' + markSvg(on) + "<span>" + t(r.label) + "</span></div>";
-      }).join("");
-      // 링크가 비어 있으면 CTA 자체를 그리지 않는다(applyLinks의 data-link 버튼과 같은 규칙).
-      var url = LINKS[paid ? "paidForm" : "freeForm"];
-      var cta = url
-        ? '<a class="btn ' + (paid ? "btn--primary" : "btn--ghost") + '" href="' + url +
-          '" target="_blank" rel="noopener">' + t(paid ? c.paidCta : c.freeCta) + "</a>"
-        : "";
-      return (
-        '<div class="plan' + (paid ? " plan--paid" : "") + '">' +
-          '<div class="plan__name">' + t(paid ? c.paidTitle : c.freeTitle) + "</div>" +
-          '<div class="plan__price">' + t(paid ? c.paidPrice : c.freePrice) + "</div>" +
-          '<div class="plan__list">' + rows + "</div>" +
-          cta +
-        "</div>"
-      );
-    }
-    host.innerHTML = plan("free") + plan("paid");
+    /* 무료/유료 2열 비교였다가 무료 단일 카드로 바꿨다(2026-08-18).
+       지금은 일일·주간·스페셜이 전부 무료 구독자에게 나가므로 옛 표는 사실과 달랐고
+       (이메일 발송이 유료 전용으로 적혀 있었다), 잠긴 항목을 나열하는 것보다
+       받는 것을 전부 체크해 보여주는 편이 구독 전환에 낫다.
+       유료 계획은 감추지 않고 목록 아래 note 한 줄로 남긴다. */
+    var rows = c.rows.map(function (r) {
+      return '<div class="plan__row">' + markSvg(true) + "<span>" + t(r.label) + "</span></div>";
+    }).join("");
+    var url = LINKS.freeForm;
+    var cta = url
+      ? '<a class="btn btn--primary" href="' + url + '" target="_blank" rel="noopener">' + t(c.freeCta) + "</a>"
+      : "";
+    host.innerHTML =
+      '<div class="plan plan--solo">' +
+        '<div class="plan__name">' + t(c.freeTitle) + "</div>" +
+        '<div class="plan__price">' + t(c.freePrice) + "</div>" +
+        '<div class="plan__list">' + rows + "</div>" +
+        cta +
+      "</div>" +
+      (c.note ? '<p class="plan__note">' + t(c.note) + "</p>" : "");
   }
 
   /* ── 서재(Library): manifest 기반 목록 ─────────────────── */

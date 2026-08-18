@@ -29,10 +29,29 @@ const apply = script.slice(script.indexOf('function applyLinks()'),
 assert(apply.includes('el.hidden = !url'), '링크가 비면 버튼을 감춘다');
 assert(apply.includes('removeAttribute("href")'), '감춘 버튼은 href를 떼어 탭 이동에서 빠진다');
 
-// 요금제 비교 카드는 innerHTML로 그리므로 CTA 자체를 안 그려야 한다
+// 멤버십 카드는 innerHTML로 그리므로 CTA 자체를 안 그려야 한다
 const cmp = script.slice(script.indexOf('function renderCompare()'),
-                         script.indexOf('function renderCompare()') + 1400);
-assert(/var url = LINKS\[paid \? "paidForm" : "freeForm"\]/.test(cmp), '비교 카드도 같은 규칙을 쓴다');
+                         script.indexOf('function renderCompare()') + 1800);
+assert(/url\s*\?/.test(cmp),
+  '멤버십 카드도 같은 규칙을 쓴다 — 링크가 비면 CTA 문자열 자체를 만들지 않는다');
+
+// ── 2026-08-18: 랜딩에서 유료 열을 걷어냈다 ─────────────────────────────
+// 지금은 일일·주간·스페셜이 전부 무료 구독자에게 나간다. 옛 비교표는 '이메일 발송'을
+// 유료 전용으로 적고 있어 사실과 달랐고, 잠긴 항목을 나열하는 것이 구독 전환을 막았다.
+// 유료 계획 자체는 감추지 않는다 — 목록 아래 note 한 줄로 남긴다.
+assert(!/plan\("paid"\)/.test(script), '랜딩 멤버십에 유료 열을 다시 그리지 않는다');
+assert(/UI\.compare/.test(script) && /c\.note/.test(script), '유료 전환 예고(note)를 화면에 남긴다');
+// ⚠️ 끝 앵커는 반드시 시작점 뒤에서 찾을 것. 파일 앞쪽에 같은 문자열이 또 있어
+//    indexOf 를 그냥 쓰면 블록이 빈 문자열이 되고 아래 검사가 전부 헛돈다.
+const cmpStart = site.indexOf('  compare: {');
+const cmpBlock = site.slice(cmpStart, site.indexOf('  dashboard: {', cmpStart));
+assert(!/paid:/.test(cmpBlock), 'compare.rows 에 paid 플래그가 남으면 안 된다');
+assert(/note:/.test(cmpBlock), 'compare.note 가 있어야 유료 전환 계획이 화면에 노출된다');
+assert(cmpBlock.split('free: true').length - 1 >= 5, '무료로 받는 항목을 충분히 나열한다');
+
+// 자물쇠 배지는 '전부 무료' 와 정반대 신호라 걷어냈다.
+assert(!/lockedLabel/.test(site) && !/lockedLabel/.test(script), '자물쇠 라벨이 남아 있으면 안 된다');
+assert(/deliveryLabel/.test(site) && /deliveryLabel/.test(script), '대신 구독 안내 라벨을 쓴다');
 assert(/\?[\s\S]*'<a class="btn/.test(cmp) && cmp.includes(': "";'), '링크가 비면 CTA를 그리지 않는다');
 assert(!/href="' \+\s*\(LINKS\[[^\]]+\] \|\| "#"\)/.test(cmp), '빈 링크를 "#"로 대체하면 죽은 버튼이 남는다');
 

@@ -182,6 +182,13 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ── 비교표 ────────────────────────────────────────────── */
 .compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-lg); margin-top: var(--s-xl); }
+/* 무료 단일 카드(2026-08-18). 2열 비교를 없앤 뒤 카드가 화면 폭 전체로 늘어지지 않게
+   한 칸으로 두고 가운데 정렬한다. 새 값은 만들지 않고 기존 토큰만 쓴다. */
+.compare:has(.plan--solo) { grid-template-columns: minmax(0, 520px); justify-content: center; }
+.plan__note {
+  grid-column: 1 / -1; margin: var(--s-lg) 0 0; text-align: center;
+  font-size: 0.875rem; color: var(--muted); line-height: 1.6;
+}
 .plan {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: var(--s-lg); box-shadow: var(--e-raised); display: flex; flex-direction: column;

@@ -26,8 +26,8 @@ const UI = {
       en: "Scattered tech, finance & economy signals —<br>into one daily briefing.",
     },
     sub: {
-      ko: "뉴스와 지표를 매일 선별해 읽기 쉬운 브리핑으로 압축합니다. 무료 구독자는 샘플을, 유료 구독자는 전체 브리핑과 아카이브를 받습니다.",
-      en: "We curate news and indicators into a briefing you can read in minutes. Free members get samples; paid members get the full briefing and archive.",
+      ko: "뉴스와 지표를 매일 선별해 읽기 쉬운 브리핑으로 압축합니다. 무료 구독을 신청하면 일일 브리핑, 시황 브리핑, 주간 브리핑, 스페셜 보고서를 받을 수 있습니다.",
+      en: "We curate news and indicators into a briefing you can read in minutes. A free subscription gets you the daily briefing, market briefing, weekly briefing, and special reports.",
     },
     ctaPrimary: { ko: "무료로 구독하기", en: "Subscribe free" },
     ctaSecondary: { ko: "샘플 브리핑 보기", en: "See sample briefings" },
@@ -50,32 +50,36 @@ const UI = {
     heading: { ko: "TODAY'S SIGNALS", en: "TODAY'S SIGNALS" },
     title: { ko: "오늘의 샘플 브리핑", en: "Today's sample briefings" },
     sub: {
-      ko: "무료 구독자가 받는 축약 버전입니다. 전체 브리핑·근거 링크·과거 아카이브는 유료 구독자에게 제공됩니다.",
-      en: "This is the free short version. Full briefings, source links, and the archive are for paid members.",
+      ko: "매일 발행하는 브리핑에서 고른 오늘의 샘플입니다. 전체 브리핑과 근거 링크는 무료 구독 메일로 받아보실 수 있습니다.",
+      en: "A sample from today's briefings. The full briefing and source links arrive in your free subscription email.",
     },
     sampleBadge: { ko: "샘플", en: "SAMPLE" },
-    lockedLabel: { ko: "전체 브리핑은 유료 구독", en: "Full briefing — paid" },
+    deliveryLabel: { ko: "전체 브리핑은 무료 구독 메일로", en: "Full briefing arrives by free email" },
     sourcesLabel: { ko: "출처", en: "Sources" },
     techMore: { ko: "기술 브리핑 전체 보기 →", en: "See all tech briefings →" },
   },
   compare: {
     heading: { ko: "MEMBERSHIP", en: "MEMBERSHIP" },
-    title: { ko: "무료로 확인하고, 유료로 전부 받으세요", en: "Try it free, get everything on paid" },
-    freeTitle: { ko: "무료 구독", en: "Free" },
+    title: { ko: "지금은 전부 무료입니다", en: "Everything is free right now" },
+    freeTitle: { ko: "무료 구독", en: "Free subscription" },
     freePrice: { ko: "₩0 · 기간 제한 없음", en: "₩0 · no time limit" },
-    paidTitle: { ko: "유료 구독", en: "Paid" },
-    paidPrice: { ko: "가격 추후 공개 · 현재 대기자 등록", en: "Pricing soon · join waitlist" },
+    // 무료 구독자가 실제로 받는 것만 적는다. 잠긴 항목을 나열하는 비교표보다
+    // 전부 체크된 목록이 가치 제시가 강하다(전환 목적).
     rows: [
-      { label: { ko: "오늘의 샘플 브리핑", en: "Daily sample briefing" }, free: true, paid: true },
-      { label: { ko: "핵심 요약 3줄", en: "3-line key summary" }, free: true, paid: true },
-      { label: { ko: "전체 브리핑(기술·금융·경제)", en: "Full briefing (all categories)" }, free: false, paid: true },
-      { label: { ko: "근거 링크·상세 해석", en: "Source links & analysis" }, free: false, paid: true },
-      { label: { ko: "경제지표 대시보드 전체", en: "Full indicator dashboard" }, free: false, paid: true },
-      { label: { ko: "브리핑 아카이브 검색", en: "Searchable briefing archive" }, free: false, paid: true },
-      { label: { ko: "이메일 발송", en: "Email delivery" }, free: false, paid: true },
+      { label: { ko: "일일 시황 브리핑 (매일 아침 메일)", en: "Daily market briefing (every morning)" }, free: true },
+      { label: { ko: "주간 브리핑 — 기술·금융·경제 (월요일 메일)", en: "Weekly briefing — tech, finance, economy (Mondays)" }, free: true },
+      { label: { ko: "스페셜 리포트 (심층 분석, 비정기)", en: "Special reports (in-depth, occasional)" }, free: true },
+      { label: { ko: "지표 대시보드 — 관계 오버레이·섹터", en: "Indicator dashboard — overlays & sectors" }, free: true },
+      { label: { ko: "서재 — 리포트·노트 전문", en: "Library — full reports and notes" }, free: true },
+      { label: { ko: "경제 캘린더", en: "Economic calendar" }, free: true },
+      { label: { ko: "근거·출처 링크", en: "Source links" }, free: true },
     ],
     freeCta: { ko: "무료로 구독하기", en: "Subscribe free" },
-    paidCta: { ko: "유료 대기자 등록", en: "Join paid waitlist" },
+    // 유료 계획을 감추지 않는다. 다만 지금 장벽으로 읽히지 않게 아래 한 줄로만 둔다.
+    note: {
+      ko: "서비스를 다듬는 동안 모든 브리핑을 무료로 제공합니다. 약 1년간 운영하며 개선한 뒤 유료 전환을 검토할 예정이며, 그때는 미리 안내드립니다.",
+      en: "Everything stays free while we refine the service. After about a year of operation and improvement we may introduce a paid tier — with notice well in advance.",
+    },
   },
   dashboard: {
     heading: { ko: "INDICATOR DASHBOARD", en: "INDICATOR DASHBOARD" },
@@ -160,8 +164,8 @@ const UI = {
   cta: {
     title: { ko: "매일 아침, 신호를 놓치지 마세요", en: "Don't miss the morning signal" },
     sub: {
-      ko: "무료 구독은 샘플 브리핑을 매일 받습니다. 유료 전체 브리핑은 현재 대기자 등록으로 수요를 확인하고 있습니다.",
-      en: "Free members get sample briefings daily. The full paid briefing is currently in waitlist validation.",
+      ko: "일일 시황·주간 브리핑·스페셜 리포트를 무료로 받아보세요. 언제든 메일 하단 링크로 해지할 수 있습니다.",
+      en: "Get the daily market, weekly briefing, and special reports — free. Unsubscribe anytime from the link in each email.",
     },
     freeCta: { ko: "무료로 구독하기", en: "Subscribe free" },
     emailPlaceholder: { ko: "이메일 주소", en: "Email address" },
