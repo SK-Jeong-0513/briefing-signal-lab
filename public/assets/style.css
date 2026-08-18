@@ -182,18 +182,29 @@ ul { margin: 0; padding: 0; list-style: none; }
 
 /* ── 비교표 ────────────────────────────────────────────── */
 .compare { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-lg); margin-top: var(--s-xl); }
-/* 무료 단일 카드(2026-08-18). 2열 비교를 없앤 뒤 카드가 화면 폭 전체로 늘어지지 않게
-   한 칸으로 두고 가운데 정렬한다. 새 값은 만들지 않고 기존 토큰만 쓴다. */
-.compare:has(.plan--solo) { grid-template-columns: minmax(0, 520px); justify-content: center; }
-.plan__note {
-  grid-column: 1 / -1; margin: var(--s-lg) 0 0; text-align: center;
-  font-size: 0.875rem; color: var(--muted); line-height: 1.6;
+/* 유료 카드는 로드맵 표시용이라 그레이로 가라앉힌다(2026-08-18).
+   무료 카드가 시각적으로 이기게 두는 것이 목적이다 — 강조(primary 테두리·그림자)는
+   .plan--paid 시절 유료 쪽에 있었는데, 지금은 실제로 쓸 수 있는 쪽이 무료다.
+   새 색은 만들지 않고 canvas·muted·border 토큰만 쓴다. */
+.plan--soon {
+  background: var(--canvas); border-style: dashed; box-shadow: none; color: var(--muted);
 }
+.plan--soon .plan__name { color: var(--muted); }
+.plan__badge {
+  margin-left: var(--s-sm); font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.04em; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 999px; vertical-align: middle;
+}
+.plan__body { margin: var(--s-lg) 0; font-size: 0.9375rem; line-height: 1.6; color: var(--muted); }
+/* 링크가 아니라 span 이다 — 갈 곳이 없을 때 이동 가능해 보이면 안 된다. */
+.plan__cta--soon { margin-top: auto; justify-content: center; color: var(--muted); cursor: default; }
+.plan__cta--soon:hover { border-color: var(--border); color: var(--muted); background: transparent; }
+
 .plan {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
   padding: var(--s-lg); box-shadow: var(--e-raised); display: flex; flex-direction: column;
 }
-.plan--paid { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary), var(--e-raised); }
 .plan__name { font-size: 1.125rem; font-weight: 700; }
 .plan__price { color: var(--muted); font-size: 0.9375rem; margin-top: 4px; }
 .plan__list { margin: var(--s-lg) 0; display: flex; flex-direction: column; gap: 10px; }

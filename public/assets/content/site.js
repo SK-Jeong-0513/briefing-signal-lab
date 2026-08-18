@@ -75,11 +75,17 @@ const UI = {
       { label: { ko: "근거·출처 링크", en: "Source links" }, free: true },
     ],
     freeCta: { ko: "무료로 구독하기", en: "Subscribe free" },
-    // 유료 계획을 감추지 않는다. 다만 지금 장벽으로 읽히지 않게 아래 한 줄로만 둔다.
-    note: {
-      ko: "서비스를 다듬는 동안 모든 브리핑을 무료로 제공합니다. 약 1년간 운영하며 개선한 뒤 유료 전환을 검토할 예정이며, 그때는 미리 안내드립니다.",
+    // 유료 카드는 로드맵 표시용이라 그레이로 둔다.
+    // ⚠️ 유료 전용 기능 목록을 적지 않는다 — 아직 정해지지 않았고, 지어내면 없는 사실을
+    //    적는 것이며, 지금 무료로 주는 항목을 유료 칸에 옮겨 적으면 왼쪽 카드와 모순된다.
+    paidTitle: { ko: "유료 구독", en: "Paid subscription" },
+    paidBadge: { ko: "향후 진행", en: "Coming later" },
+    paidPrice: { ko: "도입 시기·가격 추후 안내", en: "Timing and pricing to be announced" },
+    paidBody: {
+      ko: "서비스를 다듬는 동안 모든 브리핑을 무료로 제공합니다. 약 1년간 운영하며 개선한 뒤 유료 구독 도입을 검토할 예정이며, 도입하게 되면 미리 안내드립니다.",
       en: "Everything stays free while we refine the service. After about a year of operation and improvement we may introduce a paid tier — with notice well in advance.",
     },
+    paidCta: { ko: "준비 중", en: "Coming later" },
   },
   dashboard: {
     heading: { ko: "INDICATOR DASHBOARD", en: "INDICATOR DASHBOARD" },

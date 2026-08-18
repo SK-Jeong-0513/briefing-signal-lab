@@ -29,25 +29,37 @@ const apply = script.slice(script.indexOf('function applyLinks()'),
 assert(apply.includes('el.hidden = !url'), '링크가 비면 버튼을 감춘다');
 assert(apply.includes('removeAttribute("href")'), '감춘 버튼은 href를 떼어 탭 이동에서 빠진다');
 
-// 멤버십 카드는 innerHTML로 그리므로 CTA 자체를 안 그려야 한다
+// 멤버십 카드는 innerHTML로 그리므로 링크가 비면 CTA 자체를 안 그린다(무료 쪽).
+// 유료 쪽은 아래에서 따로 본다 — 비어 있어도 '준비 중' 표시는 남기되 이동은 불가해야 한다.
 const cmp = script.slice(script.indexOf('function renderCompare()'),
-                         script.indexOf('function renderCompare()') + 1800);
-assert(/url\s*\?/.test(cmp),
-  '멤버십 카드도 같은 규칙을 쓴다 — 링크가 비면 CTA 문자열 자체를 만들지 않는다');
+                         script.indexOf('function renderCompare()') + 2600);
+assert(cmp.includes('LINKS.freeForm'), '무료 CTA 는 LINKS.freeForm 을 본다');
+assert(cmp.includes('freeCta = LINKS.freeForm'), '무료 CTA 는 링크가 있을 때만 그린다');
 
-// ── 2026-08-18: 랜딩에서 유료 열을 걷어냈다 ─────────────────────────────
-// 지금은 일일·주간·스페셜이 전부 무료 구독자에게 나간다. 옛 비교표는 '이메일 발송'을
-// 유료 전용으로 적고 있어 사실과 달랐고, 잠긴 항목을 나열하는 것이 구독 전환을 막았다.
-// 유료 계획 자체는 감추지 않는다 — 목록 아래 note 한 줄로 남긴다.
-assert(!/plan\("paid"\)/.test(script), '랜딩 멤버십에 유료 열을 다시 그리지 않는다');
-assert(/UI\.compare/.test(script) && /c\.note/.test(script), '유료 전환 예고(note)를 화면에 남긴다');
-// ⚠️ 끝 앵커는 반드시 시작점 뒤에서 찾을 것. 파일 앞쪽에 같은 문자열이 또 있어
-//    indexOf 를 그냥 쓰면 블록이 빈 문자열이 되고 아래 검사가 전부 헛돈다.
+// ── 2026-08-18: 무료는 받는 것 전부, 유료는 그레이 로드맵 카드 ──────────
+// 옛 비교표는 잠긴 항목을 나열했고 '이메일 발송'을 유료 전용으로 적어 사실과도 달랐다
+// (지금은 일일·주간·스페셜이 전부 무료 구독자에게 나간다).
+// ⚠️ 끝 앵커는 시작점 뒤에서 찾을 것. 파일 앞쪽에 같은 문자열이 또 있어 그냥 indexOf 를
+//    쓰면 블록이 빈 문자열이 되고 아래 검사가 전부 헛돈다.
 const cmpStart = site.indexOf('  compare: {');
 const cmpBlock = site.slice(cmpStart, site.indexOf('  dashboard: {', cmpStart));
-assert(!/paid:/.test(cmpBlock), 'compare.rows 에 paid 플래그가 남으면 안 된다');
-assert(/note:/.test(cmpBlock), 'compare.note 가 있어야 유료 전환 계획이 화면에 노출된다');
+assert(!/paid:\s*(true|false)/.test(cmpBlock), 'rows 에 paid 플래그가 남으면 안 된다 — 무료 목록이다');
 assert(cmpBlock.split('free: true').length - 1 >= 5, '무료로 받는 항목을 충분히 나열한다');
+
+// 유료 카드는 로드맵 표시다. 기능 목록을 지어내지 않는다 —
+// 아직 정해지지 않았고, 무료 항목을 유료 칸에 옮겨 적으면 왼쪽 카드와 모순된다.
+assert(/paidBadge:/.test(cmpBlock) && /paidBody:/.test(cmpBlock), '유료 카드는 배지+안내문으로 둔다');
+assert(/plan--soon/.test(script) && /plan--soon/.test(css), '유료 카드는 그레이(.plan--soon)로 가라앉힌다');
+// 주석에 클래스명을 언급할 수 있으므로 '규칙 선언' 만 본다.
+assert(!css.includes('.plan--paid {'), '옛 유료 강조(primary 테두리) 규칙은 남기지 않는다 — 이제 쓸 수 있는 쪽은 무료다');
+
+// 핵심: 유료 폼이 비어 있으면 **이동 가능한 요소로 그리지 않는다**.
+// 옛 결함이 "유료 문의를 눌렀더니 무관한 컨설팅 설문이 열린다" 였다.
+const cmpFn = script.slice(script.indexOf('function renderCompare()'),
+                           script.indexOf('function renderCompare()') + 2600);
+assert(cmp.includes('LINKS.freeForm'), '무료 CTA 는 LINKS.freeForm 을 본다');
+assert(cmp.includes('freeCta = LINKS.freeForm'), '무료 CTA 는 링크가 있을 때만 그린다');
+assert(/aria-disabled="true"/.test(cmpFn), '비활성 표시를 보조기술에도 알린다');
 
 // 자물쇠 배지는 '전부 무료' 와 정반대 신호라 걷어냈다.
 assert(!/lockedLabel/.test(site) && !/lockedLabel/.test(script), '자물쇠 라벨이 남아 있으면 안 된다');

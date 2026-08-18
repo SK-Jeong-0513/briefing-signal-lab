@@ -237,26 +237,38 @@
     var host = document.getElementById("compare");
     if (!host) return;
     var c = UI.compare;
-    /* 무료/유료 2열 비교였다가 무료 단일 카드로 바꿨다(2026-08-18).
-       지금은 일일·주간·스페셜이 전부 무료 구독자에게 나가므로 옛 표는 사실과 달랐고
-       (이메일 발송이 유료 전용으로 적혀 있었다), 잠긴 항목을 나열하는 것보다
-       받는 것을 전부 체크해 보여주는 편이 구독 전환에 낫다.
-       유료 계획은 감추지 않고 목록 아래 note 한 줄로 남긴다. */
+    /* 무료는 받는 것을 전부 체크로, 유료는 로드맵 카드로 그레이 처리한다(2026-08-18).
+       옛 2열 비교표는 잠긴 항목을 나열했고 '이메일 발송'을 유료 전용으로 적어 사실과도
+       달랐다. 지금은 일일·주간·스페셜이 전부 무료 구독자에게 나간다. */
     var rows = c.rows.map(function (r) {
       return '<div class="plan__row">' + markSvg(true) + "<span>" + t(r.label) + "</span></div>";
     }).join("");
-    var url = LINKS.freeForm;
-    var cta = url
-      ? '<a class="btn btn--primary" href="' + url + '" target="_blank" rel="noopener">' + t(c.freeCta) + "</a>"
+    var freeCta = LINKS.freeForm
+      ? '<a class="btn btn--primary" href="' + LINKS.freeForm + '" target="_blank" rel="noopener">' +
+        t(c.freeCta) + "</a>"
       : "";
+    /* ⚠️ 유료 폼이 비어 있으면 **링크가 아닌** 비활성 표시로 그린다. 옛 결함이
+       "유료 문의를 눌렀더니 브리핑과 무관한 컨설팅 설문이 열린다" 였으므로, 갈 곳이
+       없을 때는 아예 이동할 수 없어야 한다(span 이라 탭 이동·클릭 대상이 아니다).
+       나중에 LINKS.paidForm 에 URL 을 넣으면 그대로 진짜 버튼이 된다. */
+    var paidCta = LINKS.paidForm
+      ? '<a class="btn btn--ghost" href="' + LINKS.paidForm + '" target="_blank" rel="noopener">' +
+        t(c.paidCta) + "</a>"
+      : '<span class="btn btn--ghost plan__cta--soon" aria-disabled="true">' + t(c.paidCta) + "</span>";
     host.innerHTML =
-      '<div class="plan plan--solo">' +
+      '<div class="plan">' +
         '<div class="plan__name">' + t(c.freeTitle) + "</div>" +
         '<div class="plan__price">' + t(c.freePrice) + "</div>" +
         '<div class="plan__list">' + rows + "</div>" +
-        cta +
+        freeCta +
       "</div>" +
-      (c.note ? '<p class="plan__note">' + t(c.note) + "</p>" : "");
+      '<div class="plan plan--soon">' +
+        '<div class="plan__name">' + t(c.paidTitle) +
+          '<span class="plan__badge">' + t(c.paidBadge) + "</span></div>" +
+        '<div class="plan__price">' + t(c.paidPrice) + "</div>" +
+        '<p class="plan__body">' + t(c.paidBody) + "</p>" +
+        paidCta +
+      "</div>";
   }
 
   /* ── 서재(Library): manifest 기반 목록 ─────────────────── */
