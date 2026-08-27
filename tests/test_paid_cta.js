@@ -94,6 +94,22 @@ pages.forEach((f) => {
   assert(!/docs\.google\.com\/forms/.test(h), f + ' 에 폼 URL 하드코딩 금지(LINKS 로만)');
 });
 
+// ── 검색·SNS 에 노출되는 meta 는 유료를 광고하지 않는다 (2026-08-27) ──
+// 랜딩 meta 는 08-18 무료 개편 때 고쳤는데 카테고리 페이지 9곳(3페이지 × description·
+// og·twitter)이 "무료 공개 요약 + 유료 … 구독" 으로 남아 있었다. 본문과 달리 이건
+// 검색 결과·공유 카드에 그대로 뜨므로, 유료 상품이 없는 동안은 사실과 다른 광고가 된다.
+// paidForm 이 채워지면(= 유료 상품이 생기면) 이 검사는 저절로 풀린다.
+if (!paid) {
+  ['index', 'tech', 'finance', 'economy'].forEach(function (page) {
+    const html = fs.readFileSync('public/' + page + '.html', 'utf8');
+    const metas = html.match(/<meta[^>]*(?:name|property)="(?:description|og:description|twitter:description)"[^>]*>/g) || [];
+    assert.strictEqual(metas.length, 3, page + '.html 의 description meta 3개(description·og·twitter)');
+    metas.forEach(function (m) {
+      assert(!/유료/.test(m), page + '.html meta 가 유료를 광고하면 안 된다(현재 유료 상품 없음): ' + m.slice(0, 90));
+    });
+  });
+}
+
 // ── 무료 구독 경로는 살아 있어야 한다(통과 기준: 구독할 방법이 사라지지 않음) ──
 assert(free, '유료를 감추면서 무료 구독까지 끊으면 안 된다');
 
