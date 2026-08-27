@@ -173,6 +173,22 @@ class ScoringTests(unittest.TestCase):
         mailer = {parts[i]: re.findall(r'id:\s*"([\w-]+)"', parts[i + 1]) for i in range(1, len(parts), 2)}
         self.assertEqual(mailer, deepdive.CATEGORIES)
 
+    def test_header_check_catches_renamed_column(self):
+        """웹앱은 헤더 이름으로 매핑한다 — 한 글자만 달라도 그 열이 조용히 빈다.
+
+        실제로 시트가 '딥다이브KO'(대문자)로 만들어져 있었다(2026-08-27).
+        """
+        good = list(deepdive.DEEPDIVE_FIELDS)
+        self.assertEqual(deepdive.check_header(good), "")
+
+        renamed = [("딥다이브KO" if h == "딥다이브ko" else h) for h in good]
+        problem = deepdive.check_header(renamed)
+        self.assertIn("딥다이브ko", problem, "빠진 열 이름을 알려줘야 고칠 수 있다")
+        self.assertIn("딥다이브KO", problem, "예상 밖 열 이름도 같이 보여줘야 오타가 보인다")
+
+        self.assertIn("헤더를 읽지 못했다", deepdive.check_header([]))
+        self.assertTrue(deepdive.check_header(good[:-1]), "열이 빠져도 잡아야 한다")
+
     def test_deepdive_fields_cover_written_rows(self):
         """시트 헤더(DEEPDIVE_FIELDS)와 실제로 쓰는 키가 어긋나면 웹앱이 조용히 빈칸을 넣는다."""
         written = {"issue_key", "revision", "분야", "출처URL", "영향도", "선행성", "파급범위",

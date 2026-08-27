@@ -102,10 +102,20 @@ def pick_issue(rows):
     return issue, revision, ready[(issue, revision)]
 
 
-def fetch_csv(url):
+def _fetch_text(url):
     req = urllib.request.Request(url, headers={"User-Agent": "BriefingSignalLab/1.0"})
     with urllib.request.urlopen(req, timeout=30) as response:
-        return list(csv.DictReader(io.StringIO(response.read().decode("utf-8-sig", "replace"))))
+        return response.read().decode("utf-8-sig", "replace")
+
+
+def fetch_csv(url):
+    return list(csv.DictReader(io.StringIO(_fetch_text(url))))
+
+
+def fetch_header(url):
+    """행이 하나도 없어도 헤더는 봐야 한다 — DictReader 는 빈 탭에서 아무것도 안 준다."""
+    rows = csv.reader(io.StringIO(_fetch_text(url)))
+    return next(rows, [])
 
 
 def parse_object(text):
@@ -253,6 +263,22 @@ def post_rows(tab, rows):
     return body
 
 
+def check_header(header):
+    """시트 헤더가 DEEPDIVE_FIELDS 와 같은지. 다르면 사유 문자열, 같으면 ''.
+
+    ⚠️ market/Code.gs 웹앱은 헤더 이름으로 매핑하므로(row[h]), 이름이 한 글자라도
+       다르면 그 열만 **조용히 빈 채로** 기록된다. 에러도 경고도 없다.
+       실제로 첫 생성 때 '딥다이브KO' 로 만들어져 있었다(2026-08-27).
+    """
+    if not header:
+        return "헤더를 읽지 못했다(탭이 비었거나 게시가 안 됨)"
+    missing = [f for f in DEEPDIVE_FIELDS if f not in header]
+    extra = [h for h in header if h and h not in DEEPDIVE_FIELDS]
+    if missing or extra:
+        return "시트 헤더 불일치 — 없음:[%s] 예상밖:[%s]" % (", ".join(missing), ", ".join(extra))
+    return ""
+
+
 def already_done(existing, issue, revision):
     """이 호·리비전이 이미 채점됐나. 한 호에 한 번만 돈다(재실행 안전)."""
     return any(str(r.get("issue_key", "")).strip() == issue
@@ -285,6 +311,13 @@ def main(argv=None):
         # 재실행 때마다 같은 호가 다시 채점돼 시트에 중복 행이 쌓인다.
         print("[deepdive] ⚠️ WEEKLY_DEEPDIVE_CSV 미설정 — 재실행 방지 없이 진행한다")
     existing = fetch_csv(deepdive_csv) if deepdive_csv else []
+    if deepdive_csv:
+        # 채점을 다 하고 나서 빈 열을 발견하면 LLM 호출이 통째로 낭비된다. 먼저 본다.
+        problem = check_header(list(existing[0].keys()) if existing else fetch_header(deepdive_csv))
+        if problem:
+            print("[ERROR] %s" % problem)
+            print("        웹앱은 헤더 이름으로 매핑해서 이름이 다르면 그 열이 조용히 빈다.")
+            return 2
     if not args.force and already_done(existing, issue, revision):
         print("[deepdive] %s rev%s 이미 채점됨 — 생략(--force 로 재실행)" % (issue, revision))
         return 0
