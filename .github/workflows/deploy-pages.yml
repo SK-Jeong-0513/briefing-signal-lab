@@ -28,6 +28,7 @@ jobs:
       - name: Inject weekly release CSV
         env:
           WEEKLY_RELEASE_ITEMS_CSV: ${{ secrets.WEEKLY_RELEASE_ITEMS_CSV }}
+          WEEKLY_DEEPDIVE_CSV: ${{ secrets.WEEKLY_DEEPDIVE_CSV }}
         run: python3 scripts/inject_weekly_release_csv.py
       - name: Upload site (public/)
         uses: actions/upload-pages-artifact@v3

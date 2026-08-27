@@ -433,6 +433,12 @@ const LINKS = {
  * 비어 있으면 안전하게 정적 샘플을 유지하며 승인 초안을 공개하지 않는다. */
 const WEEKLY_RELEASE_ITEMS_CSV = "";
 
+/* 주간 딥다이브: BSL_market의 '주간-딥다이브' 탭 게시 CSV(score_weekly_deepdive.py가 채운다).
+ * deploy-pages.yml이 WEEKLY_DEEPDIVE_CSV Secret을 배포 사본에 주입한다.
+ * ⚠️ 채점은 발송(월 09:00)보다 3시간 앞선 06:00에 끝난다 — 그래서 렌더는 published
+ *    항목에 조인된 것만 그린다. 비어 있으면 딥다이브 섹션이 통째로 빠진다(발행은 정상). */
+const WEEKLY_DEEPDIVE_CSV = "";
+
 /* 서재(Library) 업로드 경로: '서재' 탭 게시 CSV. 비우면 library.json(.md)만 사용.
  * 채우면 시트 행이 리포트로 병합됨(본문 md를 셀에 담아 .md 파일 없이 업로드).
  * 열: id · 유형(report/note) · 분류(기술/금융/경제) · 발행일 · 제목 · 요약 · 태그 · 본문 · access */
