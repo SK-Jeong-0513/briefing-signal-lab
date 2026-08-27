@@ -60,13 +60,19 @@ function checkAdminProps() {
   if (url && url.indexOf('/exec') >= 0) {
     try {
       var probe = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-      var text = probe.getContentText().slice(0, 400);
-      if (/market-webapp/.test(text)) {
+      // ⚠️ 자른 뒤에 검사하지 말 것. Apps Script HtmlService 출력은 Google 샌드박스 셸이
+      //    앞에 7천 자 넘게 붙고 실제 내용은 그 뒤 iframe 에 온다(2026-08-27 실측: 응답
+      //    8,222자 중 'BRIEFING SIGNAL LAB' 이 7,348번째). 앞 400자만 보면 URL 이 맞아도
+      //    항상 ⚠️ 가 떠서, 멀쩡한 설정을 의심하며 시간을 버린다(실제로 그랬다).
+      //    market-webapp 분기만 멀쩡했던 것은 ContentService JSON 이라 셸이 없어서다.
+      //    자르는 것은 로그 출력에만 쓴다.
+      var body = probe.getContentText();
+      if (/market-webapp/.test(body)) {
         Logger.log('  ❌ MAILER_URL 이 "시장" 웹앱을 가리킵니다 — BSL_mailer 의 배포 URL 로 바꾸세요');
-      } else if (/BRIEFING SIGNAL LAB|잘못된 요청/.test(text)) {
+      } else if (/BRIEFING SIGNAL LAB|잘못된 요청/.test(body)) {
         Logger.log('  ✅ MAILER_URL 이 메일러 웹앱에 연결됩니다');
       } else {
-        Logger.log('  ⚠️ 응답이 메일러 같지 않습니다(앞 120자): ' + text.slice(0, 120).replace(/\s+/g, ' '));
+        Logger.log('  ⚠️ 응답이 메일러 같지 않습니다(앞 120자): ' + body.slice(0, 120).replace(/\s+/g, ' '));
       }
     } catch (e) {
       Logger.log('  ⚠️ MAILER_URL 연결 확인 실패: ' + e);
