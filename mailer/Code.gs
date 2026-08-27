@@ -44,6 +44,7 @@ const CFG = {
   WEEKLY_LEDGER_TAB: "주간-발행",
   WEEKLY_ITEM_TAB: "주간-발행항목",
   WEEKLY_DELIVERY_TAB: "주간-발송로그",
+  WEEKLY_DEEPDIVE_TAB: "주간-딥다이브",   // score_weekly_deepdive.py 가 채운다
   DAILY_CATS: ["경제", "금융", "기술"],   // 메일에 담을 순서
   DAILY_SUBJECT: "[일일 시황]",       // 뒤에 날짜가 붙음
 };
@@ -230,11 +231,64 @@ function weeklyPublish_(bundle) {
   });
   weeklyAppend_(bundle.ledger, { issue_key: bundle.issueKey, state: "published", revision: 1, manual_confirmed: bundle.ledgerRow.manual_confirmed, auto_mode: bundle.ledgerRow.auto_mode, published_at: now, emailed_at: "", content_hash: bundle.ledgerRow.content_hash, updated_at: now, message: "20:00 공개; 주간 메일 발송 시작" });
 }
-function weeklyReleaseCats_(items) {
+/* 도메인 → 카테고리 키. CATS 가 유일한 근거다(별도 표를 만들면 어긋난다). */
+function catKeyOfDomain_(domain) {
+  for (var i = 0; i < CATS.length; i++) {
+    var ds = CATS[i].domains || [];
+    for (var j = 0; j < ds.length; j++) if (ds[j].id === domain) return CATS[i].key;
+  }
+  return "";
+}
+/* '주간-딥다이브' 탭 → 카테고리별 영향도 상위 3건.
+ *
+ * 조인 키는 (issue_key, revision, 출처URL) 이고, 조인 대상은 **이번 호에 실제로
+ * 나가는 items** 다. 조인을 거치지 않으면 이번 호에 안 실린 항목의 딥다이브가
+ * 메일에 따라붙는다(본문에 없는 기사의 해설이 붙는 꼴이 된다).
+ *
+ * ⚠ weeklyTable_ 은 헤더를 그대로 쓴다 — 사이트의 mktRows 는 toLowerCase 해서
+ *   '출처url' 이지만 여기는 '출처URL' 대문자 그대로다. 복사해 오면 조용히 빈다.
+ *
+ * 딥다이브는 부가물이라 탭이 없거나 읽기가 실패해도 발송을 막지 않는다. */
+function weeklyDeepdiveByCat_(ss, issueKey, revision, items) {
+  var name = CFG.WEEKLY_DEEPDIVE_TAB || "주간-딥다이브";
+  if (!ss.getSheetByName(name)) { Logger.log("[주간] 딥다이브 탭 없음(" + name + ") — 딥다이브 없이 발송"); return {}; }
+  var table;
+  try { table = weeklyTable_(ss, name); }
+  catch (e) { Logger.log("[주간] 딥다이브 탭 읽기 실패 — 딥다이브 없이 발송: " + e); return {}; }
+
+  var pub = {};
+  items.forEach(function (r) {
+    var u = String(r['출처URL'] || "").trim();
+    if (u) pub[u] = { domain: String(r['분야'] || ""), title: String(r['제목ko'] || "") };
+  });
+
+  var byCat = {}, matched = 0;
+  table.rows.forEach(function (r) {
+    if (String(r.issue_key) !== String(issueKey) || Number(r.revision || 0) !== Number(revision)) return;
+    var u = String(r['출처URL'] || "").trim(), body = String(r['딥다이브ko'] || "").trim();
+    if (!u || !body) return;
+    var hit = pub[u]; if (!hit) return;
+    var key = catKeyOfDomain_(hit.domain); if (!key) return;
+    matched++;
+    (byCat[key] = byCat[key] || []).push({
+      domain: hit.domain, title: hit.title, body: body,
+      watch: String(r['관전포인트'] || "").trim(),
+      impact: Number(r['영향도'] || 0) || 0
+    });
+  });
+  Object.keys(byCat).forEach(function (k) {
+    byCat[k].sort(function (a, b) { return b.impact - a.impact; });
+    byCat[k] = byCat[k].slice(0, 3);
+  });
+  Logger.log("[주간 " + issueKey + "] 딥다이브 조인 " + matched + "건");
+  return byCat;
+}
+function weeklyReleaseCats_(items, deepByCat) {
   var byDomain = {};
   items.forEach(function (r) { var d = String(r['분야'] || ""); if (!d) return; (byDomain[d] = byDomain[d] || []).push(r); });
   return CATS.map(function (base) {
-    var cat = { key: base.key, label: base.label, prefSheet: base.prefSheet, page: base.page, domains: base.domains, issues: {} };
+    var cat = { key: base.key, label: base.label, prefSheet: base.prefSheet, page: base.page, domains: base.domains, issues: {},
+                deepdive: (deepByCat && deepByCat[base.key]) || [] };
     base.domains.forEach(function (d) {
       var rows = byDomain[d.id] || []; if (!rows.length) return;
       // 헤드라이너는 분야당 1개만 쓰인다. 두 번째부터는 **버리지 말고 신호로 강등**한다 —
@@ -269,7 +323,8 @@ function sendWeeklyUnlocked_() {
   if (!bundle) { Logger.log("[주간 " + issueKey + "] 발송 가능한 rev.1 원장/항목 없음 또는 이미 완료 — 생략"); return; }
   if (!CFG.TEST_MODE) weeklyPublish_(bundle);
   CFG.WEEK = bundle.issueKey + " · rev.1";
-  var releaseCats = weeklyReleaseCats_(bundle.items);
+  var releaseCats = weeklyReleaseCats_(bundle.items,
+    weeklyDeepdiveByCat_(bundle.ss, bundle.issueKey, bundle.revision, bundle.items));
   var rt = tableOf_(CFG.RESP_SHEET), iE = idx_(rt.header, CFG.RESP_COL.email), iC = idx_(rt.header, CFG.RESP_COL.consent), iK = idx_(rt.header, CFG.RESP_COL.keywords);
   if (iE < 0 || iC < 0) throw new Error("응답 시트 컬럼 확인: '" + CFG.RESP_COL.email + "' / '" + CFG.RESP_COL.consent + "'");
   syncResubscribes_();          // 재신청자를 먼저 '구독'으로 되돌린 뒤 선호도를 읽는다
@@ -619,7 +674,26 @@ function html_(email, keywords, perCat) {
 }
 function catSection_(cat, domIds) {
   var blocks = domIds.map(function (id) { return domainBlock_(cat, id); }).join("");
-  return '<div style="margin:0 0 8px"><div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.primary + ';padding-left:8px;margin:4px 0 12px">' + esc_(cat.label) + " 브리핑</div>" + blocks + "</div>";
+  return '<div style="margin:0 0 8px"><div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.primary + ';padding-left:8px;margin:4px 0 12px">' + esc_(cat.label) + " 브리핑</div>" + blocks + deepSection_(cat, domIds) + "</div>";
+}
+/* 딥다이브 블록. 구독자가 고른 분야것만 싣는다 — 안 고른 분야의 해설을 보내면
+ * 그 분야 신호는 없는데 해설만 있는 없는 본문 참조가 된다. 없으면 블록 자체를 안 낸다. */
+function deepSection_(cat, domIds) {
+  var list = (cat.deepdive || []).filter(function (d) { return domIds.indexOf(d.domain) >= 0; });
+  if (!list.length) return "";
+  var rows = list.map(function (d) {
+    var watch = d.watch ? '<div style="font-size:12px;color:' + C.muted + ';margin-top:4px">관전 포인트 · ' + esc_(d.watch) + "</div>" : "";
+    return '<div style="padding:10px 0;border-top:1px solid ' + C.border + '">' +
+      '<div style="font-size:14px;font-weight:650;color:' + C.text + '">' + esc_(d.title) + "</div>" +
+      '<div style="font-size:13px;color:' + C.text + ';margin-top:3px">' + esc_(d.body) + "</div>" +
+      watch + "</div>";
+  }).join("");
+  return [
+    '<div style="margin:0 0 18px;padding:12px 14px;background:' + C.canvas + ';border:1px solid ' + C.border + ';border-radius:8px">',
+      '<div style="font-size:11px;font-weight:700;color:' + C.muted + '">이번 주 딥다이브</div>',
+      rows,
+    "</div>",
+  ].join("");
 }
 function domainBlock_(cat, id) {
   var iss = cat.issues[id], dm = domById_(cat, id);
@@ -654,6 +728,11 @@ function plain_(perCat, kw) {
       iss.signals.forEach(function (s) { lines.push("  - " + s.t); });
       lines.push("  헤드라이너: " + iss.head.title);
     });
+    var deep = (pc.cat.deepdive || []).filter(function (d) { return pc.domIds.indexOf(d.domain) >= 0; });
+    if (deep.length) {
+      lines.push("· 이번 주 딥다이브");
+      deep.forEach(function (d) { lines.push("  - " + d.title + ": " + d.body); });
+    }
     lines.push("");
   });
   lines.push("전체 보기: " + CFG.BASE, "정보 제공·투자 조언 아님.");
