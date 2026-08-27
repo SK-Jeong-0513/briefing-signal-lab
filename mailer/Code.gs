@@ -1072,6 +1072,7 @@ function sendDailyMarket() {
   var subject = CFG.DAILY_SUBJECT + " " + dg.today;
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
   var quotes = quotes_();       // 주요 시장 지표(실패·낡음이면 null → 블록만 생략)
+  if (!quotes) alertQuotesMissing_(dg.today);   // 조용히 빠지면 다음에도 구독자가 먼저 발견한다
 
   // 대상을 먼저 확정한다 — 한도를 보려면 몇 명인지 알아야 한다.
   var targets = [], skipped = 0, seen = {};
@@ -1131,27 +1132,48 @@ function dailySendTime_() {
   }
   return { h: h, m: mi, label: ("0" + h).slice(-2) + ":" + ("0" + mi).slice(-2) };
 }
+// 지표 사전 점검 시각 = 발송 - QUOTES_LEAD_MIN분. 단 QUOTES_FLOOR_MIN(06:20 KST)보다 이르게는 안 간다
+// — 겨울(EST) 미 증시 마감이 21:00 UTC = 06:00 KST라 그 전에 물어오면 마감 전 데이터가 잡힌다.
+// 발송이 너무 일러 여유가 안 나오면 null(사전 점검 트리거를 만들지 않는다).
+function preflightTime_(t) {
+  var send = t.h * 60 + t.m;
+  var at = Math.max(send - QUOTES_LEAD_MIN, QUOTES_FLOOR_MIN);
+  if (at >= send) return null;
+  var h = Math.floor(at / 60), m = at % 60;
+  return { h: h, m: m, label: ("0" + h).slice(-2) + ":" + ("0" + m).slice(-2) };
+}
 // 설정 시각으로 발송 트리거 재생성. 여러 번 실행해도 트리거는 항상 1개(멱등).
+// 지표 사전 점검 트리거도 여기서 함께 맞춘다 — 발송 시각을 바꾸면 같이 따라가야 한다.
 function applyDailySchedule() {
   var t = dailySendTime_();
   ScriptApp.getProjectTriggers().forEach(function (tr) {
-    if (tr.getHandlerFunction() === "sendDailyMarket") ScriptApp.deleteTrigger(tr);
+    var fn = tr.getHandlerFunction();
+    if (fn === "sendDailyMarket" || fn === "preflightQuotes") ScriptApp.deleteTrigger(tr);
   });
   ScriptApp.newTrigger("sendDailyMarket").timeBased()
     .atHour(t.h).nearMinute(t.m).everyDays(1).inTimezone("Asia/Seoul").create();
+  var p = preflightTime_(t);
+  if (p) {
+    ScriptApp.newTrigger("preflightQuotes").timeBased()
+      .atHour(p.h).nearMinute(p.m).everyDays(1).inTimezone("Asia/Seoul").create();
+  } else {
+    Logger.log("[지표] 발송 " + t.label + "이 일러 사전 점검 트리거 생략");
+  }
   PropertiesService.getScriptProperties().setProperty(DAILY_TIME_PROP, t.label);
-  Logger.log("일일 트리거 적용: 매일 " + t.label + " KST sendDailyMarket (±15분)");
+  Logger.log("일일 트리거 적용: 매일 " + t.label + " KST sendDailyMarket (±15분)" +
+    (p ? " · " + p.label + " KST preflightQuotes" : ""));
   return t.label;
 }
 // 매일 새벽 실행. 콘솔에서 시각을 바꾸면 다음 날부터 자동 반영된다.
 function syncDailySchedule() {
-  var want = dailySendTime_().label;
+  var t = dailySendTime_();
   var applied = PropertiesService.getScriptProperties().getProperty(DAILY_TIME_PROP);
-  var live = ScriptApp.getProjectTriggers().some(function (tr) {
-    return tr.getHandlerFunction() === "sendDailyMarket";
-  });
-  if (applied === want && live) return;
-  Logger.log("[일일] 발송 시각 " + (applied || "미기록") + " → " + want + (live ? "" : " (트리거 없음)"));
+  var fns = ScriptApp.getProjectTriggers().map(function (tr) { return tr.getHandlerFunction(); });
+  // 사전 점검 트리거가 사라진 것도 '트리거 없음'이다 — 있어야 하는데 없으면 재생성한다.
+  var live = fns.indexOf("sendDailyMarket") >= 0 &&
+    (!preflightTime_(t) || fns.indexOf("preflightQuotes") >= 0);
+  if (applied === t.label && live) return;
+  Logger.log("[일일] 발송 시각 " + (applied || "미기록") + " → " + t.label + (live ? "" : " (트리거 없음)"));
   applyDailySchedule();
 }
 // 설치 1회: 발송 트리거 + 새벽 03:00 동기화 트리거.
@@ -1170,20 +1192,44 @@ function createDailyTrigger() {
 var QUOTES_PATH = "assets/data/quotes.json";  // CFG.BASE 기준 상대 경로(fetch_dashboard.py가 생성)
 var QUOTES_STALE_DAYS = 5;                    // asof가 이보다 오래면 블록만 생략(연휴 3~4일은 통과)
 
-function quotes_() {
+// 사전 점검(preflightQuotes) 상수. 토큰만 스크립트 속성에 두고 나머지는 비밀이 아니라 코드에 둔다.
+var QUOTES_REPO = "SK-Jeong-0513/briefing-signal-lab";
+var QUOTES_WORKFLOW = "daily-quotes.yml";     // workflow_dispatch가 선언돼 있어야 발화된다
+var QUOTES_TOKEN_PROP = "GH_DISPATCH_TOKEN";  // 파인그레인드 PAT(Actions: read/write)
+var QUOTES_LEAD_MIN = 50;                     // 발송 몇 분 전에 점검할지
+var QUOTES_FLOOR_MIN = 6 * 60 + 20;           // 06:20 KST — 겨울 미 마감(21:00 UTC = 06:00 KST) 이후
+var QUOTES_WAIT_MS = 20000;                   // 발화 후 재확인 간격
+var QUOTES_TRIES = 6;                         // 최대 대기 = 20초 × 6 = 2분
+
+function todayKst_() { return Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd"); }
+
+// 스냅샷을 읽기만 한다(당일·신선도 게이트 없음). quotes_()와 preflightQuotes()가 같은 창구를 쓴다.
+// GitHub Pages는 최대 10분 캐시한다. 고유 쿼리로 최신 배포본을 강제 조회한다.
+function quotesFetch_() {
   try {
-    // GitHub Pages는 최대 10분 캐시한다. 발송 직전에는 고유 쿼리로 최신 배포본을 강제 조회한다.
     var res = UrlFetchApp.fetch(CFG.BASE + QUOTES_PATH + "?v=" + Date.now(), { muteHttpExceptions: true, followRedirects: true });
     if (res.getResponseCode() !== 200) {
-      Logger.log("[지표] HTTP " + res.getResponseCode() + " — 블록 생략");
+      Logger.log("[지표] HTTP " + res.getResponseCode());
       return null;
     }
     var q = JSON.parse(res.getContentText());
     if (!q || !q.rows || !q.rows.length || !q.asof) {
-      Logger.log("[지표] 빈 스냅샷 — 블록 생략");
+      Logger.log("[지표] 빈 스냅샷");
       return null;
     }
-    var todayKst = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+    return q;
+  } catch (e) {
+    Logger.log("[지표] 조회 실패: " + e);
+    return null;
+  }
+}
+
+// 판정까지 try 안에 둔다 — 여기서 예외가 새면 지표 하나 때문에 일일 발송이 통째로 죽는다.
+function quotes_() {
+  try {
+    var q = quotesFetch_();
+    if (!q) { Logger.log("[지표] 블록 생략"); return null; }
+    var todayKst = todayKst_();
     if (!q.briefing_date || q.briefing_date !== todayKst) {
       Logger.log("[지표] 브리핑일 " + (q.briefing_date || "없음") + " ≠ " + todayKst + " — 전일 데이터 차단");
       return null;
@@ -1197,10 +1243,94 @@ function quotes_() {
     }
     return q;
   } catch (e) {
-    Logger.log("[지표] 조회 실패 — 블록 생략: " + e);
+    Logger.log("[지표] 판정 실패 — 블록 생략: " + e);
     return null;
   }
 }
+
+// ── 지표 사전 점검 (2026-08-27 추가) ────────────────────────────────────────
+// GitHub 예약 크론은 best-effort라 지연 보장이 없다. 06:10 KST 크론이 3시간 29분 늦어
+// 07:41 발송 시점의 quotes.json이 전일자였고, 위 당일 게이트가 블록을 생략했다.
+// 게이트는 의도대로 동작했다 — 틀린 숫자 대신 공백. 문제는 데이터가 제때 안 온 것이다.
+//
+// 발송 QUOTES_LEAD_MIN분 전에 신선도를 보고, 낡았으면 워크플로를 직접 발화해 복구한다.
+// 발화 주체가 GitHub 스케줄러가 아니라 Apps Script 트리거라, 08-26처럼 그날 예약 크론이
+// 전부 흘러가도 산다. 발송 경로에는 지연을 더하지 않는다(별도 트리거).
+function preflightQuotes() {
+  var today = todayKst_();
+  var q = quotesFetch_();
+  if (q && q.briefing_date === today) {
+    Logger.log("[지표·사전점검] " + today + " 최신 — 조치 없음");
+    return;
+  }
+  Logger.log("[지표·사전점검] 브리핑일 " + ((q && q.briefing_date) || "없음") + " ≠ " + today + " — 워크플로 발화");
+  if (!dispatchQuotes_()) {
+    alertOperator_("[BSL] 일일 지표 갱신 발화 실패 — " + today,
+      today + " 발송 전 quotes.json이 낡아 " + QUOTES_WORKFLOW + " 발화를 시도했으나 실패했습니다.\n\n" +
+      "스크립트 속성 " + QUOTES_TOKEN_PROP + "(파인그레인드 PAT · Actions read/write)를 먼저 확인하세요.\n" +
+      "수동 조치: GitHub Actions → " + QUOTES_WORKFLOW + " → Run workflow.");
+    return;
+  }
+  for (var i = 0; i < QUOTES_TRIES; i++) {
+    Utilities.sleep(QUOTES_WAIT_MS);
+    q = quotesFetch_();
+    if (q && q.briefing_date === today) {
+      Logger.log("[지표·사전점검] 복구 완료 — asof " + q.asof);
+      return;
+    }
+  }
+  alertOperator_("[BSL] 일일 지표 갱신 지연 — 블록 생략 예상 " + today,
+    today + " 발송 전 quotes.json이 낡아 " + QUOTES_WORKFLOW + "를 발화했으나 " +
+    Math.round(QUOTES_WAIT_MS * QUOTES_TRIES / 1000) + "초 안에 반영되지 않았습니다.\n\n" +
+    "이대로면 '주요 시장 지표' 블록이 빠진 채 발송됩니다(나머지 본문은 정상).\n" +
+    "GitHub Actions에서 " + QUOTES_WORKFLOW + " 실행 상태를 확인하세요.");
+}
+
+// workflow_dispatch로 daily-quotes.yml을 즉시 발화한다. 성공은 204(본문 없음).
+function dispatchQuotes_() {
+  var token = PropertiesService.getScriptProperties().getProperty(QUOTES_TOKEN_PROP);
+  if (!token) { Logger.log("[지표·사전점검] " + QUOTES_TOKEN_PROP + " 미설정 — 발화 불가"); return false; }
+  try {
+    var res = UrlFetchApp.fetch(
+      "https://api.github.com/repos/" + QUOTES_REPO + "/actions/workflows/" + QUOTES_WORKFLOW + "/dispatches", {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          Authorization: "Bearer " + token,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        payload: JSON.stringify({ ref: "main" }),
+        muteHttpExceptions: true,
+      });
+    var code = res.getResponseCode();
+    if (code === 204) return true;
+    Logger.log("[지표·사전점검] 발화 HTTP " + code + " — " + String(res.getContentText()).slice(0, 200));
+    return false;
+  } catch (e) {
+    Logger.log("[지표·사전점검] 발화 예외: " + e);
+    return false;
+  }
+}
+
+// 운영자 알림. 알림 자체가 실패해도 호출부(발송·점검)를 죽이지 않는다.
+function alertOperator_(subject, body) {
+  Logger.log("[ERROR] " + subject);
+  try { sendMail_(CFG.OPERATOR_EMAIL, subject, body, ""); }
+  catch (e) { Logger.log("[ERROR] 운영자 알림 실패: " + e); }
+}
+
+// 블록이 실제로 빠진 날 알린다. 종전에는 Logger.log만 남아 아무도 보지 않았고,
+// 2026-08-03·08-27 두 번 모두 구독자가 메일을 읽고 나서야 발견됐다.
+function alertQuotesMissing_(today) {
+  alertOperator_("[BSL] 일일 시황 '주요 시장 지표' 블록 생략 — " + today,
+    today + " 일일 시황 메일에서 지표 블록이 빠진 채 발송됩니다(나머지 본문은 정상).\n\n" +
+    "원인은 실행 로그의 '[지표]' 줄에 있습니다 — 브리핑일 불일치 / HTTP / 빈 스냅샷 / asof 낡음.\n" +
+    "가장 흔한 원인은 GitHub 예약 크론 지연으로 quotes.json이 전일자로 남는 것입니다.\n\n" +
+    "확인: " + CFG.BASE + QUOTES_PATH + "\n" +
+    "수동 조치: GitHub Actions → " + QUOTES_WORKFLOW + " → Run workflow.");
+}
+
 function quoteCell_(r) {
   if (!r) return '<td width="50%"></td>';
   var color = r.dir > 0 ? C.success : (r.dir < 0 ? C.danger : C.muted);

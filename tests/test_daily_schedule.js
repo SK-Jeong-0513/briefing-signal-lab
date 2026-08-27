@@ -125,4 +125,38 @@ assert.throws(() => vm.runInContext('setDailySendTime("아침")', admin), /HH:MM
 assert.strictEqual(vm.runInContext('DAILY_SEND_TIME_DEFAULT', admin), '07:40');
 assert(mailer.includes('DAILY_SEND_TIME: "07:40"'), '콘솔 기본값과 메일러 폴백은 같아야 함');
 
+// ── 지표 사전 점검 트리거 (2026-08-27) ──
+// 발송 트리거와 한 자리에서 관리한다 — 발송 시각을 바꾸면 점검 시각도 따라가야 한다.
+m = mailerContext([['daily_send_time', '07:40']]);
+vm.runInContext('applyDailySchedule()', m.context);
+let pre = m.state.triggers.filter((t) => t.fn === 'preflightQuotes');
+assert.strictEqual(pre.length, 1, '사전 점검 트리거 1개');
+assert.strictEqual(pre[0].hour, 6);
+assert.strictEqual(pre[0].minute, 50, '발송 50분 전 — ±15분 오차를 양쪽에 두고도 20분 남는다');
+assert.strictEqual(pre[0].tz, 'Asia/Seoul');
+assert.strictEqual(pre[0].days, 1, '일일 메일이 주말에도 나가므로 점검도 매일');
+
+vm.runInContext('applyDailySchedule()', m.context);
+assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'preflightQuotes').length, 1, '재실행해도 중복 없음(멱등)');
+
+// 바닥값: 겨울(EST) 미 증시 마감이 21:00 UTC = 06:00 KST라 그보다 이르면 마감 전 데이터를 물어온다.
+assert.strictEqual(vm.runInContext('preflightTime_({h:7,m:40}).label', m.context), '06:50');
+assert.strictEqual(vm.runInContext('preflightTime_({h:6,m:30}).label', m.context), '06:20', '06:20 바닥에 걸린다');
+assert.strictEqual(vm.runInContext('preflightTime_({h:6,m:20})', m.context), null, '여유가 0이면 만들지 않는다');
+assert.strictEqual(vm.runInContext('preflightTime_({h:6,m:15})', m.context), null, '발송이 바닥보다 이르면 만들지 않는다');
+
+m = mailerContext([['daily_send_time', '06:10']]);
+vm.runInContext('applyDailySchedule()', m.context);
+assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'preflightQuotes').length, 0, '발송이 이르면 사전 점검 생략');
+assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'sendDailyMarket').length, 1, '그래도 발송은 건다');
+assert(m.state.logs.some((l) => l.includes('사전 점검 트리거 생략')), '생략 이유를 로그로 남긴다');
+
+// 사전 점검 트리거만 사라져도 새벽 동기화가 되살린다
+m = mailerContext([['daily_send_time', '07:40']], { props: { daily_send_time_applied: '07:40' } });
+vm.runInContext('applyDailySchedule();', m.context);
+m.state.triggers = m.state.triggers.filter((t) => t.fn !== 'preflightQuotes');
+vm.runInContext('syncDailySchedule();', m.context);
+assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'preflightQuotes').length, 1, '사라진 사전 점검 트리거 복구');
+assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'sendDailyMarket').length, 1, '복구해도 발송 트리거는 1개');
+
 console.log('daily schedule tests: OK');
