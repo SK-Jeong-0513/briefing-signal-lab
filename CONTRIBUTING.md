@@ -69,7 +69,7 @@ public/assets/content/
 
 ## 세션 인수인계
 
-세션을 마칠 때 [docs/HANDOFF.md](docs/HANDOFF.md) 템플릿을 채워 커밋하면, 다음 세션이 브랜치·진행상황을 바로 이어받는다. (또는 Claude Code `/hand-off`·`/context-save` 사용)
+세션을 마칠 때 워크스페이스 루트의 [handoff.md](../handoff.md) 를 갱신한다(Claude Code `/hand-off`). 이 저장소 안에는 핸드오프 파일을 두지 않는다 — 워크스페이스 전체가 그 파일 하나를 공유한다.
 
 ## 하지 말 것
 
