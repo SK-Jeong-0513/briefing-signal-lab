@@ -549,9 +549,15 @@ function _getSetting_(key) {
   if (last < 2) return null;
   var data = sh.getRange(2, 1, last - 1, 2).getValues();
   for (var i = 0; i < data.length; i++) {
-    if (String(data[i][0]).trim() === key) return String(data[i][1]).trim();
+    if (String(data[i][0]).trim() === key) return _settingText_(data[i][1]);
   }
   return null;
+}
+// 메일러 settingText_ 와 같은 이유·같은 규칙(동기 유지). 시트가 "07:20" 을 시각으로
+// 자동 해석해 Date 로 저장하므로, String() 하면 콘솔 화면에도 긴 날짜 문자열이 뜬다.
+function _settingText_(v) {
+  if (v instanceof Date) return ("0" + v.getHours()).slice(-2) + ":" + ("0" + v.getMinutes()).slice(-2);
+  return String(v == null ? "" : v).trim();
 }
 function _setSetting_(key, value) {
   var sh = _settingsSheet_();
