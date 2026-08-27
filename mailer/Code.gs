@@ -1113,12 +1113,22 @@ function marketSetting_(key) {
     if (!sh || sh.getLastRow() < 2) return null;
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
     for (var i = 0; i < data.length; i++) {
-      if (String(data[i][0]).trim() === key) return String(data[i][1]).trim();
+      if (String(data[i][0]).trim() === key) return settingText_(data[i][1]);
     }
   } catch (e) {
     Logger.log("[설정] " + key + " 조회 실패(기본값 사용): " + e);
   }
   return null;
+}
+// 시트는 "07:20" 같은 값을 **시각으로 자동 해석**해 Date(1899-12-30 기준)로 저장한다.
+// 그대로 String() 하면 "Sat Dec 30 1899 07:20:00 GMT+0827" 이 되어 호출부의 HH:MM 파싱이
+// 전부 실패한다 — 관리자 콘솔에서 발송 시각을 바꿔도 **조용히 무시**되고 CFG 기본값으로
+// 폴백했다(2026-08-27 발견. 07:20 설정이 07:40 으로 돌고 있었다).
+// getHours/getMinutes 는 스크립트 시간대 기준이라 시트에 보이는 시각과 같은 값이 나온다.
+// ⚠️ 이 settings 탭의 값은 전부 짧은 스칼라다. 날짜가 의미 있는 설정을 넣게 되면 여기부터 고칠 것.
+function settingText_(v) {
+  if (v instanceof Date) return ("0" + v.getHours()).slice(-2) + ":" + ("0" + v.getMinutes()).slice(-2);
+  return String(v == null ? "" : v).trim();
 }
 // "HH:MM" → {h, m, label}. 미설정·형식 오류는 CFG.DAILY_SEND_TIME으로 폴백(fail-open).
 function dailySendTime_() {

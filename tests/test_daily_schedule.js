@@ -159,4 +159,47 @@ vm.runInContext('syncDailySchedule();', m.context);
 assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'preflightQuotes').length, 1, '사라진 사전 점검 트리거 복구');
 assert.strictEqual(m.state.triggers.filter((t) => t.fn === 'sendDailyMarket').length, 1, '복구해도 발송 트리거는 1개');
 
+// ── 시트가 "07:20" 을 시각(Date)으로 저장해도 읽어야 한다 (2026-08-27) ──
+// 시트는 HH:MM 문자열을 시각으로 자동 해석해 1899-12-30 기준 Date 로 저장한다. 이걸 못 읽어
+// 콘솔에서 07:20 으로 설정해도 조용히 무시되고 CFG 기본값 07:40 으로 돌고 있었다.
+// ⚠️ Date 는 반드시 vm 컨텍스트 안에서 만든다 — 밖에서 만들면 realm 이 달라 instanceof 가 false 다.
+m = mailerContext([['daily_send_time', '이 값은 아래에서 Date 로 대체된다']]);
+vm.runInContext('SpreadsheetApp.openById = function(){ return { getSheetByName: function(){ return { getLastRow: function(){ return 2; }, getRange: function(){ return { getValues: function(){ return [["daily_send_time", new Date(1899, 11, 30, 7, 20, 0)]]; } }; } }; } }; };', m.context);
+assert.strictEqual(vm.runInContext('dailySendTime_().label', m.context), '07:20', '시각 셀(Date)을 HH:MM 으로 읽어야 함');
+assert.strictEqual(m.state.logs.filter((l) => l.includes('형식 오류')).length, 0, '더 이상 형식 오류로 떨어지지 않는다');
+
+vm.runInContext('applyDailySchedule()', m.context);
+send = m.state.triggers.filter((t) => t.fn === 'sendDailyMarket');
+pre = m.state.triggers.filter((t) => t.fn === 'preflightQuotes');
+assert.strictEqual(send[0].hour, 7);
+assert.strictEqual(send[0].minute, 20, '설정한 시각이 실제 트리거에 반영돼야 함');
+assert.strictEqual(pre[0].hour, 6);
+assert.strictEqual(pre[0].minute, 30, '07:20 발송이면 사전 점검은 06:30(50분 전, 바닥 06:20 위)');
+
+vm.runInContext('SpreadsheetApp.openById = function(){ return { getSheetByName: function(){ return { getLastRow: function(){ return 2; }, getRange: function(){ return { getValues: function(){ return [["daily_send_time", new Date(1899, 11, 30, 8, 5, 0)]]; } }; } }; } }; };', m.context);
+assert.strictEqual(vm.runInContext('dailySendTime_().label', m.context), '08:05', '한 자리 시·분도 0 패딩');
+
+// 문자열·숫자 경로는 종전 그대로 (회귀 방지)
+m = mailerContext([['daily_send_time', '07:20']]);
+assert.strictEqual(vm.runInContext('dailySendTime_().label', m.context), '07:20', '문자열 경로 회귀 없음');
+assert.strictEqual(vm.runInContext('settingText_("  07:20  ")', m.context), '07:20', '문자열은 트림만');
+assert.strictEqual(vm.runInContext('settingText_(1)', m.context), '1', "숫자(pipeline_enabled '1')는 그대로");
+assert.strictEqual(vm.runInContext('settingText_(null)', m.context), '', 'null 은 빈 문자열');
+
+// ── 콘솔도 같은 변환을 한다 — 안 하면 관리 화면에 긴 날짜 문자열이 그대로 뜬다 ──
+const adminDate = vm.createContext({ console });
+vm.runInContext(fs.readFileSync('admin/Code.gs', 'utf8'), adminDate);
+vm.runInContext('function _assertAuth_(){}', adminDate);
+vm.runInContext('function _settingsSheet_(){ return { getLastRow: function(){ return 2; }, getRange: function(){ return { getValues: function(){ return [["daily_send_time", new Date(1899, 11, 30, 7, 20, 0)]]; } }; } }; }', adminDate);
+assert.strictEqual(vm.runInContext('_getSetting_("daily_send_time")', adminDate), '07:20', '콘솔도 시각 셀을 HH:MM 으로');
+assert.strictEqual(vm.runInContext('getDailySendTime().time', adminDate), '07:20');
+assert.strictEqual(vm.runInContext('getDailySendTime().isDefault', adminDate), false, '저장된 값이 있으면 기본값 표시가 아니다');
+
+// 메일러와 콘솔의 변환 규칙은 같아야 한다(둘이 갈라지면 화면과 실제 발송 시각이 어긋난다)
+const mailerSrc = fs.readFileSync('mailer/Code.gs', 'utf8');
+const adminSrc = fs.readFileSync('admin/Code.gs', 'utf8');
+assert(/function settingText_\(v\)/.test(mailerSrc) && /function _settingText_\(v\)/.test(adminSrc), '양쪽에 변환 함수 존재');
+assert(mailerSrc.includes('return settingText_(data[i][1]);'), '메일러 읽기 경로에 배선');
+assert(adminSrc.includes('return _settingText_(data[i][1]);'), '콘솔 읽기 경로에 배선');
+
 console.log('daily schedule tests: OK');
