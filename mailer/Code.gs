@@ -237,8 +237,12 @@ function weeklyReleaseCats_(items) {
     var cat = { key: base.key, label: base.label, prefSheet: base.prefSheet, page: base.page, domains: base.domains, issues: {} };
     base.domains.forEach(function (d) {
       var rows = byDomain[d.id] || []; if (!rows.length) return;
-      var signals = rows.filter(function (r) { return String(r['유형'] || "signal").toLowerCase() !== "headliner"; }).map(function (r) { return { t: String(r['제목ko'] || ""), l: String(r['한줄ko'] || ""), tag: "" }; });
-      var headRow = rows.filter(function (r) { return String(r['유형'] || "").toLowerCase() === "headliner"; })[0] || rows[0];
+      // 헤드라이너는 분야당 1개만 쓰인다. 두 번째부터는 **버리지 말고 신호로 강등**한다 —
+      // 종전에는 signals 필터에서도 빠져 사이트·메일 양쪽에서 통째로 사라졌다.
+      // heads 가 비면 headRow=rows[0] 이고 signals 도 전부 남아 종전 동작과 같다.
+      var heads = rows.filter(function (r) { return String(r['유형'] || "").toLowerCase() === "headliner"; });
+      var headRow = heads[0] || rows[0];
+      var signals = rows.filter(function (r) { return r !== heads[0]; }).map(function (r) { return { t: String(r['제목ko'] || ""), l: String(r['한줄ko'] || ""), tag: "" }; });
       cat.issues[d.id] = { signals: signals.length ? signals : [{ t: String(headRow['제목ko'] || ""), l: String(headRow['한줄ko'] || ""), tag: "" }], head: { title: String(headRow['제목ko'] || ""), sum: [String(headRow['한줄ko'] || "")] } };
     });
     return cat;

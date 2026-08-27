@@ -920,8 +920,12 @@
         var titleEn = (o["제목en"] || titleKo).trim(), lineKo = (o["한줄ko"] || "").trim(), lineEn = (o["한줄en"] || o["한줄ko"] || "").trim();
         bucket.publishedAt = bucket.publishedAt || (o["published_at"] || "").trim();
         bucket.updatedAt = (o["updated_at"] || bucket.publishedAt || "").trim();
-        if ((o["유형"] || o["type"] || "").toLowerCase() === "headliner") {
-          if (!bucket.headliner) bucket.headliner = { title: { ko: titleKo, en: titleEn }, summary: { ko: [lineKo], en: [lineEn] }, valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() } };
+        // 헤드라이너는 분야당 1개만 렌더된다. 두 번째부터는 **버리지 말고 신호로 강등**한다 —
+        // 종전에는 이 분기에 막혀 signals 에도 안 들어가 통째로 사라졌고, 경고도 없었다
+        // (2026-08-27 발견: W35 semicon 에 headliner 2건이 있어 실제로 1건이 소실 중이었다).
+        var isHead = (o["유형"] || o["type"] || "").toLowerCase() === "headliner";
+        if (isHead && !bucket.headliner) {
+          bucket.headliner = { title: { ko: titleKo, en: titleEn }, summary: { ko: [lineKo], en: [lineEn] }, valueChain: { ko: (o["밸류체인"] || "").trim(), en: (o["밸류체인"] || "").trim() } };
         } else if (!bucket.signals.some(function (s) { return s.title.ko === titleKo; })) {
           bucket.signals.push({ title: { ko: titleKo, en: titleEn }, lede: { ko: lineKo, en: lineEn }, tag: "" });
         }
