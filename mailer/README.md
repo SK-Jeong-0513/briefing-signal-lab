@@ -85,7 +85,11 @@ Apps Script에는 `MARKET_SHEET_ID`와 운영자 알림 이메일 설정이 필�
 
 일일 메일 상단에 지표 21개를 2열 11행으로 넣는다. 표시 문자열은 `scripts/fetch_dashboard.py`가 `public/assets/data/quotes.json`에 미리 만들어 두고, 메일러는 `quotes_()`로 **한 번 읽어 그리기만** 한다(메일러는 수동 붙여넣기 배포라 티커·포맷 변경이 여기 닿지 않게 하기 위함).
 
-- `.github/workflows/daily-quotes.yml`이 평일 06:10 KST에 `--quotes-only`로 지표만 먼저 갱신한다. 기존 전체 대시보드 파이프와 분리해 07:40 KST 메일보다 앞서 배포될 여유를 둔다.
+- `.github/workflows/daily-quotes.yml`이 **매일** 06:10 KST에 `--quotes-only`로 지표만 먼저 갱신한다.
+  기존 전체 대시보드 파이프와 분리해 메일 발송(`settings.daily_send_time`, 현재 07:20 KST)보다
+  앞서 배포될 여유를 둔다. **평일이 아니라 매일인 이유:** 일일 메일이 `everyDays(1)`로 주말에도
+  나가는데 주말에 갱신이 없으면 `briefing_date`가 금요일에 머물러 블록이 통째로 생략된다
+  (2026-08-08 토·08-09 일 실제 누락). 요일을 다시 좁히지 말 것.
 - `briefing_date`는 **한국 기준 브리핑 날짜**, `asof`는 **미국장 마감 기준일**이다. 메일에는 `MM-DD 아침 기준 · 미 증시 MM-DD 마감`으로 둘을 함께 표시한다.
 - `quotes_()`는 `?v=현재시각`을 붙여 GitHub Pages의 최대 10분 캐시를 우회한다.
 - `briefing_date`가 한국 기준 당일이 아니면 전일 스냅샷을 사용하지 않고 **지표 블록만 생략**한다.
