@@ -110,6 +110,44 @@ if (!paid) {
   });
 }
 
+// ── 자물쇠 UI 는 걷어냈다 (2026-08-27, 핸드오프 3·4번) ────────────────────
+// tech.html 의 '유료 딥다이브' 박스는 **잠긴 게 아니라 데이터가 없어서** 비어 보였다.
+// 자물쇠로 포장하면 "전부 무료" 와 정반대 신호를 준다. lockedLabel 때와 같은 처리.
+assert(!/deepLockTitle|deepLockDesc/.test(site), '유료 딥다이브 자물쇠 문구가 남아 있으면 안 된다');
+assert(!/signalLock/.test(site) && !/signalLock/.test(script), '신호 잠금 문구가 남아 있으면 안 된다');
+assert(/digestNote/.test(site) && /digestNote/.test(script), '대신 무료 구독 안내(digestNote)를 쓴다');
+assert(!/deep-lock/.test(script), '헤드라이너의 자물쇠 상자를 그리면 안 된다');
+assert(!css.includes('.deep-lock {'), '옛 자물쇠 상자 규칙은 남기지 않는다');
+assert(/\.head-facts\s*\{/.test(css), '자물쇠 대신 사실 줄(.head-facts)로 그린다');
+// 밸류체인·관전포인트가 blur 인 채로 남으면 자물쇠를 뗀 의미가 없다.
+assert(/deep-row--open/.test(script), '헤드라이너 사실 줄의 blur 를 풀어야 한다');
+
+// ── 유료 상품이 없는 동안 본문도 유료를 약속하지 않는다 (2026-08-27) ──────
+// meta 만 고치고 본문을 두면 "유료 구독입니다" 라고 설명만 하고 누를 곳이 없는 화면이 된다.
+// paidForm 이 채워지면(= 유료 상품이 생기면) 이 검사는 저절로 풀린다.
+if (!paid) {
+  const pageBlock = (key) => {
+    const at = site.indexOf('  ' + key + ': {');
+    assert(at > 0, key + ' 블록을 찾지 못했다');
+    return site.slice(at, site.indexOf('\n  },', at));
+  };
+  ['techPage', 'financePage', 'economyPage'].forEach((key) => {
+    const b = pageBlock(key);
+    // intro 는 페이지 첫인상이다 — "아래는 무료 요약이고 전문은 유료" 가 여기 있었다.
+    const intro = (b.match(/intro:\s*\{\s*\n\s*ko:\s*"([^"]*)"/) || [])[1];
+    assert(intro, key + '.intro 를 찾지 못했다');
+    assert(!/유료/.test(intro), key + '.intro 가 유료를 약속하면 안 된다: ' + intro.slice(0, 60));
+
+    // paidBody 는 로드맵 안내여야 한다. 유료 전용 기능 목록을 지어내지 않는다 —
+    // 지금 무료로 주는 것을 유료 칸에 옮겨 적으면 랜딩 비교표와 정면으로 모순된다.
+    const paidBody = (b.match(/paidBody:\s*\{\s*\n\s*ko:\s*"([^"]*)"/) || [])[1];
+    assert(paidBody, key + '.paidBody 를 찾지 못했다');
+    assert(/무료로 제공/.test(paidBody), key + '.paidBody 는 전부 무료임을 밝힌다');
+    assert(!/아카이브|전문/.test(paidBody),
+      key + '.paidBody 가 유료 전용 기능을 나열하면 안 된다(미정): ' + paidBody.slice(0, 60));
+  });
+}
+
 // ── 무료 구독 경로는 살아 있어야 한다(통과 기준: 구독할 방법이 사라지지 않음) ──
 assert(free, '유료를 감추면서 무료 구독까지 끊으면 안 된다');
 

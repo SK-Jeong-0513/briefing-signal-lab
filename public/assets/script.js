@@ -179,9 +179,6 @@
       ? '<svg class="mk mk--on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>'
       : '<svg class="mk mk--off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12h14"/></svg>';
   }
-  function lockSvg() {
-    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-  }
   function discSvg() {
     return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
   }
@@ -224,7 +221,7 @@
           '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" +
           // 자물쇠 배지였다(2026-08-18 교체). 전부 무료로 바뀌었는데 카드마다 잠금 아이콘이
           // 붙어 있으면 정반대 신호를 준다 — 메일 아이콘 + 구독 안내로 바꿨다.
-          '<div class="card__locked">' +
+          '<div class="card__note">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>' +
             t(s.deliveryLabel) + "</div>" +
         "</article>"
@@ -741,14 +738,18 @@
   /* ── 주간 브리핑 렌더 — tech/finance=분야 모델, economy=단일 다이제스트. 공용. ── */
   var weeklyState = {};
   var weeklySheet = {};  /* published 발행항목 스냅샷. raw approved는 읽지 않는다. */
+  /* 렌더된 호·리비전의 published 항목을 (issue_key|revision|출처URL) 로 색인한 것.
+   * 딥다이브 조인의 유일한 근거이자 미공개 호 유출을 막는 장치다. */
+  var weeklyPublished = {};
+  var weeklyDeep = {};   /* 카테고리(tech/finance/economy) → 카드 배열(최대 3) */
   function weeklyCfgs() {
     var cfgs = [];
     if (typeof TECH_DOMAINS !== "undefined")
-      cfgs.push({ key: "tech", ui: UI.techPage, mode: "domains", domains: TECH_DOMAINS, weekly: TECH_WEEKLY, badge: UI.techPage.freeBadge, menuSel: "[data-tech-menu]", hostSel: "[data-tech-weekly]" });
+      cfgs.push({ key: "tech", ui: UI.techPage, mode: "domains", domains: TECH_DOMAINS, weekly: TECH_WEEKLY, badge: UI.techPage.freeBadge, menuSel: "[data-tech-menu]", hostSel: "[data-tech-weekly]", deepSel: "[data-tech-deepdive]" });
     if (typeof FINANCE_DOMAINS !== "undefined")
-      cfgs.push({ key: "finance", ui: UI.financePage, mode: "domains", domains: FINANCE_DOMAINS, weekly: FINANCE_WEEKLY, badge: UI.samples.sampleBadge, menuSel: "[data-finance-menu]", hostSel: "[data-finance-weekly]" });
+      cfgs.push({ key: "finance", ui: UI.financePage, mode: "domains", domains: FINANCE_DOMAINS, weekly: FINANCE_WEEKLY, badge: UI.samples.sampleBadge, menuSel: "[data-finance-menu]", hostSel: "[data-finance-weekly]", deepSel: "[data-finance-deepdive]" });
     if (typeof ECONOMY_WEEKLY !== "undefined")
-      cfgs.push({ key: "economy", ui: UI.economyPage, mode: "single", single: ECONOMY_WEEKLY, sheetDomain: "macro", badge: UI.samples.sampleBadge, hostSel: "[data-economy-weekly]" });
+      cfgs.push({ key: "economy", ui: UI.economyPage, mode: "single", single: ECONOMY_WEEKLY, sheetDomain: "macro", badge: UI.samples.sampleBadge, hostSel: "[data-economy-weekly]", deepSel: "[data-economy-deepdive]" });
     return cfgs;
   }
   function weeklyDomainById(cfg, id) { return (cfg.domains || []).filter(function (d) { return d.id === id; })[0] || null; }
@@ -822,15 +823,15 @@
     var digest =
       '<h3 class="tech-sub">' + t(ui.digestHeading) + " · " + issue.signals.length + "</h3>" +
       '<ul class="sig-list">' + sigs + "</ul>" +
-      '<div class="card__locked">' + lockSvg() + t(ui.signalLock) + "</div>";
+      '<div class="card__note">' + t(ui.digestNote) + "</div>";
     var h = issue.headliner, head = "";
     if (h) {
       var summary = ((h.summary && h.summary[lang]) || []).map(function (l) { return "<li>" + l + "</li>"; }).join("");
       var tags = (h.tags || []).map(function (x) { return '<span class="tag">#' + x + "</span>"; }).join("");
       var srcNames = (h.sources || []).map(function (x) { return x.name; }).join(" · ");
       var sparkHtml = h.spark ? '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + sparkPath(h.spark) + '"/></svg>' : "";
-      var watchHtml = (h.watch && h.watch[lang]) ? '<div class="deep-row"><span class="deep-row__k">' + t(ui.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" : "";
-      var vcHtml = (h.valueChain && h.valueChain[lang]) ? '<div class="deep-row"><span class="deep-row__k">' + t(ui.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" : "";
+      var watchHtml = (h.watch && h.watch[lang]) ? '<div class="deep-row deep-row--open"><span class="deep-row__k">' + t(ui.watchLabel) + '</span><span class="deep-row__v">' + h.watch[lang] + "</span></div>" : "";
+      var vcHtml = (h.valueChain && h.valueChain[lang]) ? '<div class="deep-row deep-row--open"><span class="deep-row__k">' + t(ui.valueChainLabel) + '</span><span class="deep-row__v">' + h.valueChain[lang] + "</span></div>" : "";
       head =
         '<article class="card headliner">' +
           '<div class="card__top"><span class="badge-head">' + t(ui.headBadge) + "</span>" +
@@ -841,11 +842,9 @@
           '<span class="disclaimer-inline">' + discSvg() + (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>" +
           (tags ? '<div class="card__meta">' + tags + "</div>" : "") +
           (srcNames ? '<p class="card__sources">' + t(s.sourcesLabel) + ": " + srcNames + "</p>" : "") +
-          '<div class="deep-lock">' +
-            '<div class="deep-lock__head">' + lockSvg() + t(ui.deepLockTitle) + "</div>" +
-            vcHtml + watchHtml +
-            '<p class="deep-lock__desc">' + t(ui.deepLockDesc) + "</p>" +
-          "</div>" +
+          // 자물쇠 상자를 걷었다 — 잔기지 않은 것을 잠금으로 포장하고 있었다.
+          // 내용이 없으면(밸류체인·관전포인트 둘 다 빈 호) 줄 자체를 내지 않는다.
+          ((vcHtml || watchHtml) ? '<div class="head-facts">' + vcHtml + watchHtml + "</div>" : "") +
         "</article>";
     }
     var releaseMeta = "";
@@ -909,7 +908,7 @@
   function loadWeeklySheet() {
     if (typeof WEEKLY_RELEASE_ITEMS_CSV !== "string" || !WEEKLY_RELEASE_ITEMS_CSV) return;
     fetch(WEEKLY_RELEASE_ITEMS_CSV).then(function (r) { return r.text(); }).then(function (txt) {
-      var rows = mktRows(txt), issues = {};
+      var rows = mktRows(txt), issues = {}, pubIndex = {};
       rows.forEach(function (o) {
         if ((o["상태"] || o["state"] || "").toLowerCase() !== "published") return;
         var issue = (o["issue_key"] || o["발행주"] || "").trim(), revision = parseInt(o["revision"] || "1", 10);
@@ -917,6 +916,13 @@
         if (!issue || !dom || !titleKo) return;
         var revs = (issues[issue] = issues[issue] || {}), domains = (revs[revision] = revs[revision] || {});
         var bucket = domains[dom] = domains[dom] || { signals: [], headliner: null, publishedAt: "", updatedAt: "" };
+        // ⚠ mktRows 가 헤더를 toLowerCase 한다 — '출처URL' 은 '출처url' 로 들어온다.
+        //   대문자로 읽으면 undefined 라 조인이 통째로 빈다(에러 없음).
+        var srcUrl = (o["출처url"] || o["source_url"] || "").trim();
+        if (srcUrl) {
+          var pubKey = issue + "|" + revision + "|" + srcUrl;
+          (pubIndex[pubKey] = pubIndex[pubKey] || { dom: dom, title: { ko: titleKo, en: titleEn }, url: srcUrl });
+        }
         var titleEn = (o["제목en"] || titleKo).trim(), lineKo = (o["한줄ko"] || "").trim(), lineEn = (o["한줄en"] || o["한줄ko"] || "").trim();
         bucket.publishedAt = bucket.publishedAt || (o["published_at"] || "").trim();
         bucket.updatedAt = (o["updated_at"] || bucket.publishedAt || "").trim();
@@ -939,9 +945,100 @@
         out[dom] = { week: issueKey, signals: b.signals, headliner: b.headliner, release: { revision: revision, publishedAt: b.publishedAt, initialPublishedAt: initialPublishedAt || b.publishedAt, updatedAt: b.updatedAt } };
       });
       weeklySheet = out;
+      // 조인 대상을 **실제로 렌더되는 호·리비전**으로 좁힌다. 전체를 남기면
+      // 지난 호의 딥다이브가 이번 호 섹션에 섞여 들어온다.
+      var keep = {}, prefix = issueKey + "|" + revision + "|";
+      Object.keys(pubIndex).forEach(function (k) { if (k.indexOf(prefix) === 0) keep[k] = pubIndex[k]; });
+      weeklyPublished = keep;
       renderAllWeekly();
+      loadWeeklyDeepdive();   // published 색인이 준비된 뒤에만 불러야 조인이 성립한다
     }).catch(function () { /* 실패 시 정적 유지 */ });
   }
+
+  /* 도메인 → 카테고리. score_weekly_deepdive.py 의 CATEGORIES 를 복사하지 않고
+   * weeklyCfgs() 에서 도출한다 — 한쪽만 고치면 어긋나는 표를 하나 더 만들지 않기 위해. */
+  function deepDomainCategory() {
+    var map = {};
+    weeklyCfgs().forEach(function (cfg) {
+      (cfg.domains || []).forEach(function (d) { map[d.id] = cfg.key; });
+      if (cfg.sheetDomain) map[cfg.sheetDomain] = cfg.key;
+    });
+    return map;
+  }
+
+  /* 주간-딥다이브 CSV → published 조인 → 카테고리별 상위 3건. */
+  function loadWeeklyDeepdive() {
+    if (typeof WEEKLY_DEEPDIVE_CSV !== "string" || !WEEKLY_DEEPDIVE_CSV) return;
+    fetch(WEEKLY_DEEPDIVE_CSV).then(function (r) { return r.text(); }).then(function (txt) {
+      var cat = deepDomainCategory(), buckets = {};
+      mktRows(txt).forEach(function (o) {
+        // 헤더는 전부 소문자로 들어온다('출처URL'→'출처url', '딥다이브ko' 는 원래 소문자).
+        var issue = (o["issue_key"] || "").trim();
+        var revision = parseInt(o["revision"] || "1", 10);
+        var url = (o["출처url"] || "").trim();
+        var body = (o["딥다이브ko"] || "").trim();
+        if (!issue || !url || !body) return;
+        // ⭐ 유출 방지: published 색인에 없으면 그리지 않는다.
+        var hit = weeklyPublished[issue + "|" + revision + "|" + url];
+        if (!hit) return;
+        var domain = (o["분야"] || hit.dom || "").trim(), key = cat[domain];
+        if (!key) return;
+        (buckets[key] = buckets[key] || []).push({
+          domain: domain,
+          title: hit.title,
+          url: url,
+          body: body,
+          watch: (o["관전포인트"] || "").trim(),
+          basis: (o["근거"] || "").trim(),
+          impact: parseFloat(o["영향도"] || "0") || 0,
+          lead: parseFloat(o["선행성"] || "0") || 0,
+          reach: parseFloat(o["파급범위"] || "0") || 0,
+        });
+      });
+      // 영향도 내림차순 상위 3건. 동률은 시트 순서 유지(안정정렬).
+      Object.keys(buckets).forEach(function (k) {
+        buckets[k].sort(function (a, b) { return b.impact - a.impact; });
+        buckets[k] = buckets[k].slice(0, 3);
+      });
+      weeklyDeep = buckets;
+      renderAllDeepdive();
+    }).catch(function () { /* 실패 시 섹션 생략 — 발행은 정상 */ });
+  }
+
+  function deepCardHtml(cfg, it) {
+    var ui = cfg.ui, D = UI.deepdive;
+    var dom = weeklyDomainById(cfg, it.domain);
+    var domLabel = dom ? t(dom.label) : it.domain;
+    var row = function (k, v) {
+      return v ? '<div class="deep-row deep-row--open"><span class="deep-row__k">' + k +
+        '</span><span class="deep-row__v">' + v + "</span></div>" : "";
+    };
+    return '<article class="card deep-card">' +
+        '<div class="card__top"><span class="badge-head">' + t(D.heading) + "</span>" +
+          '<span class="tag">#' + domLabel + "</span></div>" +
+        '<h3 class="card__title">' + it.title[lang] + "</h3>" +
+        '<p class="deep-card__body">' + it.body + "</p>" +
+        row(t(D.leadLabel), it.lead ? String(Math.round(it.lead)) : "") +
+        row(t(D.reachLabel), it.reach ? String(Math.round(it.reach)) : "") +
+        row(t(ui.watchLabel), it.watch) +
+        row(t(D.basisLabel), it.basis) +
+        '<span class="disclaimer-inline">' + discSvg() + (lang === "ko" ? "정보 제공 · 투자 조언 아님" : "Info only · not advice") + "</span>" +
+        (it.url ? '<p class="card__sources"><a class="lib__more" href="' + it.url + '" target="_blank" rel="noopener">' + t(D.sourceLabel) + "</a></p>" : "") +
+      "</article>";
+  }
+
+  /* 딥다이브가 없는 카테고리는 섹션을 통째로 감춘다 — 빈 상자를 남기지 않는다. */
+  function renderDeepdive(cfg) {
+    if (!cfg.deepSel) return;
+    var host = document.querySelector(cfg.deepSel);
+    if (!host) return;
+    var sec = host.closest("[data-deepdive-section]") || host;
+    var items = weeklyDeep[cfg.key] || [];
+    if (!items.length) { sec.hidden = true; host.innerHTML = ""; return; }
+    sec.hidden = false;
+    host.innerHTML = '<div class="grid-3">' + items.map(function (it) { return deepCardHtml(cfg, it); }).join("") + "</div>";
+  }
+  function renderAllDeepdive() { weeklyCfgs().forEach(function (cfg) { renderDeepdive(cfg); }); }
 
   /* ── 서재: 리포트 읽기(read.html) ─────────────────────── */
   var readState = { item: null, bodyHtml: null, error: null };
@@ -1013,6 +1110,7 @@
     renderLibraryPage();
     renderLibraryStrip();
     renderAllWeekly();
+    renderAllDeepdive();
     renderCalendar();
     renderReport();
     renderMarket();

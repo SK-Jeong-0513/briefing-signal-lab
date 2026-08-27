@@ -175,7 +175,7 @@ ul { margin: 0; padding: 0; list-style: none; }
   display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600;
   color: var(--warning); background: #FBF3E4; border: 1px solid #EBD9B4; padding: 4px 8px; border-radius: var(--r-sm);
 }
-.card__locked {
+.card__note {
   display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 600; color: var(--muted);
   background: var(--canvas); border: 1px dashed var(--border); border-radius: var(--r-md); padding: 10px 12px;
 }
@@ -372,15 +372,21 @@ ul { margin: 0; padding: 0; list-style: none; }
   font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--primary); background: var(--primary-soft); padding: 3px 10px; border-radius: 999px;
 }
-.deep-lock {
-  border: 1px dashed var(--border); background: var(--canvas); border-radius: var(--r-md);
-  padding: var(--s-md); display: flex; flex-direction: column; gap: var(--s-sm);
+/* 헤드라이너의 사실 줄(밸류체인·관전포인트). 예전 .deep-lock 은 자물쇠 상자였는데,
+   잠긴 게 아니라 데이터가 없어 비어 보였던 것이라 걷었다(2026-08-27). */
+.head-facts {
+  border-top: 1px solid var(--border); padding-top: var(--s-md);
+  display: flex; flex-direction: column; gap: var(--s-sm);
 }
-.deep-lock__head { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; font-weight: 700; color: var(--muted); }
 .deep-row { display: flex; gap: var(--s-sm); font-size: 0.875rem; }
 .deep-row__k { flex: none; width: 68px; font-weight: 600; color: var(--muted); }
+/* 기본값이 blur 인 것은 아직 잠금이 남은 곳을 위한 것이 아니라,
+   --open 을 깜빡하면 바로 드러나게 하기 위해 남겨 둔다. */
 .deep-row__v { color: var(--text); filter: blur(3px); user-select: none; }
-.deep-lock__desc { font-size: 0.8125rem; color: var(--muted); }
+/* 딥다이브 카드는 잠금이 아니다 — .deep-row__v 기본값인 blur 를 된다. */
+.deep-row--open .deep-row__v { filter: none; user-select: auto; }
+.deep-card__body { font-size: 0.9375rem; color: var(--text); }
+.deep-card .deep-row { margin-top: var(--s-xs); }
 
 /* 오늘의 샘플 브리핑 상단 카테고리 진입 칩 */
 .samples-nav { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-lg); }
