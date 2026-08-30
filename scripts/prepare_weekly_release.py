@@ -7,6 +7,8 @@ import json
 import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -19,6 +21,9 @@ KST = timezone(timedelta(hours=9))
 MIN_SCORE = float(os.environ.get("WEEKLY_MIN_SCORE", "85"))
 MIN_CONFIDENCE = float(os.environ.get("WEEKLY_MIN_CONFIDENCE", "0.85"))
 FRESH_DAYS = int(os.environ.get("WEEKLY_FRESH_DAYS", "10"))
+# 30초는 짧았다 — 2026-08-31 에 88행 POST 가 응답 대기 중 끊겼다(시트에는 기록됨).
+# 발송까지 버퍼가 몇 시간 있으므로 넉넉히 기다리는 편이 반쪽 상태로 죽는 것보다 낫다.
+POST_TIMEOUT = int(os.environ.get("WEEKLY_POST_TIMEOUT", "120"))
 READY_STATES = {"manual_ready", "auto_ready", "published", "email_partial", "emailed", "skipped"}
 ITEM_FIELDS = ["issue_key", "revision", "분야", "발행주", "유형", "제목ko", "제목en", "한줄ko", "한줄en", "밸류체인", "출처URL", "원문제목", "원문일시", "검수점수", "검수사유", "상태", "published_at", "updated_at"]
 
@@ -179,17 +184,67 @@ def content_hash(items):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def post_rows(tab, rows):
+def stamped_rows(csv_url, issue_key, stamp):
+    """게시 CSV 에서 (issue_key, updated_at=stamp) 인 행 수. 조회 실패는 -1."""
+    try:
+        rows = fetch_csv(csv_url)
+    except Exception as e:                                  # noqa: BLE001 - 조회 실패와 0건은 다르다
+        print("[verify] CSV 조회 실패: %s" % e)
+        return -1
+    return sum(1 for r in rows
+               if (r.get("issue_key") or "").strip() == issue_key
+               and (r.get("updated_at") or "").strip() == stamp)
+
+
+def written_despite_timeout(csv_url, issue_key, stamp, expected, attempts=6, wait=30):
+    """타임아웃 뒤 실제 기록 여부를 게시 CSV 로 확인한다.
+
+    ⚠️ 게시 CSV 스냅샷은 몇 분 늦게 갱신된다. 한 번 보고 0건이라고 판단하면 안 된다.
+    updated_at 을 이번 실행의 stamp 로 맞춰 세므로 과거 행이나 중복 재실행분이 섞이지 않는다.
+    """
+    for i in range(attempts):
+        time.sleep(15 if i == 0 else wait)
+        n = stamped_rows(csv_url, issue_key, stamp)
+        print("[verify] %s %s: %s건 / 기대 %d건 (%d/%d)"
+              % (issue_key, stamp, "조회실패" if n < 0 else n, expected, i + 1, attempts))
+        if n >= expected:
+            return True
+    return False
+
+
+def post_rows(tab, rows, verify=None):
+    """시트 탭에 append 한다.
+
+    verify=(csv_url, issue_key, stamp, expected) 를 주면 **타임아웃일 때만** 실제 기록
+    여부를 확인한다.
+
+    ⚠️ 타임아웃은 "안 써졌다"가 아니다. Apps Script 가 다 쓰고 응답만 늦는 경우가 있다.
+       2026-08-31 W36 에서 항목 88행이 시트에 기록됐는데 30초에 끊겨 스크립트가 죽었고,
+       뒤따르는 원장 POST 가 아예 실행되지 못했다. 그 결과 '항목만 있고 원장이 없는' 반쪽
+       상태가 됐는데, 그게 하필 mailer 의 weeklyLatestBundle_ 이 조용히 null 을 반환하는
+       조건이라 그 호가 통째로 사라질 뻔했다(운영자가 발행 예약을 눌러 수습).
+       그래서 타임아웃에 **재전송하지 않는다** — 재전송하면 같은 행이 두 번 들어간다.
+       확인해서 기록됐으면 그대로 다음 단계로 넘어가고, 정말 안 됐을 때만 실패시킨다.
+    """
     url = os.environ.get("WEEKLY_WEBAPP_URL", "").strip()
     if not url:
         raise RuntimeError("WEEKLY_WEBAPP_URL 없음")
     payload = {"token": os.environ.get("WEEKLY_WEBAPP_TOKEN", ""), "tab": tab, "rows": rows}
     req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as response:
-        body = response.read().decode("utf-8", "replace")
-        if response.status >= 300:
-            raise RuntimeError("POST %s %s" % (response.status, body[:200]))
-        print("[write] %s: %s" % (tab, body[:160]))
+    try:
+        with urllib.request.urlopen(req, timeout=POST_TIMEOUT) as response:
+            body = response.read().decode("utf-8", "replace")
+            if response.status >= 300:
+                raise RuntimeError("POST %s %s" % (response.status, body[:200]))
+            print("[write] %s: %s" % (tab, body[:160]))
+            return
+    except (TimeoutError, urllib.error.URLError) as e:
+        if not verify:
+            raise
+        print("[write] %s 응답 없음(%s) — 기록 여부 확인" % (tab, e))
+        if not written_despite_timeout(*verify):
+            raise
+        print("[write] %s: 응답은 없었지만 기록 확인됨 — 재전송 없이 계속" % tab)
 
 
 def main():
@@ -218,7 +273,7 @@ def main():
     reasons = tally([r for x in rejected for r in x["reasons"]])
     if not accepted:
         ledger_row = {"issue_key": issue, "state": "skipped", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": "", "updated_at": now, "message": "통과 0건; 제외 %d건 (%s)" % (len(rejected), reasons)}
-        post_rows("주간-발행", [ledger_row])
+        post_rows("주간-발행", [ledger_row], verify=(ledger_url, issue, now, 1))
         print("[release] %s skipped" % issue)
         return 0
     items = []
@@ -227,9 +282,13 @@ def main():
         item.update({"issue_key": issue, "revision": "1", "검수점수": str(int(ev["score"])), "검수사유": str(ev.get("reason", "")), "상태": "ready", "published_at": "", "updated_at": now})
         items.append(item)
     digest = content_hash(items)
-    post_rows("주간-발행항목", items)
+    # ⚠️ 항목 → 원장 순서이고, 항목에서 죽으면 원장이 안 써져 그 호가 조용히 사라진다.
+    #    (mailer weeklyLatestBundle_ 이 rev.1 원장을 못 찾으면 null 을 반환하고 발송을 생략한다)
+    #    그래서 항목 POST 는 타임아웃 시 재확인까지 하고 넘어간다.
+    post_rows("주간-발행항목", items,
+              verify=(items_url, issue, now, len(items)) if items_url else None)
     ledger_row = {"issue_key": issue, "state": "auto_ready", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": digest, "updated_at": now, "message": "자동 검수 통과 %d건 [%s]; 제외 %d건 (%s)" % (len(items), tally([i["분야"] for i in items]), len(rejected), reasons)}
-    post_rows("주간-발행", [ledger_row])
+    post_rows("주간-발행", [ledger_row], verify=(ledger_url, issue, now, 1))
     print("[release] %s auto_ready %d건 [%s]" % (issue, len(items), tally([i["분야"] for i in items])))
     print("[release] 제외 %d건 (%s)" % (len(rejected), reasons))
     return 0
