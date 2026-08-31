@@ -10,6 +10,7 @@ import pathlib
 import re
 import sys
 import unittest
+from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -242,6 +243,53 @@ class ScoringTests(unittest.TestCase):
         self.assertNotIn('"1줄"', seen["user"], "따라 쓸 수 있는 라벨을 넘기면 안 된다")
         self.assertNotIn('"2줄"', seen["user"])
         self.assertNotIn('"3줄"', seen["user"])
+
+    def test_force_write_is_refused_when_rows_exist(self):
+        """--force 로 덮어쓸 수 없다 — 웹앱이 append 전용이라 행이 더해진다.
+
+        메일러 weeklyDeepdiveByCat_ 는 출처URL 중복을 걸러내지 않고 영향도로 정렬해
+        상위 3건을 자른다. 9행에 9행이 더 붙으면 같은 카드가 메일에 두 번 실린다.
+        """
+        import contextlib, io as _io
+        # 헤더 검사가 existing[0].keys() 를 보므로 필드를 다 갖춘 행이어야 한다.
+        done = dict.fromkeys(deepdive.DEEPDIVE_FIELDS, "")
+        done.update({"issue_key": "2026-W36", "revision": "1"})
+        existing = [dict(done) for _ in range(9)]
+        posted = []
+        with patch.object(deepdive, "fetch_csv", side_effect=[
+                [row("macro", "E1", issue_key="2026-W36")], existing]), \
+             patch.object(deepdive, "fetch_header", return_value=deepdive.DEEPDIVE_FIELDS), \
+             patch.object(deepdive, "post_rows", side_effect=lambda *a: posted.append(a)), \
+             patch.dict(deepdive.os.environ, {"WEEKLY_RELEASE_ITEMS_CSV": "u", "WEEKLY_DEEPDIVE_CSV": "v"}):
+            out = _io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = deepdive.main(["--force"])
+        self.assertEqual(code, 2, "거부하지 않으면 시트가 조용히 오염된다")
+        self.assertEqual(posted, [], "거부했는데 썼다")
+        self.assertIn("append 전용", out.getvalue())
+
+    def test_no_op_message_tells_how_to_rescore(self):
+        """--force 로는 못 하므로, 안내가 '행을 지우라'여야 한다."""
+        import contextlib, io as _io
+        done = dict.fromkeys(deepdive.DEEPDIVE_FIELDS, "")
+        done.update({"issue_key": "2026-W36", "revision": "1"})
+        existing = [done]
+        with patch.object(deepdive, "fetch_csv", side_effect=[
+                [row("macro", "E1", issue_key="2026-W36")], existing]), \
+             patch.object(deepdive, "fetch_header", return_value=deepdive.DEEPDIVE_FIELDS), \
+             patch.dict(deepdive.os.environ, {"WEEKLY_RELEASE_ITEMS_CSV": "u", "WEEKLY_DEEPDIVE_CSV": "v"}):
+            out = _io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = deepdive.main([])
+        self.assertEqual(code, 0)
+        self.assertIn("지우고 재실행", out.getvalue())
+
+    def test_existing_rows_are_matched_per_issue_and_revision(self):
+        rows = [{"issue_key": "2026-W36", "revision": "1"},
+                {"issue_key": "2026-W36", "revision": "2"},
+                {"issue_key": "2026-W35", "revision": "1"}]
+        self.assertEqual(len(deepdive.existing_rows(rows, "2026-W36", 1)), 1)
+        self.assertEqual(deepdive.existing_rows(rows, "2026-W34", 1), [])
 
     def test_already_done_is_per_issue_revision(self):
         existing = [{"issue_key": "2026-W35", "revision": "1"}]

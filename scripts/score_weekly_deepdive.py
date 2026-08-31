@@ -359,16 +359,24 @@ def check_header(header):
     return ""
 
 
+def existing_rows(existing, issue, revision):
+    """이 호·리비전으로 이미 기록된 딥다이브 행."""
+    return [r for r in existing
+            if str(r.get("issue_key", "")).strip() == issue
+            and str(r.get("revision", "")).strip() == str(revision)]
+
+
 def already_done(existing, issue, revision):
     """이 호·리비전이 이미 채점됐나. 한 호에 한 번만 돈다(재실행 안전)."""
-    return any(str(r.get("issue_key", "")).strip() == issue
-               and str(r.get("revision", "")).strip() == str(revision) for r in existing)
+    return bool(existing_rows(existing, issue, revision))
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="선정 결과만 출력하고 시트에 쓰지 않는다")
-    parser.add_argument("--force", action="store_true", help="이미 채점된 호도 다시 채점한다")
+    parser.add_argument("--force", action="store_true",
+                        help="이미 채점된 호도 다시 채점한다. 쓰기와 함께 쓰면 거부된다 "
+                             "— 웹앱이 append 전용이라 행이 더해진다. --dry-run 과 함께 쓸 것")
     args = parser.parse_args(argv)
 
     items_csv = os.environ.get("WEEKLY_RELEASE_ITEMS_CSV", "").strip()
@@ -398,9 +406,27 @@ def main(argv=None):
             print("[ERROR] %s" % problem)
             print("        웹앱은 헤더 이름으로 매핑해서 이름이 다르면 그 열이 조용히 빈다.")
             return 2
-    if not args.force and already_done(existing, issue, revision):
-        print("[deepdive] %s rev%s 이미 채점됨 — 생략(--force 로 재실행)" % (issue, revision))
+    stale = existing_rows(existing, issue, revision)
+    if stale and not args.force:
+        print("[deepdive] %s rev%s 이미 채점됨(%d행) — 생략" % (issue, revision, len(stale)))
+        print("           다시 채점하려면 시트 '%s' 에서 그 행들을 지우고 재실행한다." % DEEPDIVE_TAB)
+        print("           점수만 미리 보려면 --dry-run --force (시트에 쓰지 않는다).")
         return 0
+    if stale and args.force and not args.dry_run:
+        # ⚠️ --force 로 덮어쓸 수 없다. 웹앱(market/Code.gs)이 appendRow 전용이라
+        #    지우지 않고 다시 쓰면 행이 **더해진다**. 그리고 메일러 weeklyDeepdiveByCat_ 는
+        #    출처URL 중복을 걸러내지 않고 영향도로 정렬해 상위 3건을 자르므로,
+        #    같은 딥다이브 카드가 메일에 두 번 실린다.
+        #    2026-08-31 W36 에서 재채점을 검토하다 이 구조를 확인했다(그때는 손으로 지웠다).
+        print("[ERROR] %s rev%s 딥다이브 %d행이 이미 있다 — --force 로 덮어쓸 수 없다."
+              % (issue, revision, len(stale)))
+        print("        웹앱이 append 전용이라 %d행이 더 붙어 %d행이 되고, 메일러가 출처URL"
+              % (len(stale), len(stale) * 2))
+        print("        중복을 걸러내지 않아 같은 카드가 두 번 실린다.")
+        print("        시트 '%s' 에서 그 %d행을 지운 뒤 --force 없이 다시 실행할 것."
+              % (DEEPDIVE_TAB, len(stale)))
+        print("        점수만 확인하려면 --dry-run --force 를 쓴다.")
+        return 2
 
     scores = score_rows(rows)
     if not scores:
