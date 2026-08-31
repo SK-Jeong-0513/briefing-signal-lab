@@ -159,6 +159,44 @@ class ScoringTests(unittest.TestCase):
         body, watch = deepdive.build_deepdive(row("semicon", "A"), lambda s, u, **k: ("", None))
         self.assertEqual((body, watch), ("", ""))
 
+    def test_format_label_is_stripped_from_body_and_watch(self):
+        """'1줄: ' 라벨이 본문에 남으면 안 된다 — 2026-08-31 W36 에서 9건 중 2건이 그랬다.
+
+        둘 다 각 카테고리 1순위 카드라 눈에 띄는 자리였고, 발송 전에 손으로 지웠다.
+        """
+        def labelled(system, user, **kwargs):
+            return json.dumps({
+                "lines": ["1줄: 엔비디아가 GPU 를 공급한다.", "2줄: 수요가 늘었다.", "3줄: 병목은 전력이다."],
+                "watch": "1줄: 다음 주 가동률을 보라.",
+            }), "deepseek"
+        body, watch = deepdive.build_deepdive(row("ai-infra", "A"), labelled)
+        self.assertEqual(body, "엔비디아가 GPU 를 공급한다.\n수요가 늘었다.\n병목은 전력이다.")
+        self.assertEqual(watch, "다음 주 가동률을 보라.")
+
+    def test_sentences_that_merely_start_with_digits_survive(self):
+        """콜론을 요구하지 않으면 '3분기 실적…' 같은 정상 문장의 앞머리를 잘라먹는다."""
+        def plain(system, user, **kwargs):
+            return json.dumps({
+                "lines": ["3분기 실적이 개선됐다.", "2026년 전망은 밝다.", "1위 사업자가 바뀐다."],
+                "watch": "3줄 요약을 참고하라.",
+            }), "deepseek"
+        body, watch = deepdive.build_deepdive(row("semicon", "A"), plain)
+        self.assertEqual(body, "3분기 실적이 개선됐다.\n2026년 전망은 밝다.\n1위 사업자가 바뀐다.")
+        self.assertEqual(watch, "3줄 요약을 참고하라.")
+
+    def test_prompt_does_not_hand_the_model_a_label_to_copy(self):
+        """원인 쪽도 막는다 — 스키마에 '1줄' 을 두면 모델이 값 앞에 그대로 붙인다."""
+        seen = {}
+
+        def capture(system, user, **kwargs):
+            seen["user"] = user
+            return json.dumps({"lines": ["a", "b", "c"], "watch": "w"}), "deepseek"
+
+        deepdive.build_deepdive(row("semicon", "A"), capture)
+        self.assertNotIn('"1줄"', seen["user"], "따라 쓸 수 있는 라벨을 넘기면 안 된다")
+        self.assertNotIn('"2줄"', seen["user"])
+        self.assertNotIn('"3줄"', seen["user"])
+
     def test_already_done_is_per_issue_revision(self):
         existing = [{"issue_key": "2026-W35", "revision": "1"}]
         self.assertTrue(deepdive.already_done(existing, "2026-W35", 1))

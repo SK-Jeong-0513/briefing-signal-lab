@@ -229,24 +229,44 @@ def select(rows, scores, per_category=None):
     return picked
 
 
+# '1줄: ' 같은 형식 라벨. 콜론을 반드시 요구한다 — 없으면 '3줄 요약을 보면...' 같은
+# 정상 문장의 앞머리를 잘라먹는다.
+_FORMAT_LABEL = re.compile(r"^\s*(?:[-*•]\s*)?(?:\d\s*줄|line\s*\d)\s*[:：]\s*", re.I)
+
+
+def strip_format_label(text):
+    """모델이 본문 앞에 붙인 형식 라벨을 걷어낸다.
+
+    ⚠️ 프롬프트 스키마에 ["1줄","2줄","3줄"] 이라고 적어 뒀더니 모델이 그 라벨을 값 앞에
+       그대로 붙여 내보내는 회차가 있었다(2026-08-31 W36: 9건 중 2건이 '1줄: ...').
+       각 카테고리 1순위 카드라 눈에 띄는 자리였고 손으로 지워서 발송했다.
+       스키마 문구는 아래에서 고쳤지만 **형식은 회차마다 흔들리므로** 파싱에서도 막는다.
+    """
+    return _FORMAT_LABEL.sub("", str(text or "")).strip()
+
+
 def build_deepdive(row, chat=None):
     """선정된 1건 → (3줄 요약, 관전 포인트). 실패하면 ('', '') — 점수만 남는다."""
     chat = chat or ai.chat
     system = ("당신은 주간 투자 브리핑의 애널리스트입니다. 주어진 신호의 **메커니즘**을 3줄로 "
               "설명하고, 다음 주에 확인할 관전 포인트를 1줄로 씁니다. 원문에 없는 수치·기업명을 "
-              "지어내지 마세요. 매수·매도·목표가를 권유하지 마세요. JSON 객체만 반환하세요.")
+              "지어내지 마세요. 매수·매도·목표가를 권유하지 마세요. JSON 객체만 반환하세요. "
+              "각 값에 '1줄:' 같은 번호·라벨을 붙이지 말고 문장만 쓰세요.")
     user = json.dumps({
         "domain": row.get("분야", ""), "title": row.get("제목ko", ""), "line": row.get("한줄ko", ""),
         "source_title": row.get("원문제목", ""), "value_chain": row.get("밸류체인", ""),
-        "required": {"lines": ["1줄", "2줄", "3줄"], "watch": "1줄"},
+        # ⚠️ 여기에 ["1줄","2줄","3줄"] 처럼 **따라 쓸 수 있는 라벨**을 두지 않는다.
+        #    모델이 그것을 값의 일부로 착각해 본문 앞에 붙인다(2026-08-31 실제).
+        "required": {"lines": "메커니즘을 설명하는 문장 3개의 배열",
+                     "watch": "다음 주에 확인할 관전 포인트 한 문장"},
     }, ensure_ascii=False)
     text, engine = chat(system, user, max_tokens=700, temperature=0.2, min_chars=120)
     obj = parse_object(text)
     if not obj or not engine:
         print("[deepdive] 본문 생성 실패: %s" % str(row.get("제목ko", ""))[:30])
         return "", ""
-    lines = [str(x).strip() for x in (obj.get("lines") or []) if str(x).strip()]
-    return "\n".join(lines[:3]), str(obj.get("watch", "")).strip()
+    lines = [s for s in (strip_format_label(x) for x in (obj.get("lines") or [])) if s]
+    return "\n".join(lines[:3]), strip_format_label(obj.get("watch", ""))
 
 
 def post_rows(tab, rows):
