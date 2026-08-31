@@ -75,6 +75,7 @@ class ScheduleOrderTests(unittest.TestCase):
         self.steps = {}
         for key, fname in (("draft", "weekly-draft.yml"),
                            ("release", "weekly-release.yml"),
+                           ("deepdive", "weekly-deepdive.yml"),
                            ("send", "weekly-send.yml")):
             minute, hour, dow = cron_of(fname)
             h, d, m = utc_to_kst(hour, dow, minute)
@@ -89,6 +90,34 @@ class ScheduleOrderTests(unittest.TestCase):
         order = [hours_from_saturday(*self.steps[k]) for k in ("draft", "release", "send")]
         self.assertLess(order[0], order[1], "draft 가 release 보다 늦다")
         self.assertLess(order[1], order[2], "release 가 send 보다 늦다 — 호가 통째로 생략된다")
+
+    def test_deepdive_sits_between_release_and_send(self):
+        """채점은 게이트 뒤이자 발송 앞이어야 한다.
+
+        앞서면 대상('상태=ready')이 아직 없고, 발송을 넘기면 그 호는 딥다이브 없이 나간다.
+        발송이 항목을 published 로 바꾸므로 그 뒤에는 다시 돌려도 no-op 이라 복구가 안 된다.
+        """
+        rel, dd, send = (hours_from_saturday(*self.steps[k]) for k in ("release", "deepdive", "send"))
+        self.assertLess(rel, dd, "채점이 release 보다 이르다 — ready 항목이 아직 없다")
+        self.assertLess(dd, send, "채점이 send 보다 늦다 — 그 호는 딥다이브 없이 확정된다")
+
+    def test_deepdive_is_triggered_by_the_gate_not_only_by_cron(self):
+        """크론 하나에만 기대면 안 된다 — 2026-08-31 에 첫 예약이 통째로 누락됐다.
+
+        게이트 지연(04:00 예정 → 06:40 실행)까지 겹치면 크론만으로는 순서도 안 지켜진다.
+        """
+        text = (ROOT / ".github" / "workflows" / "weekly-deepdive.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_run:", text, "게이트 완료를 직접 물려야 순서가 보장된다")
+        self.assertIn("Weekly briefing release gate", text, "물린 대상이 게이트가 아니다")
+
+    def test_scheduled_crons_avoid_the_top_of_the_hour(self):
+        """정각은 GitHub 예약 부하가 몰려 지연·누락이 잦다.
+
+        주간 사이클 4개는 서로 순서에 의존하므로 한 단계가 밀리면 다음이 헛돈다.
+        """
+        offenders = [k for k, (_h, _d, m) in self.steps.items() if m == 0]
+        self.assertNotIn("deepdive", offenders,
+                         "채점은 게이트 지연에 가장 민감하다 — 정각을 피한다")
 
     def test_release_has_enough_buffer_before_send(self):
         gap = hours_from_saturday(*self.steps["send"]) - hours_from_saturday(*self.steps["release"])
