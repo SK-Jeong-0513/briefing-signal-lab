@@ -14,6 +14,7 @@
 """
 import argparse
 import csv
+import difflib
 import io
 import json
 import os
@@ -39,6 +40,12 @@ CATEGORIES = {
 DOMAIN_CATEGORY = {d: c for c, ds in CATEGORIES.items() for d in ds}
 
 PER_CATEGORY = int(os.environ.get("DEEPDIVE_PER_CATEGORY", "3"))
+# 영향도 = (선행성 + 파급범위) / 2. 하한 미달이면 그 자리를 비운다.
+MIN_IMPACT = int(os.environ.get("DEEPDIVE_MIN_IMPACT", "65"))
+# 같은 사건 판정 임계값. 2026-08-31 실측으로 잡았다(중복 쌍 공유2·비율0.50,
+# 무관 쌍 공유0·비율 0.16~0.33). 둘 다 만족해야 병합한다.
+MERGE_MIN_SHARED = int(os.environ.get("DEEPDIVE_MERGE_SHARED", "2"))
+MERGE_MIN_RATIO = float(os.environ.get("DEEPDIVE_MERGE_RATIO", "0.45"))
 BATCH = int(os.environ.get("DEEPDIVE_BATCH", "25"))
 
 # 두 축은 제품 한 문장에서 나온다 — "경제지 헤드라인보다 먼저 잡은 선행 신호를,
@@ -203,7 +210,40 @@ def dedupe_key(row):
     return url or ("t:" + (row.get("제목ko") or "").strip())
 
 
-def select(rows, scores, per_category=None):
+def impact_of(score):
+    """영향도 = (선행성 + 파급범위) / 2. 시트에 쓰는 값과 같은 식이어야 한다."""
+    return round((score["lead"] + score["reach"]) / 2)
+
+
+def content_tokens(title):
+    """제목에서 비교에 쓸 토큰. 수치와 한 글자는 버린다.
+
+    같은 사건이라도 매체마다 수치를 다르게 적는다(200만개 추가 = 300만개로 확대).
+    """
+    words = re.sub(r"[^0-9A-Za-z가-힣]+", " ", str(title or "").lower()).split()
+    return {w for w in words if len(w) >= 2 and not any(c.isdigit() for c in w)}
+
+
+def same_story(a, b):
+    """출처URL 이 달라도 같은 사건을 가리키는 제목인가.
+
+    ⚠️ dedupe_key 는 출처URL 이 다르면 다른 기사로 본다. 그런데 같은 사건을 다룬 서로
+       다른 기사가 딥다이브 두 칸을 먹는 일이 실제로 있었다(2026-08-31 W36: '엔비디아,
+       아마존에 GPU 200만개 추가 공급' 과 '아마존, AWS에 엔비디아 GPU 300만개 도입 확정'
+       이 tech 3칸 중 2칸을 차지했고, semicon 후보 10건은 한 건도 못 올라왔다).
+
+    실제 문자열로 재서 임계값을 잡았다. 위 중복 쌍은 공유토큰 2 · difflib 0.50 이고,
+    같은 호의 무관한 쌍 4개는 전부 공유토큰 0 · difflib 0.16~0.33 이었다.
+    **두 신호를 모두 요구한다** — 잘못 병합하면 멀쩡한 딥다이브 한 칸이 조용히 사라지고,
+    놓치면 눈에 보이기만 한다. 놓치는 쪽이 덜 나쁘므로 정밀도를 택한다.
+    """
+    ta, tb = content_tokens(a), content_tokens(b)
+    if len(ta & tb) < MERGE_MIN_SHARED:
+        return False
+    return difflib.SequenceMatcher(None, str(a or ""), str(b or "")).ratio() >= MERGE_MIN_RATIO
+
+
+def select(rows, scores, per_category=None, min_impact=None):
     """카테고리별 상위 N. 동점은 원래 행 순서(파이썬 sort 는 안정정렬).
 
     ⚠️ 같은 기사를 두 번 뽑지 않는다. 발행항목에는 실제로 중복 행이 있다
@@ -211,21 +251,41 @@ def select(rows, scores, per_category=None):
        중복을 그대로 두면 딥다이브 9칸 중 두 칸을 같은 글이 먹는다.
     """
     per_category = PER_CATEGORY if per_category is None else per_category
+    min_impact = MIN_IMPACT if min_impact is None else min_impact
     picked, seen = [], set()
     for category in ("tech", "finance", "economy"):
         pool = [i for i in sorted(scores)
                 if DOMAIN_CATEGORY.get((rows[i].get("분야") or "").strip()) == category]
+        # ⚠️ 하한 미달이면 **자리를 비운다.** 카테고리별 상위 N 은 상대 순위라 후보가 얇으면
+        #    품질과 무관하게 올라온다. economy 는 분야가 macro 하나뿐이라 특히 그렇다
+        #    (2026-08-31: 선행성 40 — 이미 일어난 금리인상 — 이 영향도 55로 선정됐다).
+        #    3칸을 채우는 것보다 딥다이브가 아닌 것을 싣지 않는 쪽이 낫다.
+        low = [i for i in pool if impact_of(scores[i]) < min_impact]
+        if low:
+            print("  [%-9s] 영향도 하한(%d) 미달 %d건 제외 — 최고 %d"
+                  % (category, min_impact, len(low), max(impact_of(scores[i]) for i in low)))
+        pool = [i for i in pool if impact_of(scores[i]) >= min_impact]
         pool.sort(key=lambda i: -(scores[i]["lead"] + scores[i]["reach"]))
-        taken = 0
+        taken, titles = 0, []
         for i in pool:
             if taken >= per_category:
                 break
             key = dedupe_key(rows[i])
             if key in seen:
                 continue
+            title = rows[i].get("제목ko") or ""
+            dup = next((t for t in titles if same_story(title, t)), None)
+            if dup is not None:
+                # 조용히 버리지 않는다 — 잘못 병합했는지 로그로만 알 수 있다.
+                print("  [%-9s] 같은 사건으로 병합 제외: %s (기선정: %s)"
+                      % (category, str(title)[:34], str(dup)[:34]))
+                continue
             seen.add(key)
+            titles.append(title)
             picked.append(i)
             taken += 1
+        if taken < per_category:
+            print("  [%-9s] %d/%d건만 선정 — 후보 부족" % (category, taken, per_category))
     return picked
 
 

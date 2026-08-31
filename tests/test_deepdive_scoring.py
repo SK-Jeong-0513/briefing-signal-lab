@@ -88,14 +88,14 @@ class ScoringTests(unittest.TestCase):
                 row("power", "B"), row("space", "C")]
         scores = {0: {"lead": 99, "reach": 99}, 1: {"lead": 98, "reach": 98},
                   2: {"lead": 50, "reach": 50}, 3: {"lead": 40, "reach": 40}}
-        picked = deepdive.select(rows, scores, per_category=3)
+        picked = deepdive.select(rows, scores, per_category=3, min_impact=0)
         self.assertEqual(picked, [0, 2, 3], "같은 출처URL 은 한 번만 — 다음 후보로 채운다")
 
     def test_select_falls_back_to_title_when_url_missing(self):
         rows = [row("semicon", "같은제목", 출처URL=""), row("bio", "같은제목", 출처URL=""),
                 row("power", "다른제목")]
         scores = {i: {"lead": 90 - i, "reach": 90 - i} for i in range(3)}
-        self.assertEqual(deepdive.select(rows, scores, per_category=3), [0, 2])
+        self.assertEqual(deepdive.select(rows, scores, per_category=3, min_impact=0), [0, 2])
 
     def test_clamp_bounds_and_rejects_non_numeric(self):
         self.assertEqual(deepdive.clamp(150), 100)
@@ -136,7 +136,7 @@ class ScoringTests(unittest.TestCase):
         scores = {0: {"lead": 90, "reach": 90}, 1: {"lead": 80, "reach": 80}, 2: {"lead": 70, "reach": 70},
                   3: {"lead": 10, "reach": 10}, 4: {"lead": 95, "reach": 95}, 5: {"lead": 60, "reach": 60},
                   6: {"lead": 50, "reach": 50}, 7: {"lead": 88, "reach": 88}, 8: {"lead": 20, "reach": 20}}
-        picked = deepdive.select(rows, scores, per_category=3)
+        picked = deepdive.select(rows, scores, per_category=3, min_impact=0)
         self.assertEqual(picked, [0, 1, 2, 4, 5, 6, 7, 8],
                          "카테고리별 상위 3 — economy 는 후보가 2건뿐이라 2건")
         self.assertNotIn(3, picked, "최저점 ai-infra 는 tech 상위 3에서 밀려야 한다")
@@ -144,7 +144,7 @@ class ScoringTests(unittest.TestCase):
     def test_select_is_stable_on_ties(self):
         rows = [row("semicon", "A"), row("bio", "B"), row("power", "C"), row("space", "D")]
         scores = {i: {"lead": 50, "reach": 50} for i in range(4)}
-        self.assertEqual(deepdive.select(rows, scores, per_category=2), [0, 1],
+        self.assertEqual(deepdive.select(rows, scores, per_category=2, min_impact=0), [0, 1],
                          "동점이면 원래 행 순서를 유지한다")
 
     def test_deepdive_trims_to_three_lines(self):
@@ -158,6 +158,52 @@ class ScoringTests(unittest.TestCase):
         # 본문 생성이 실패해도 점수 행은 남아야 한다 — 딥다이브만 비는 게 전부 잃는 것보다 낫다.
         body, watch = deepdive.build_deepdive(row("semicon", "A"), lambda s, u, **k: ("", None))
         self.assertEqual((body, watch), ("", ""))
+
+    def test_same_event_from_two_articles_takes_only_one_slot(self):
+        """출처URL 이 달라도 같은 사건이면 한 칸만 쓴다 — 2026-08-31 W36 실사고.
+
+        tech 3칸 중 2칸을 같은 GPU 뉴스가 먹었고, semicon 후보 10건은 한 건도 못 올라왔다.
+        dedupe_key 는 출처URL 기준이라 서로 다른 기사로 봤다.
+        """
+        rows = [row("ai-infra", "엔비디아, 아마존에 GPU 200만개 추가 공급하기로", 출처URL="https://a/1"),
+                row("ai-infra", "아마존, AWS에 엔비디아 GPU 300만 개 도입 확정", 출처URL="https://b/2"),
+                row("semicon", "삼성전자, HBM4E 8단 시제품 개발 착수", 출처URL="https://c/3")]
+        scores = {0: {"lead": 85, "reach": 80}, 1: {"lead": 85, "reach": 80}, 2: {"lead": 70, "reach": 70}}
+        picked = deepdive.select(rows, scores, per_category=3, min_impact=0)
+        self.assertEqual(picked, [0, 2], "같은 사건은 한 번만 — 남는 칸은 다음 후보가 채운다")
+
+    def test_unrelated_stories_are_not_merged(self):
+        """잘못 병합하면 멀쩡한 딥다이브 한 칸이 조용히 사라진다 — 놓치는 쪽이 덜 나쁘다.
+
+        같은 호의 무관한 쌍은 실측에서 공유토큰 0 · difflib 0.16~0.33 이었다.
+        """
+        pairs = [
+            ("삼성전자, 엔비디아 NVHBM 선점 및 HBM4E 개발 돌입", "삼성바이오로직스, 3조 원 대형 유증 승인에 주가 급락"),
+            ("美, 베네수엘라와 석유 합의…트럼프 매장원유에 과반 통제권", "카타르 LNG시설 가동중단에 아시아·유럽 천연가스 가격폭등"),
+            ("한은, 두 달 연속 25bp 금리인상…연 3.00%", "경제 포커스 두 달 만에 12% 내린 환율...이젠 삼전닉"),
+            ("캐나다, 미국산 700개 품목 최대 50% 보복관세", "대만 GDP 성장률 전망치 대폭 상향 조정"),
+        ]
+        for a, b in pairs:
+            self.assertFalse(deepdive.same_story(a, b), "무관한 쌍을 병합했다: %s / %s" % (a[:20], b[:20]))
+
+    def test_low_impact_leaves_the_slot_empty(self):
+        """하한 미달이면 자리를 비운다 — 상대 순위라 후보가 얇으면 품질과 무관하게 올라온다.
+
+        2026-08-31: economy 는 분야가 macro 하나뿐이라 선행성 40(이미 일어난 금리인상)이
+        영향도 55 로 선정됐다. 3칸을 채우는 것보다 안 싣는 쪽이 낫다.
+        """
+        rows = [row("macro", "E1"), row("macro", "E2"), row("macro", "E3")]
+        scores = {0: {"lead": 75, "reach": 60},   # 영향도 68
+                  1: {"lead": 50, "reach": 70},   # 영향도 60
+                  2: {"lead": 40, "reach": 70}}   # 영향도 55 — 어제 실제로 실린 것
+        self.assertEqual(deepdive.select(rows, scores, per_category=3, min_impact=65), [0],
+                         "하한 미달은 자리를 비운다")
+        self.assertEqual(deepdive.select(rows, scores, per_category=3, min_impact=0), [0, 1, 2])
+
+    def test_impact_matches_the_value_written_to_the_sheet(self):
+        """하한 판정과 시트 '영향도' 가 다른 식이면 로그와 결과가 어긋난다."""
+        self.assertEqual(deepdive.impact_of({"lead": 90, "reach": 80}), 85)
+        self.assertEqual(deepdive.impact_of({"lead": 40, "reach": 70}), 55)
 
     def test_format_label_is_stripped_from_body_and_watch(self):
         """'1줄: ' 라벨이 본문에 남으면 안 된다 — 2026-08-31 W36 에서 9건 중 2건이 그랬다.
