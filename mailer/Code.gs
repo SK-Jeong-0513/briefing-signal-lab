@@ -330,6 +330,21 @@ function sendWeeklyUnlocked_() {
   syncResubscribes_();          // 재신청자를 먼저 '구독'으로 되돌린 뒤 선호도를 읽는다
   var maps = {}; releaseCats.forEach(function (c) { maps[c.key] = prefMap_(c.prefSheet); });
   var delivery = weeklyDelivery_(), sentMap = weeklySentMap_(delivery, bundle.issueKey, 1);
+  // 한도 사전 확인. 주간은 발송로그가 있어 부분 발송이 복구되므로 막지 않고 알리기만 한다.
+  // 아직 못 받은 사람 수를 센다 — 아래 루프의 첫 두 필터(이메일 정규화·동의·중복 발송)와
+  // 같은 판정을 쓴다. 분야 선호로 더 걸러지므로 이 값은 상한이고, 조금 과하게 경고할 수는
+  // 있어도 놓치지는 않는다.
+  if (!CFG.TEST_MODE) {
+    var need = 0, preSeen = {};
+    for (var q = 0; q < rt.rows.length; q++) {
+      var qe = String(rt.rows[q].cells[iE] || "").trim().toLowerCase();
+      if (!qe || qe.indexOf("@") < 0 || preSeen[qe] || !consented_(rt.rows[q].cells[iC])) continue;
+      preSeen[qe] = 1;
+      if (!sentMap[token_(qe)]) need++;
+    }
+    mailQuotaWarn_(need, "주간 " + bundle.issueKey);
+  }
+
   var sent = 0, skipped = 0, failed = 0, seen = {};
   for (var i = 0; i < rt.rows.length; i++) {
     var cells = rt.rows[i].cells, email = String(cells[iE] || "").trim().toLowerCase();
@@ -493,12 +508,8 @@ function specialSendRow_(table, row) {
     // ⚠️ 한도 조회는 경고 로그 전용이다. 발송을 막지 않는다. 그런데 MailApp 은 GmailApp 과
     //    OAuth 스코프가 달라, 트리거가 새 스코프를 승인받기 전이면 이 줄에서 통째로 죽는다
     //    (2026-08-17 스페셜·일일이 정확히 여기서 멈췄다). 진단이 발송을 죽이면 안 된다.
-    var left = null;
-    try { left = MailApp.getRemainingDailyQuota(); }
-    catch (e) { Logger.log("[WARN] 스페셜 " + bundle.id + " 잔여 한도 조회 실패 — 경고 생략: " + e); }
-    if (targets.length && left != null && left < targets.length) {
-      Logger.log("[WARN] 스페셜 " + bundle.id + " 한도 부족 — 필요 " + targets.length + " · 잔여 " + left + " (부분 발송 후 이어서 진행)");
-    }
+    // 로그만 남기던 것을 운영자 메일까지 가게 바꿨다(2026-09-01) — 로그는 아무도 안 본다.
+    if (!CFG.TEST_MODE) mailQuotaWarn_(targets.length, "스페셜 " + bundle.id);
 
     for (var i = 0; i < targets.length; i++) {
       var email = targets[i], hash = token_(email);
@@ -769,6 +780,29 @@ function sendMail_(to, subject, plain, htmlBody) {
 // ⚠️ 한도 조회 자체가 실패해도 같은 원칙으로 통과시킨다. MailApp 은 GmailApp 과 OAuth
 //    스코프가 달라 트리거가 새 스코프를 승인받기 전이면 여기서 예외가 나는데,
 //    2026-08-17 에 그 예외가 일일 시황 발송을 통째로 죽였다(가드가 발송을 막은 셈).
+// 주간·스페셜용. 이쪽은 수신자별 발송로그가 있어 부분 발송이 복구되므로 **막지 않고 알린다.**
+//
+// ⚠️ 로그로만 남기면 아무도 모른다. 운영자가 보는 것은 실행 기록이 아니라 [BSL] 메일이다
+//    (스페셜은 2026-08-16 부터 Logger.log 경고만 있었고, 그래서 한 번도 눈에 띈 적이 없다).
+// ⚠️ 한도 조회 실패는 그냥 넘어간다 — 진단이 발송을 막는 주체가 되면 안 된다(2026-08-17).
+// ⚠️ 알림 메일 자체도 한도를 1 쓴다. 한도가 0이면 이 발송이 예외를 내므로 반드시 감싼다.
+function mailQuotaWarn_(needed, label) {
+  var left;
+  try { left = MailApp.getRemainingDailyQuota(); }
+  catch (e) { Logger.log("[WARN] " + label + " 잔여 한도 조회 실패 — 경고 생략: " + e); return; }
+  if (!needed || left >= needed) return;
+  Logger.log("[WARN] " + label + " 한도 부족 — 필요 " + needed + " · 잔여 " + left + " (부분 발송 후 이어서 진행)");
+  try {
+    sendMail_(CFG.OPERATOR_EMAIL, "[BSL] 발송 한도 부족 — " + label + " 부분 발송",
+      label + " 발송에 " + needed + "명이 필요하나 남은 한도가 " + left + "명입니다.\n\n" +
+      "이쪽은 수신자별 발송로그가 있어 중간에 끊겨도 이어서 보낼 수 있으므로 발송을 시작했습니다.\n" +
+      "한도에 걸린 수신자는 발송로그에 failed 로 남고 원장이 email_partial 이 됩니다. " +
+      "한도가 풀린 뒤 같은 함수를 다시 실행하면 못 받은 사람에게만 나갑니다.\n\n" +
+      "⚠️ 한도는 롤링 24시간입니다. 어제 많이 썼으면 오늘도 부족합니다.\n" +
+      "근본 해결은 Google Workspace 이전입니다(100명 → 1,500명).", "");
+  } catch (e) { Logger.log("[ERROR] 한도 부족 알림도 실패: " + e); }
+}
+
 function mailQuotaOk_(needed, label) {
   var left;
   try { left = MailApp.getRemainingDailyQuota(); }
@@ -777,9 +811,14 @@ function mailQuotaOk_(needed, label) {
   Logger.log("[ERROR] " + label + " 발송 한도 부족 — 필요 " + needed + " · 잔여 " + left);
   try {
     sendMail_(CFG.OPERATOR_EMAIL, "[BSL] 발송 한도 부족 — " + label + " 발송 보류",
-      label + " 발송에 " + needed + "명이 필요하나 오늘 남은 한도가 " + left + "명입니다.\n\n" +
+      label + " 발송에 " + needed + "명이 필요하나 남은 한도가 " + left + "명입니다.\n\n" +
       "절반만 나가면 누가 받았는지 알 수 없어 재발송이 불가능하므로 발송하지 않았습니다.\n" +
-      "한도는 자정(태평양 표준시 기준)에 초기화됩니다. 반복되면 Google Workspace 계정으로 옮겨야 합니다(한도 1,500명).", "");
+      "이 회차는 복구되지 않습니다 — 일일은 수신자별 발송로그가 없어 이어서 보낼 수 없습니다.\n\n" +
+      "⚠️ 한도는 달력 하루가 아니라 롤링 24시간입니다. '내일이면 초기화'가 아니라, " +
+      "24시간 전에 쓴 몫이 시간에 따라 조금씩 풀립니다. 그래서 어제 많이 썼으면 오늘도 부족합니다.\n" +
+      "실제로 2026-09-01 에 그랬습니다 — 전날(월) 일일 35 + 주간 35 가 같은 창에 남아 화요일 일일이 보류됐습니다.\n\n" +
+      "근본 해결은 Google Workspace 이전입니다(한도 100명 → 1,500명). 개인 계정에서는 " +
+      "일일이 매일 나가 창에 항상 2일치가 겹치므로, 구독자 35명이면 이미 70%를 씁니다.", "");
   } catch (e) { Logger.log("[ERROR] 한도 부족 알림도 실패: " + e); }
   return false;
 }

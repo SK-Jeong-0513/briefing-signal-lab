@@ -125,6 +125,54 @@ assert(/function sendSpecialDue\(\)/.test(mailer), '폴링 진입점 존재');
 assert(/LockService\.getScriptLock/.test(block(mailer, 'function sendSpecialDue', 'function createSpecialTrigger', 'sendSpecialDue')),
   '폴링은 락으로 중복 실행을 막는다');
 
+// ── 경고형 가드(주간·스페셜) ─────────────────────────────
+// 일일과 반대다. 이쪽은 발송로그가 있어 부분 발송이 복구되므로 **막지 않고 알린다.**
+function warn(left, needed) {
+  const sent = [];
+  const ctx = vm.createContext({
+    console, Logger: { log() {} },
+    CFG: { OPERATOR_EMAIL: 'op@x.com', SENDER_NAME: 'BSL' },
+    MailApp: { getRemainingDailyQuota: () => (typeof left === 'function' ? left() : left) },
+    GmailApp: { sendEmail: (to, subj) => sent.push({ to, subj }) },
+    mailSafe_: (s) => String(s == null ? '' : s),
+  });
+  // sendMail_ 까지 포함해야 한다 — 빼면 ReferenceError 를 mailQuotaWarn_ 의 catch 가 삼켜서
+  // '알림이 안 갔다'가 '한도가 충분했다'처럼 보인다.
+  vm.runInContext(block(mailer, 'function sendMail_', 'function ymd_', 'sendMail_/mailQuotaWarn_'), ctx);
+  ctx.mailQuotaWarn_(needed, '주간 2026-W36');
+  return sent;
+}
+assert.strictEqual(warn(100, 35).length, 0, '여유가 있으면 알리지 않는다');
+assert.strictEqual(warn(35, 35).length, 0, '정확히 맞아도 알리지 않는다');
+const shortWarn = warn(29, 35);
+assert.strictEqual(shortWarn.length, 1, '부족하면 운영자에게 알린다');
+assert(/한도 부족/.test(shortWarn[0].subj) && /부분 발송/.test(shortWarn[0].subj),
+  '제목에 사유와 성격(부분 발송)이 드러난다');
+assert.strictEqual(warn(0, 0).length, 0, 'needed 미상이면 조용히 통과');
+// 한도 조회 실패가 발송을 죽이면 안 된다 — 2026-08-17 에 그 예외가 스페셜·일일을 멈췄다.
+assert.doesNotThrow(() => warn(() => { throw new Error('scope'); }, 35),
+  '한도 조회 실패가 예외로 새어 나가면 안 된다');
+assert.strictEqual(warn(() => { throw new Error('scope'); }, 35).length, 0,
+  '조회 실패 시에는 알림도 보내지 않는다(무엇이 부족한지 모른다)');
+// 한도가 0이면 알림 발송 자체가 예외를 낸다. 그것도 삼켜야 한다.
+assert.doesNotThrow(() => {
+  const ctx = vm.createContext({
+    console, Logger: { log() {} },
+    CFG: { OPERATOR_EMAIL: 'op@x.com', SENDER_NAME: 'BSL' },
+    MailApp: { getRemainingDailyQuota: () => 0 },
+    GmailApp: { sendEmail: () => { throw new Error('quota exhausted'); } },
+    mailSafe_: (s) => String(s == null ? '' : s),
+  });
+  vm.runInContext(block(mailer, 'function sendMail_', 'function ymd_', 'sendMail_/mailQuotaWarn_'), ctx);
+  ctx.mailQuotaWarn_(35, '주간');
+}, '알림 발송 실패가 본 발송을 죽이면 안 된다');
+
+// 일일 보류 안내는 롤링 24시간임을 알려야 한다. '자정에 초기화'로 안내하면 운영자가
+// 다음 날 정상일 거라 믿는데, 실제로는 어제 쓴 몫이 남아 또 부족하다(2026-09-01).
+const holdBlock = block(mailer, 'function mailQuotaOk_', 'function ymd_', 'mailQuotaOk_');
+assert(/롤링 24시간/.test(holdBlock), '보류 안내에 롤링 24시간 설명이 있다');
+assert(!/자정.*초기화/.test(holdBlock), "'자정에 초기화' 는 사실이 아니다");
+
 // ── 발송 단일 지점 ────────────────────────────────────────────────────
 // GmailApp 직접 호출은 래퍼 안 1곳뿐이어야 한다(주석 줄 제외).
 const directSends = mailer.split('\n').filter((l) => /GmailApp\.sendEmail\(/.test(l) && !/^\s*\/\//.test(l));
@@ -140,9 +188,11 @@ assert(/"상태": "발송중"/.test(sendRow), '발송 전에 상태를 잠근다
 // 보이고 실행 기록을 뒤져야 원인을 안다 — 2026-08-17 에 실제로 그렇게 찾았다.
 assert(/message: "중단: " \+ String\(e\)/.test(sendRow), '루프 밖 크래시 사유를 행에 기록한다');
 assert(/"상태": "실패"[^]*중단/.test(sendRow), '크래시는 실패로 두어 폴링이 다시 집지 않게 한다');
-// 한도 조회는 경고 로그 전용이므로 발송을 죽이면 안 된다.
-assert(/try \{ left = MailApp\.getRemainingDailyQuota\(\); \}\s*\n\s*catch/.test(sendRow),
-  '한도 조회 실패가 스페셜 발송을 죽이지 않는다');
+// 한도 부족은 발송을 막지 않는다(발송로그가 있어 이어서 보낼 수 있다). 다만 2026-09-01
+// 부터 로그로만 두지 않고 운영자 메일까지 보낸다 — 운영자는 실행 기록이 아니라 [BSL] 메일을 본다.
+assert(/mailQuotaWarn_\(targets\.length/.test(sendRow), '스페셜은 한도 부족을 운영자에게 알린다');
+assert(!/MailApp\.getRemainingDailyQuota/.test(sendRow),
+  '한도 조회는 mailQuotaWarn_ 안으로 모았다 — 두 곳에 두면 한쪽만 고쳐진다');
 
 // ── 콘솔: 예약 입력 검증 ──────────────────────────────────────────────
 const sched = block(admin, 'function specialSchedule', 'function specialCancel', 'specialSchedule');
