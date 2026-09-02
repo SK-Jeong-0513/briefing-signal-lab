@@ -618,6 +618,24 @@ function checkMailerProps() {
   }
 }
 
+/** 발송 한도 진단 — 어느 계정으로 실행됐는지와 잔여 한도를 함께 찍는다.
+ *
+ * Workspace 이전(docs/workspace-migration.md)의 1단계·4단계 검증에 쓴다.
+ *
+ * ⚠️ 계정 주소를 반드시 함께 찍는다. 브라우저에 개인 계정과 Workspace 계정이 동시에
+ *    로그인돼 있으면 어느 쪽으로 실행됐는지 알 수 없어, 「한도가 낮다」와 「계정을 잘못
+ *    골랐다」가 구분되지 않는다. 숫자만 보면 둘 다 100 근처로 똑같이 보인다.
+ * ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 는 _ 로 끝나는 함수를 실행 드롭다운에서 숨긴다.
+ */
+function checkQuota() {
+  Logger.log("[한도] 실행 계정: " + Session.getEffectiveUser().getEmail());
+  try {
+    Logger.log("[한도] 잔여 수신자 수: " + MailApp.getRemainingDailyQuota());
+  } catch (e) {
+    Logger.log("[한도] 조회 실패 — MailApp 스코프 승인이 필요할 수 있습니다: " + e);
+  }
+}
+
 /** 15분 폴링 트리거 생성(1회 실행). 기존 동명 트리거는 지우고 다시 만든다. */
 function createSpecialTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (tr) {
