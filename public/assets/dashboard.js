@@ -93,15 +93,46 @@
     }).join("");
   }
 
-  function vcCard(name, unit, v, manual, period) {
-    var chg = (manual && v.length >= 2) ? (v[v.length - 1] / v[v.length - 2] - 1) * 100 : pctChg(v);
+  /* 지표 유형별 변화 표시. 통일하면 어느 한쪽이 반드시 오독된다 —
+     CPI 전월비는 독자가 보는 숫자가 아니고, 심리지수는 변화율보다 기준선 대비가 정보다.
+     mode 는 fetch_dashboard.py 의 KR_MACRO 가 실어 보낸다. */
+  function chgByMode(v, mode) {
+    var n = v.length, last = v[n - 1];
+    if (mode === "yoy" && n >= 13 && v[n - 13]) {
+      var y = (last / v[n - 13] - 1) * 100;
+      return { val: y, text: (y >= 0 ? "+" : "") + y.toFixed(1) + "% YoY" };
+    }
+    if (mode === "mom" && n >= 2 && v[n - 2]) {
+      var m = (last / v[n - 2] - 1) * 100;
+      return { val: m, text: (m >= 0 ? "+" : "") + m.toFixed(1) + "% 전월비" };
+    }
+    if (mode === "diff" && n >= 2) {
+      var d = last - v[n - 2];
+      return { val: d, text: (d >= 0 ? "+" : "") + fmtNum(d) + " 전월차" };
+    }
+    if (mode === "baseline100") {
+      var b = last - 100;
+      return { val: b, text: (b >= 0 ? "+" : "") + b.toFixed(1) + " 기준선" };
+    }
+    return null;                       // 모드를 못 알아들으면 기존 계산으로 떨어진다
+  }
+
+  /* ⚠️ pctChg 는 v[len-22] 를 본다 — 거래일 22일 ≈ 1개월을 노린 값이라 **일간 시리즈 전용**이다.
+     월간 시리즈에 쓰면 22개월 전 대비가 계산되는데 라벨은 "~1M" 이라 아무도 눈치채지 못한다.
+     그래서 월간 카드는 반드시 mode 를 넘겨야 한다.
+     manual 은 '수동 입력 배지'만 담당한다 — 예전엔 계산 방식까지 겸했다. */
+  function vcCard(name, unit, v, manual, period, mode) {
+    var byMode = mode ? chgByMode(v, mode) : null;
+    var chg = byMode ? byMode.val
+      : ((manual && v.length >= 2) ? (v[v.length - 1] / v[v.length - 2] - 1) * 100 : pctChg(v));
+    var text = byMode ? byMode.text : ((chg >= 0 ? "+" : "") + chg.toFixed(1) + "%");
     var last = v[v.length - 1], dir = chg >= 0 ? "up" : "down", per = period || "~1M";
     var suffix = (unit && unit !== "$" && unit !== "pt" && unit !== "원") ? " " + unit : "";
     return '<div class="vc-card">' +
       '<div class="vc-card__label">' + name + (manual ? '<span class="vc-tag">수동</span>' : "") + "</div>" +
       '<svg class="card__spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path d="' + spark(v) + '"/></svg>' +
       '<div class="vc-card__val">' + fmtNum(last) + suffix + "</div>" +
-      '<div class="vc-card__chg vc-' + dir + '">' + (chg >= 0 ? "+" : "") + chg.toFixed(1) + '% <span>' + per + '</span></div></div>';
+      '<div class="vc-card__chg vc-' + dir + '">' + text + ' <span>' + per + '</span></div></div>';
   }
   function renderValueChain() {
     var hostv = document.querySelector("[data-dash-vc]");
@@ -124,6 +155,19 @@
     host2.innerHTML = cards || '<p class="section-sub">섹터 지표를 준비 중입니다.</p>';
   }
 
+  /* 한국 매크로 — 월간이라 페어 차트가 아니라 카드다. 발표 지연이 7~37일이라 차트로 그리면
+     오른쪽이 늘 비어 보이는데, 카드는 기준 시점(2026.08)을 라벨로 찍어 그 문제가 없다.
+     변화 표시는 지표마다 다르다 — series 의 mode 를 그대로 넘긴다. */
+  function renderKrMacro() {
+    var host3 = document.querySelector("[data-dash-krmacro]");
+    if (!host3) return;
+    var cards = (state.data.krmacro || []).map(function (k) {
+      var s = state.data.series[k];
+      return (s && s.v && s.v.length) ? vcCard(s.name, s.unit, s.v, false, s.period, s.mode) : "";
+    }).join("");
+    host3.innerHTML = cards || '<p class="section-sub">한국 매크로 지표를 준비 중입니다.</p>';
+  }
+
   function setPair(id) { state.pairId = id; renderChips(); renderChart(); }
   function setRange(d) { state.rangeDays = d; renderChips(); renderChart(); }
 
@@ -135,15 +179,17 @@
     // 수집이 일부 실패해도 직전 데이터가 보존되어 그림은 멀쩡해 보인다. 그 상태를 사람이
     // 알 방법이 화면 말고 없으므로, 결손이 있을 때만 한 조각 끼운다(평소엔 아무것도 안 보임).
     var cov = json.coverage, gap = "";
-    if (cov && (cov.pairs < cov.pairsExpected || cov.sectors < cov.sectorsExpected)) {
+    if (cov && (cov.pairs < cov.pairsExpected || cov.sectors < cov.sectorsExpected ||
+                (cov.krmacroExpected && cov.krmacro < cov.krmacroExpected))) {
       gap = " · 지표 " + cov.pairs + "/" + cov.pairsExpected + "(일부 출처 지연)";
     }
     if (meta) meta.textContent = "업데이트: " + json.updated + gap +
-      " · 출처: Yahoo Finance · 미 재무부 · FRED · 정보 제공(투자 조언 아님)";
+      " · 출처: Yahoo Finance · 미 재무부 · FRED · 한국은행 · 정보 제공(투자 조언 아님)";
     renderChips();
     renderChart();
     renderValueChain();
     renderSectors();
+    renderKrMacro();
     host.addEventListener("click", function (e) {
       var pc = e.target.closest("[data-pair]");
       if (pc) { setPair(pc.getAttribute("data-pair")); return; }

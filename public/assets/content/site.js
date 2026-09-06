@@ -325,6 +325,11 @@ const UI = {
       ko: "S&P 11개 섹터 ETF의 최근 추세와 약 1개월 변화입니다. 오버레이는 두 지표의 관계를 보지만, 섹터는 '어느 쪽이 앞서나'를 나란히 놓고 봐야 읽힙니다. 정보 제공이며 투자 조언이 아닙니다.",
       en: "Recent trend and ~1-month change for the 11 S&P sector ETFs. Overlays read a relationship between two series; sectors need to sit side by side to show which is leading. Information only, not investment advice.",
     },
+    krHeading: { ko: "한국 매크로 지표", en: "Korea macro indicators" },
+    krIntro: {
+      ko: "한국은행 ECOS의 월간 지표입니다. 각 카드에 그 지표의 기준 시점(예: 2026.08)이 함께 표시되며, 발표 주기가 달라 시점이 카드마다 다를 수 있습니다. 변화 표시는 지표 성격에 맞춥니다 — 물가·생산·소비는 전년동월비, 심리·순환 지수는 기준선 100 대비, 잔액은 전월비입니다. 정보 제공이며 투자 조언이 아닙니다.",
+      en: "Monthly indicators from the Bank of Korea (ECOS). Each card shows its own reference month (e.g. 2026.08); release schedules differ, so cards may sit on different months. The change figure follows the indicator type — year-over-year for prices, output and retail; distance from the 100 baseline for sentiment and cycle indices; month-over-month for balances. Information only, not investment advice.",
+    },
     vcHeading: { ko: "산업 밸류체인 지표", en: "Value-chain indicators" },
     vcIntro: {
       ko: "반도체 밸류체인을 주가·ETF로 근사한 자동 프록시 + 무료 API가 없는 핵심 지표(수동). 각 카드는 최근 추세와 약 1개월 변화를 보여줍니다. 정보 제공이며 투자 조언이 아닙니다.",

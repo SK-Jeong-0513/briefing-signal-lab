@@ -62,6 +62,51 @@ FRED = {
     "dgs10":   ("미 10년물 금리",    "%",  "DGS10"),
 }
 
+# ── 한국은행 ECOS ───────────────────────────────────────────────────────────
+# 대시보드가 미국 편중이었다. 미국은 FRED 로 금리·통화량·준비금이 촘촘한데 한국은
+# 야후에서 긁는 가격(KOSPI·원달러·EWY)만 있고 매크로가 0이었다. 설계 근거와 실측치는
+# docs/kr-macro-plan.md 에 있다.
+#
+# ⚠️ 키가 없으면 ECOS 를 통째로 건너뛴다(fail-open). 수출 수집과 같은 원칙이다 —
+#    지표 하나 때문에 배포를 막으면 멀쩡한 나머지 지표까지 낡는다.
+ECOS_KEY = os.environ.get("BOK_API_KEY", "").strip()
+ECOS_BASE = "https://ecos.bok.or.kr/api"
+
+# 일간 — 페어용. (key, 통계표, 항목코드들, 이름, 단위)
+# ⚠️ 페어의 우축 드롭다운은 전부 802Y001 하나에서 온다. 소스를 섞으면 옵션을 바꿀 때마다
+#    차트 끝 날짜가 달라진다(FRED 주석 참고). 같은 표면 거래일 달력이 같다.
+ECOS_DAILY = [
+    ("kr10y",     "817Y002", ("010210000",), "국고채 10년",            "%"),
+    ("kospi_kr",  "802Y001", ("0001000",),   "KOSPI",                 "pt"),
+    ("frgn_net",  "802Y001", ("0030000",),   "외국인 순매수(유가증권)",  "십억원"),
+    ("kosdaq_kr", "802Y001", ("0089000",),   "KOSDAQ",                "pt"),
+]
+
+# 월간 — 카드용. mode 가 변화율 표시 방식을 정한다(docs/kr-macro-plan.md §2-C).
+#   yoy          전년동월비 %       지수형 물가·실물
+#   mom          전월비 %           잔액형
+#   diff         전월 대비 절대차    부호가 바뀌거나 100 이 기준선이 아닌 것
+#   baseline100  기준선 100 대비    100 중심으로 표준화된 지수
+#
+# ⚠️ BSI 에 baseline100 을 쓰지 말 것. 실측 평균이 75.3(범위 51~95)이라 100 을 기준선으로
+#    보면 평년 수준인 77 이 '기준선 −23, 심각한 비관' 으로 읽힌다. CSI(평균 101.4)와
+#    ESI(99.9)는 100 중심이라 baseline100 이 맞다.
+# ⚠️ yoy 는 원계열·불변지수에만 쓴다. 계절조정지수에 전년동월비를 씌우면 조정이 두 번 된다.
+#    그래서 전산업생산은 A00/1(원계열), 소매판매는 G0/T2(불변)를 집는다.
+KR_MACRO = [
+    ("kr_csi",      "511Y002", ("FME",),        "소비자심리지수",              "",         "baseline100"),
+    ("kr_bsi",      "512Y007", ("AA", "99988"), "기업경기실사(전산업)",         "",         "diff"),
+    ("kr_esi",      "513Y001", ("E1000",),      "경제심리지수",                "",         "baseline100"),
+    ("kr_cpi",      "901Y009", ("0",),          "소비자물가지수",              "2020=100", "yoy"),
+    ("kr_cpi_core", "901Y010", ("QB",),         "근원물가(농산물·석유류 제외)",  "2020=100", "yoy"),
+    ("kr_reserves", "732Y001", ("99",),         "외환보유액",                  "천달러",    "mom"),
+    ("kr_ca",       "301Y013", ("000000",),     "경상수지",                   "백만달러",  "diff"),
+    ("kr_leading",  "901Y067", ("I16E",),       "선행지수순환변동치",           "2020=100", "baseline100"),
+    ("kr_ip",       "901Y033", ("A00", "1"),    "전산업생산지수(원계열)",       "2020=100", "yoy"),
+    ("kr_retail",   "901Y100", ("G0", "T2"),    "소매판매액지수(불변)",         "2020=100", "yoy"),
+]
+KR_MACRO_MONTHS = 72   # 6년. yoy 에 13개월이 필요하고 스파크라인에도 충분하다.
+
 # 미 섹터 ETF — 페어가 아니라 **카드**로 나란히 깐다("어느 섹터가 앞서나"는 오버레이로 못 본다).
 # ⚠️ 카드는 마지막 90개만 읽는다(dashboard.js 의 spark() 가 slice(-90), pctChg 가 -22).
 #    3년치를 담으면 663개가 한 번도 안 읽히고 파일만 150KB 불어난다.
@@ -133,6 +178,11 @@ PAIRS = [
      "rightOptions": [["uvol", "미국 거래량"], ["ks11", "KOSPI"], ["gspc", "S&P500"], ["ixic", "나스닥"]]},
     {"id": "breadth-index",  "label": "시장폭 ↔ 미국 지수",      "left": "breadth", "right": "gspc",
      "rightOptions": INDEX_OPTIONS + [["dji", "다우"]]},
+    # ── 2026-09-06 추가분(한국은행 ECOS) ────────────────────────────────────
+    # 좌축은 파생 시리즈다(국고10년 − 미10년, 교집합). 우축 셋은 전부 ECOS 802Y001 이라
+    # 드롭다운을 바꿔도 거래일 달력이 같다.
+    {"id": "krus-kospi",     "label": "한미 10년 금리차 ↔ KOSPI", "left": "krus10", "right": "kospi_kr",
+     "rightOptions": [["kospi_kr", "KOSPI"], ["frgn_net", "외국인 순매수"], ["kosdaq_kr", "KOSDAQ"]]},
 ]
 
 
@@ -248,6 +298,83 @@ def fred(series_id):
         except ValueError:
             continue
     return out_t, out_v
+
+
+def _ecos_ts(t):
+    """ECOS TIME → UTC 자정 epoch. 일간은 'YYYYMMDD', 월간은 'YYYYMM'(그 달 1일로 본다).
+
+    dashboard.js 의 aligned() 가 floor(t/86400) 로 내부조인하므로 FRED 와 같은 규칙을 쓴다.
+    로컬 시간대를 쓰면 하루가 밀려 교집합이 통째로 빌 수 있다.
+    """
+    t = str(t).strip()
+    if len(t) == 8:
+        d = datetime.datetime.strptime(t, "%Y%m%d")
+    elif len(t) == 6:
+        d = datetime.datetime.strptime(t + "01", "%Y%m%d")
+    else:
+        return None
+    return int(d.replace(tzinfo=datetime.timezone.utc).timestamp())
+
+
+def ecos_series(table, cycle, start, end, items):
+    """ECOS StatisticSearch → (ts[], val[]). 시각 오름차순, 시점당 1개.
+
+    ⚠️ 항목 코드를 덜 지정하면 **시점당 여러 행**이 온다. 901Y033 은 항목 하나(A00)만 주면
+       원계열과 계절조정이 같이 와서 값이 두 배로 늘고, 무엇이 담겼는지 모르게 된다.
+       그래서 중복 시점을 발견하면 마지막 값을 취하되 **반드시 로그로 남긴다** —
+       조용히 절반을 버리면 어느 계열이 실렸는지 아무도 모른다.
+    """
+    if not ECOS_KEY:
+        return [], []
+    path = "/".join([ECOS_BASE, "StatisticSearch", ECOS_KEY, "json", "kr", "1", "900",
+                     table, cycle, start, end] + [urllib.parse.quote(str(i)) for i in items])
+    j = get(path)
+    if "StatisticSearch" not in j:
+        raise RuntimeError(str(j.get("RESULT", j))[:200])
+    rows = j["StatisticSearch"].get("row", [])
+    by_ts, kept = {}, 0
+    for r in rows:
+        val = r.get("DATA_VALUE")
+        if val in (None, "", "-"):
+            continue
+        ts = _ecos_ts(r.get("TIME", ""))
+        if ts is None:
+            continue
+        try:
+            fv = float(val)
+        except (TypeError, ValueError):
+            continue
+        kept += 1
+        by_ts[ts] = round(fv, 4)
+    if kept > len(by_ts):
+        print("  [ECOS] %s 항목 지정이 느슨하다 — 유효 %d행이 %d시점으로 접혔다(마지막 값 사용)"
+              % (table, kept, len(by_ts)))
+    ordered = sorted(by_ts)
+    return ordered, [by_ts[t] for t in ordered]
+
+
+def _ecos_period(ts):
+    """카드에 찍을 기준 시점 라벨. 월간 지표는 '언제 것인가' 가 값만큼 중요하다."""
+    return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime("%Y.%m")
+
+
+def kr_us_spread(kr, us):
+    """한미 10년 금리차 = 국고채(10년) − 미 10년물. **날짜 교집합만** 쓴다.
+
+    forward-fill 하지 않는다. 2025-01-01~2026-09-06 실측으로 KR 409 · US 419 거래일 중
+    교집합이 395(94.3%)라 보간할 만큼 비지 않고, 결측 보간은 없는 값을 지어내는 쪽이다.
+    최대 공백은 추석 8일이며 uPlot 이 선으로 잇는다.
+
+    ⚠️ 최신일은 둘 중 **느린 쪽**에 맞춰진다. 대개 미국(FRED)이 하루 더 늦어
+       한국 값만 있는 마지막 하루는 빠진다 — 정상이다.
+    """
+    um = dict(zip(us[0], us[1]))
+    t, v = [], []
+    for ts, kv in zip(kr[0], kr[1]):
+        if ts in um:
+            t.append(ts)
+            v.append(round(kv - um[ts], 4))
+    return t, v
 
 
 def treasury_tga():
@@ -608,6 +735,56 @@ def main():
         except Exception as e:
             print("[WARN] %s(FRED %s) 실패: %s" % (key, sid, e))
 
+    # ── 한국은행 ECOS ──────────────────────────────────────────────────────
+    # 키가 없으면 통째로 건너뛴다. 아래 페어·카드는 series 에 재료가 없으면 자동으로 빠지고,
+    # _prev_all() 보존 로직이 직전 값을 살려 화면이 갑자기 비지는 않는다.
+    if not ECOS_KEY:
+        print("[ECOS] BOK_API_KEY 없음 — 한국 매크로 수집 건너뜀")
+    else:
+        today = datetime.date.today()
+        d_start = (today - datetime.timedelta(days=_range_days())).strftime("%Y%m%d")
+        d_end = today.strftime("%Y%m%d")
+        for key, table, items, name, unit in ECOS_DAILY:
+            try:
+                t, v = ecos_series(table, "D", d_start, d_end, items)
+                if v:
+                    series[key] = {"name": name, "unit": unit, "t": t, "v": v}
+                    print("%s(ECOS %s): %d pts" % (key, table, len(v)))
+                else:
+                    print("[WARN] %s(ECOS %s) 빈 응답" % (key, table))
+            except Exception as e:
+                print("[WARN] %s(ECOS %s) 실패: %s" % (key, table, e))
+
+        m_start = (today - datetime.timedelta(days=31 * KR_MACRO_MONTHS)).strftime("%Y%m")
+        m_end = today.strftime("%Y%m")
+        for key, table, items, name, unit, mode in KR_MACRO:
+            try:
+                t, v = ecos_series(table, "M", m_start, m_end, items)
+                if v:
+                    series[key] = {"name": name, "unit": unit, "t": t, "v": v,
+                                   "mode": mode, "period": _ecos_period(t[-1])}
+                    print("%s(ECOS %s): %d pts [%s, %s 기준]"
+                          % (key, table, len(v), mode, _ecos_period(t[-1])))
+                else:
+                    print("[WARN] %s(ECOS %s) 빈 응답" % (key, table))
+            except Exception as e:
+                print("[WARN] %s(ECOS %s) 실패: %s" % (key, table, e))
+
+        # 한미 10년 금리차 — 파생 시리즈. 재료 둘 중 하나라도 없으면 만들지 않는다.
+        if series.get("kr10y", {}).get("v") and series.get("dgs10", {}).get("v"):
+            st, sv = kr_us_spread((series["kr10y"]["t"], series["kr10y"]["v"]),
+                                  (series["dgs10"]["t"], series["dgs10"]["v"]))
+            if sv:
+                series["krus10"] = {"name": "한미 10년 금리차", "unit": "%p", "t": st, "v": sv}
+                print("krus10: %d pts (KR %d · US %d 교집합 %.1f%%)"
+                      % (len(sv), len(series["kr10y"]["v"]), len(series["dgs10"]["v"]),
+                         100.0 * len(sv) / max(len(series["kr10y"]["v"]), len(series["dgs10"]["v"]))))
+            else:
+                print("[WARN] krus10 교집합 0 — 날짜 정렬을 의심할 것")
+        else:
+            print("[WARN] krus10 재료 없음 (kr10y=%s · dgs10=%s)"
+                  % (bool(series.get("kr10y")), bool(series.get("dgs10"))))
+
     # 섹터는 카드 전용 — 마지막 SECTOR_KEEP 개만 남긴다(위 SECTORS 주석 참고).
     for key, name, sym in SECTORS:
         try:
@@ -674,17 +851,20 @@ def main():
                       "rightOptions": [o for o in KRSEMI_OPTIONS if o[0] in series]})
     valuechain = [k for k in VALUECHAIN if k in series]
     sectors = [k for k, _, _ in SECTORS if k in series]
+    krmacro = [k for k, _, _, _, _, _ in KR_MACRO if k in series]
     # 결손을 화면이 읽을 수 있게 실어 보낸다. fail-safe 로 직전 데이터가 남아 그림은 멀쩡한데
     # 실제로는 낡은 값인 상태를 사람이 알 방법이 여기 말고는 없다.
     coverage = {"pairs": len(pairs), "pairsExpected": len(PAIRS) + 1,
-                "sectors": len(sectors), "sectorsExpected": len(SECTORS)}
+                "sectors": len(sectors), "sectorsExpected": len(SECTORS),
+                "krmacro": len(krmacro), "krmacroExpected": len(KR_MACRO)}
     out = {
         "updated": time.strftime("%Y-%m-%d"),
-        "note": "공개 출처 실데이터(Yahoo Finance · 미 재무부 · FRED). 정보 제공이며 투자 조언 아님.",
+        "note": "공개 출처 실데이터(Yahoo Finance · 미 재무부 · FRED · 한국은행 ECOS). 정보 제공이며 투자 조언 아님.",
         "series": series,
         "pairs": pairs,
         "valuechain": valuechain,
         "sectors": sectors,
+        "krmacro": krmacro,
         "coverage": coverage,
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
@@ -708,8 +888,9 @@ def main():
     missing = [p["id"] for p in PAIRS if p["id"] not in live]
     if missing:
         print("[WARN] 누락 페어: %s" % ", ".join(missing))
-    print("SCORE 페어 %d/%d · 섹터 %d/%d"
-          % (coverage["pairs"], coverage["pairsExpected"], coverage["sectors"], coverage["sectorsExpected"]))
+    print("SCORE 페어 %d/%d · 섹터 %d/%d · 한국매크로 %d/%d"
+          % (coverage["pairs"], coverage["pairsExpected"], coverage["sectors"], coverage["sectorsExpected"],
+             coverage["krmacro"], coverage["krmacroExpected"]))
 
 
 def run(argv=None):
