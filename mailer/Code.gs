@@ -1201,6 +1201,17 @@ function unsubSet_() {
   return set;
 }
 function sendDailyMarket() {
+  // 월요일은 09:00 주간 브리핑이 나가므로 일일을 보내지 않는다.
+  // 발송 한도는 달력 하루가 아니라 롤링 24시간이다. 월요일에 일일과 주간이 함께 나가면
+  // 그 두 배치가 화요일 아침 창에 그대로 남아 다음 일일을 통째로 막는다 - 2026-09-01 에
+  // 실제로 한 회차를 잃었다(필요 35 · 잔여 29). 월요일 한 회를 비우면 화요일 창에는
+  // 주간만 남는다. 구독자에게 월요일이 빈 날은 아니다 - 그날은 주간 브리핑이 나간다.
+  var kst = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy,M,d").split(",").map(Number);
+  if (new Date(Date.UTC(kst[0], kst[1] - 1, kst[2])).getUTCDay() === 1) {
+    Logger.log("[일일] 월요일 - 주간 브리핑 발송일이라 생략(한도 확보)");
+    return;
+  }
+
   var dg = dailyGroups_();
   if (!dg.groups.length) { Logger.log("[일일] " + dg.today + " 시장-일일 행 없음 — 발송 생략"); return; }
 
