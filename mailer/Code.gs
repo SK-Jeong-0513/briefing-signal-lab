@@ -447,8 +447,6 @@ function specialPlain_(lib, lead) {
 function specialHtml_(email, lib, lead) {
   var tok = token_(email);
   var url = CFG.BASE + "read.html?id=" + encodeURIComponent(String(lib["id"] || ""));
-  var unsub = CFG.WEBAPP_URL ? link_(tok, "unsubscribe", "", "", "수신거부")
-    : '<a href="mailto:' + CFG.OPERATOR_EMAIL + '" style="color:' + C.muted + '">수신거부</a>';
   var leadHtml = lead
     ? '<p style="margin:0 0 16px;font-size:14px;color:' + C.text + ';line-height:1.7">' + esc_(lead) + "</p>"
     : "";
@@ -469,7 +467,8 @@ function specialHtml_(email, lib, lead) {
     "</td></tr>",
     '<tr><td style="padding:16px 24px;border-top:1px solid ' + C.border + ';font-size:12px;color:' + C.muted + ';line-height:1.6">',
       "정보 제공·투자 조언 아님. 종목·자산은 공개 출처 기반 관찰로만 명시하며 매수·매도·목표가를 권유하지 않습니다.<br>",
-      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a> &nbsp;·&nbsp; ' + unsub,
+      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a>',
+      unsubButton_(tok),
     "</td></tr>",
     "</table></td></tr></table></div>",
   ].join("");
@@ -679,7 +678,6 @@ function html_(email, keywords, perCat) {
     return '<span style="white-space:nowrap">' + c.label + ": " + links + "</span>";
   }).join(" &nbsp;·&nbsp; ");
   var prefRow = CFG.WEBAPP_URL ? '<p style="margin:12px 0 0;font-size:12px;color:' + C.muted + '">받는 항목 변경: ' + toggles + "</p>" : "";
-  var unsub = CFG.WEBAPP_URL ? link_(tok, "unsubscribe", "", "", "수신거부") : '<a href="mailto:' + CFG.OPERATOR_EMAIL + '?subject=' + encodeURIComponent("브리핑 수신거부") + '" style="color:' + C.muted + '">수신거부</a>';
 
   return [
     '<div style="margin:0;padding:0;background:' + C.canvas + '">',
@@ -696,7 +694,8 @@ function html_(email, keywords, perCat) {
     "</td></tr>",
     '<tr><td style="padding:16px 24px;border-top:1px solid ' + C.border + ';font-size:12px;color:' + C.muted + ';line-height:1.6">',
       "정보 제공·투자 조언 아님. 종목·자산은 공개 출처 기반 관찰로만 명시하며 매수·매도·목표가를 권유하지 않습니다.<br>",
-      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a> &nbsp;·&nbsp; ' + unsub,
+      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a>',
+      unsubButton_(tok),
     "</td></tr>",
     "</table></td></tr></table></div>",
   ].join("");
@@ -746,6 +745,18 @@ function domainBlock_(cat, id) {
 function link_(tok, action, cat, domain, label) {
   var url = CFG.WEBAPP_URL + "?t=" + tok + "&a=" + action + (cat ? "&c=" + cat : "") + (domain ? "&d=" + domain : "");
   return '<a href="' + url + '" style="color:' + C.primary + ';text-decoration:none">' + esc_(label) + "</a>";
+}
+// 구독 취소 버튼. 세 메일(일일·주간·스페셜) 푸터가 공유한다.
+// 주 CTA(primary 채움)와 겹치지 않도록 테두리형(surface + border)으로 그린다.
+// 웹앱 URL 이 없으면 운영자 mailto 로 폴백한다 — 어느 경우에도 해지 경로가 사라지지 않는다.
+function unsubButton_(tok) {
+  var href = CFG.WEBAPP_URL
+    ? CFG.WEBAPP_URL + "?t=" + tok + "&a=unsubscribe"
+    : "mailto:" + CFG.OPERATOR_EMAIL + "?subject=" + encodeURIComponent("브리핑 구독 취소");
+  return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px 0 0"><tr>' +
+    '<td style="border:1px solid ' + C.border + ';border-radius:8px;background:' + C.surface + '">' +
+    '<a href="' + href + '" style="display:inline-block;padding:8px 16px;font-size:13px;font-weight:600;color:' + C.muted + ';text-decoration:none">구독 취소</a>' +
+    "</td></tr></table>";
 }
 function plain_(perCat, kw) {
   var lines = ["이번 주 브리핑 (" + CFG.WEEK + ")", ""];
@@ -1535,8 +1546,6 @@ function dailyHtml_(email, dg, detail, quotes) {
     var head = g.label ? '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.primary + ';padding-left:8px;margin:4px 0 8px">' + esc_(g.label) + " 시황</div>" : "";
     return '<div style="margin:0 0 16px">' + head + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + sigs + "</table></div>";
   }).join("");
-  var unsubLink = CFG.WEBAPP_URL ? link_(tok, "unsubscribe", "", "", "수신거부") : '<a href="mailto:' + CFG.OPERATOR_EMAIL + '?subject=' + encodeURIComponent("브리핑 수신거부") + '" style="color:' + C.muted + '">수신거부</a>';
-
   return [
     '<div style="margin:0;padding:0;background:' + C.canvas + '">',
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + C.canvas + '"><tr><td align="center" style="padding:24px 12px">',
@@ -1552,7 +1561,8 @@ function dailyHtml_(email, dg, detail, quotes) {
     "</td></tr>",
     '<tr><td style="padding:16px 24px;border-top:1px solid ' + C.border + ';font-size:12px;color:' + C.muted + ';line-height:1.6">',
       "AI 자동 생성 · 정보 제공이지 투자 조언이 아닙니다. 종목·자산은 공개 출처 기반 관찰로만 명시하며 매수·매도·목표가를 권유하지 않습니다.<br>",
-      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a> &nbsp;·&nbsp; ' + unsubLink,
+      '<a href="' + CFG.BASE + '" style="color:' + C.muted + '">Briefing Signal Lab</a>',
+      unsubButton_(tok),
     "</td></tr>",
     "</table></td></tr></table></div>",
   ].join("");
@@ -1625,6 +1635,12 @@ function doGet(e) {
   if (!email) return page_("구독자를 찾을 수 없습니다.");
 
   if (a === "unsubscribe") {
+    // 메일의 링크(GET)만으로는 해지하지 않는다 — 버튼 오클릭과 메일 클라이언트의 링크
+    // 사전 열람(safe-link 검사)이 구독자를 조용히 지우는 경로다. 확인 페이지의 폼 제출
+    // (confirm=1)에서만 실제로 반영한다.
+    if (String(e.parameter.confirm || "") !== "1") {
+      return page_("모든 브리핑(일일 시황·주간 브리핑·스페셜 리포트) 수신을 해지할까요?", unsubConfirmForm_(t));
+    }
     CATS.forEach(function (c) { var p = prefMap_(c.prefSheet)[email.toLowerCase()]; prefUpsert_(c.prefSheet, email, p ? p.domains : c.domains.map(function (d) { return d.label; }), "수신거부"); });
     return page_("모든 브리핑 수신이 해지되었습니다. 그동안 감사했습니다.");
   }
@@ -1639,10 +1655,23 @@ function doGet(e) {
   }
   return page_("처리할 수 없는 요청입니다.");
 }
-function page_(msg) {
+// extraHtml 은 이스케이프하지 않은 채 메시지 아래에 붙는다(확인 폼 등). 호출부가 만든 마크업만 넘길 것.
+function page_(msg, extraHtml) {
   var html = '<div style="font-family:Helvetica,Arial,sans-serif;max-width:480px;margin:64px auto;padding:0 20px;color:#17202A">' +
     '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:#2454D6">BRIEFING SIGNAL LAB</div>' +
     '<p style="font-size:16px;margin:12px 0 20px">' + esc_(msg) + "</p>" +
-    '<a href="' + CFG.BASE + '" style="color:#2454D6">사이트로 →</a></div>';
+    (extraHtml || "") +
+    '<a href="' + CFG.BASE + '" target="_top" style="color:#2454D6">사이트로 →</a></div>';
   return HtmlService.createHtmlOutput(html);
+}
+// 해지 확인 폼. HtmlService 는 페이지를 iframe 안에 띄우므로 target="_top" 이 없으면
+// 제출 결과가 iframe 안에서 열린다. 폼 제출(confirm=1)만이 doGet 의 실제 해지 분기로 간다.
+function unsubConfirmForm_(tok) {
+  return '<form method="get" action="' + CFG.WEBAPP_URL + '" target="_top" style="margin:0 0 20px">' +
+    '<input type="hidden" name="t" value="' + esc_(tok) + '">' +
+    '<input type="hidden" name="a" value="unsubscribe">' +
+    '<input type="hidden" name="confirm" value="1">' +
+    '<button type="submit" style="font-family:inherit;font-size:14px;font-weight:600;color:' + C.text + ';background:' + C.surface + ';border:1px solid ' + C.border + ';border-radius:8px;padding:12px 20px;cursor:pointer">구독 취소</button>' +
+    "</form>" +
+    '<p style="font-size:13px;color:' + C.muted + ';margin:0 0 20px">해지하지 않으려면 이 페이지를 닫으면 됩니다. 해지 후 다시 받으려면 사이트에서 구독을 다시 신청하세요.</p>';
 }
