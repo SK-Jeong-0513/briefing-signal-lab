@@ -301,6 +301,45 @@ function weeklyPrepareRelease(issueKey) {
   return { ok: true, unchanged: false, issueKey: issueKey, state: ledgerState, revision: revision, count: items.length };
 }
 
+/** 발행 예약 취소. 아직 공개·발송되지 않은 manual_ready 원장만 되돌린다.
+ *
+ * 원장 행을 지우거나 새 행을 덧붙이지 않고 **그 자리에서** state 를 cancelled 로 바꾼다.
+ * 자동 게이트(prepare_weekly_release.py)는 이 호의 원장에 READY 상태가 하나라도
+ * 남아 있으면 no-op 하므로 취소 행을 덧붙이는 방식으로는 게이트가 살아나지 않는다.
+ * 메일러(weeklyLatestBundle_)와 게이트 둘 다 cancelled 를 모르는 상태로 취급해
+ * 건너뛴다. 예약 때 ready 로 올린 발행항목은 superseded 로 내려 다음 예약·게이트
+ * 결과와 섞이지 않게 한다(weeklyPrepareRelease 가 재예약 때 하는 것과 같다).
+ *
+ * 편집기에서 인자를 못 넘기므로 임시 래퍼로 실행한다:
+ *   function cancelNow() { Logger.log(JSON.stringify(weeklyCancelRelease('2026-W38'))); }
+ */
+function weeklyCancelRelease(issueKey) {
+  _assertAuth_();
+  if (!issueKey) throw new Error('발행주를 지정하세요');
+  var ss = _openMarket_(), tabs = _releaseTabs_(ss), now = _nowKst_();
+  var ledgerRows = _readTab_(ss, RELEASE_TAB).rows.filter(function (r) { return String(r.issue_key) === String(issueKey); });
+  var locked = ledgerRows.filter(function (r) { return ['published', 'email_partial', 'emailed'].indexOf(String(r.state)) >= 0; });
+  if (locked.length) throw new Error(issueKey + ' 는 이미 공개/발송된 호라 취소할 수 없습니다 (' + locked[locked.length - 1].state + ')');
+  var targets = ledgerRows.filter(function (r) { return String(r.state) === 'manual_ready'; });
+  if (!targets.length) throw new Error(issueKey + ' 의 manual_ready 원장이 없습니다 — 취소할 예약이 없습니다');
+
+  var stateCol = _colIndex_(tabs.ledger, 'state'), updCol = _colIndex_(tabs.ledger, 'updated_at'), msgCol = _colIndex_(tabs.ledger, 'message');
+  targets.forEach(function (r) {
+    tabs.ledger.getRange(r._row, stateCol).setValue('cancelled');
+    tabs.ledger.getRange(r._row, updCol).setValue(now);
+    tabs.ledger.getRange(r._row, msgCol).setValue(String(r.message || '') + ' → 운영자 취소');
+  });
+
+  var itemStateCol = _colIndex_(tabs.items, '상태'), itemUpdCol = _colIndex_(tabs.items, 'updated_at'), superseded = 0;
+  _readTab_(ss, RELEASE_ITEM_TAB).rows.forEach(function (r) {
+    if (String(r.issue_key) !== String(issueKey) || Number(r.revision || 0) !== 1 || String(r['상태']) !== 'ready') return;
+    tabs.items.getRange(r._row, itemStateCol).setValue('superseded');
+    tabs.items.getRange(r._row, itemUpdCol).setValue(now);
+    superseded++;
+  });
+  return { ok: true, issueKey: issueKey, cancelled: targets.length, superseded: superseded };
+}
+
 
 // ───────────────────────── ⑥ 스페셜 리포트 발송 ─────────────────────────
 // 콘솔은 예약 행만 쓴다. 실제 발송은 메일러(별도 프로젝트)의 sendSpecialDue() 15분 폴링이
