@@ -230,4 +230,4 @@ CSV 에서 날짜별로 만든다. `market-data.yml` 이 매일 데이터를 커
 | 날짜 | 내용 |
 |---|---|
 | 2026-09-14 | 로드맵 작성. Phase 0 기준선 미기록 |
-| 2026-09-14 | **Phase 1 구현(로컬, 미커밋·미배포).** `about.html`(본문 1,600자) · `privacy.html`(1,819자) · `robots.txt` · `sitemap.xml`(10 URL) 신규. 9개 HTML 푸터에 소개·개인정보처리방침 링크, `site.js` `UI.footer.about/privacy` 추가. `tests/test_footer_links.js` 신설 → JS 24/24 통과, `test_inject_weekly_release_csv.py` 통과, sitemap XML well-formed. 배포 후 남은 검증: curl 정적 텍스트, Search Console URL 검사. 발견: `public/library.html.bak` 이 Pages 에 그대로 배포되고 있다(이번 범위 밖, 정리 대상) |
+| 2026-09-14 | **Phase 1 완료 — 커밋 a690f77, 라이브 배포 확인.** `about.html`(본문 1,600자) · `privacy.html`(1,819자) · `robots.txt` · `sitemap.xml`(10 URL) 신규. 9개 HTML 푸터에 소개·개인정보처리방침 링크, `site.js` `UI.footer.about/privacy` 추가. `tests/test_footer_links.js` 신설 → JS 24/24 통과, `test_inject_weekly_release_csv.py` 통과, sitemap XML well-formed. 라이브: 4개 파일 HTTP 200, `about.html` 이 JS 없이 본문을 담고, 랜딩 푸터에 두 링크가 있으며 sitemap `<loc>` 10개. **남은 검증: Search Console URL 검사(Phase 0 등록 뒤).** 발견: `public/library.html.bak` 이 Pages 에 그대로 배포되고 있다(이번 범위 밖, 정리 대상) |
