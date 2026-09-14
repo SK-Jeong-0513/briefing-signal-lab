@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>소개 — Briefing Signal Lab</title>
+  <meta name="description" content="Briefing Signal Lab 은 기술·금융·경제 신호를 매일 선별해 하나의 브리핑으로 전하는 무료 구독 서비스입니다. 무엇을 제공하고 어떻게 만드는지 설명합니다." />
+  <link rel="canonical" href="https://brevislab.com/about.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Briefing Signal Lab" />
+  <meta property="og:title" content="소개 — Briefing Signal Lab" />
+  <meta property="og:description" content="기술·금융·경제 신호를 매일 선별해 하나의 브리핑으로 전하는 무료 구독 서비스. 무엇을 제공하고 어떻게 만드는지 설명합니다." />
+  <meta property="og:url" content="https://brevislab.com/about.html" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="소개 — Briefing Signal Lab" />
+  <meta name="twitter:description" content="기술·금융·경제 신호를 매일 선별해 하나의 브리핑으로 전하는 무료 구독 서비스. 무엇을 제공하고 어떻게 만드는지 설명합니다." />
+  <meta property="og:image" content="https://brevislab.com/assets/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:image" content="https://brevislab.com/assets/og.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+  <!-- ── 헤더 ── -->
+  <header class="header">
+    <div class="wrap header__inner">
+      <a class="brand" href="index.html" aria-label="Briefing Signal Lab">
+        <svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true">
+          <rect class="mark__bg" x="1" y="1" width="24" height="24" rx="6"/>
+          <path class="mark__line" d="M4 17 L9 11 L13 14 L17 7 L22 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="mark__dot" cx="17" cy="7" r="2"/>
+        </svg>
+        <span class="brand__name" data-i18n="brand">브리핑 시그널 랩</span>
+      </a>
+      <nav class="nav" aria-label="주요">
+        <a class="nav__link" href="tech.html" data-i18n="nav.tech">기술</a>
+        <a class="nav__link" href="economy.html" data-i18n="nav.economy">경제</a>
+        <a class="nav__link" href="finance.html" data-i18n="nav.finance">금융</a>
+        <a class="nav__link" href="market.html" data-i18n="nav.market">시장</a>
+        <a class="nav__link" href="dashboard.html" data-i18n="nav.dashboard">대시보드</a>
+        <a class="nav__link" href="library.html" data-i18n="nav.library">서재</a>
+        <a class="nav__link" href="calendar.html" data-i18n="nav.calendar">경제 캘린더</a>
+      </nav>
+      <div class="header__actions">
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" data-lang="ko" aria-pressed="true">KO</button>
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+        <a class="btn btn--primary btn--sm" data-link="freeForm" target="_blank" rel="noopener" data-i18n="nav.subscribe">무료 구독</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- 본문은 정적 KO 다. data-i18n 을 쓰지 않는다 — 크롤러가 JS 없이 읽을 수 있어야 한다. -->
+  <main id="top">
+    <section class="band">
+      <div class="wrap">
+        <article class="read">
+          <p class="eyebrow">ABOUT</p>
+          <h1 class="read__title">Briefing Signal Lab 소개</h1>
+          <p class="read__meta">기술·금융·경제 신호를 매일 선별해 하나의 브리핑으로</p>
+          <div class="read__body">
+
+            <p>Briefing Signal Lab(브리핑 시그널 랩)은 기술·금융·경제 신호를 매일 선별해 하나의 브리핑으로 전하는 무료 구독 서비스입니다. 단순 뉴스 요약이 아닙니다. 기술 변화, 금융 시장, 경제지표를 서로 연결해 '오늘 무엇을 봐야 하는지'를 짚습니다. 매일 같은 시간, 같은 형식으로 도착해 습관이 됩니다.</p>
+
+            <h2>무엇을 제공하나</h2>
+            <ul>
+              <li><strong>일일 시황</strong> — 아침에 주요 시장 지표와 그날의 관전 포인트를 메일로 보냅니다.</li>
+              <li><strong>주간 브리핑</strong> — 월요일 오전에 기술·금융·경제 분야별 선행 신호와 헤드라이너 딥다이브를 보냅니다. 구독자가 고른 분야만 담깁니다.</li>
+              <li><strong>스페셜 리포트</strong> — 특정 산업·공급망을 깊이 정리한 리서치를 비정기로 보냅니다. 지난 리포트는 <a href="library.html">서재</a>에서 읽을 수 있습니다.</li>
+              <li><strong>지표 대시보드</strong> — 서로 관계 있는 지표를 한 화면에 겹쳐 보는 관계 페어, 미국 섹터 카드, 한국 매크로 카드를 매일 갱신합니다.</li>
+              <li><strong>경제 캘린더</strong> — 주요 시장 일정을 월 단위로 정리합니다.</li>
+            </ul>
+            <p>지금은 전부 무료입니다. 약 1년간 운영하고 개선해 안정화된 뒤 유료 구독 도입을 검토하며, 도입하게 되면 미리 안내합니다.</p>
+
+            <h2>어떻게 만드나</h2>
+            <p>주간 브리핑은 다섯 단계를 거칩니다. 자동화와 사람의 선별을 섞되, 무엇을 실을지는 사람이 정합니다.</p>
+            <ol>
+              <li><strong>수집</strong> — 공식 발표·공시·공개 데이터 같은 1차 출처를 우선합니다. 뉴스 기사는 제목·링크·짧은 요약만 쓰고 전문을 복사하지 않습니다.</li>
+              <li><strong>초안</strong> — AI 언어 모델이 후보 항목마다 제목·한 줄 요약·출처를 초안으로 정리합니다. 초안은 후보일 뿐 그대로 발행되지 않습니다.</li>
+              <li><strong>선별</strong> — 운영자가 초안을 직접 읽고 실을 항목을 고릅니다. 밸류체인 기업명을 확정하고 투자 판단으로 읽힐 표현을 지웁니다.</li>
+              <li><strong>검수</strong> — 초안을 만든 것과 다른 모델이 항목을 독립적으로 검수하고, 자동 표현 검사기가 매수·매도·목표가 같은 투자 판단 표현을 걸러냅니다. 걸린 항목은 발행에서 제외됩니다.</li>
+              <li><strong>발행</strong> — 통과한 항목만 사이트와 메일에 실립니다.</li>
+            </ol>
+            <p>일일 시황은 공개 시장 데이터를 바탕으로 자동 생성되며, 같은 표현 검사를 통과한 것만 발송됩니다. 대시보드 데이터는 Yahoo Finance, FRED(미 연준 경제 데이터), 미 재무부, 관세청, 한국은행 ECOS 등 공개 소스에서 매일 가져옵니다. 스페셜 리포트는 운영자가 공개 출처를 바탕으로 직접 씁니다.</p>
+
+            <h2>원칙</h2>
+            <ul>
+              <li><strong>투자 조언이 아닙니다.</strong> 모든 브리핑은 정보 제공과 관찰 노트가 목적입니다. 특정 종목의 매수·매도를 권유하지 않고 목표가를 제시하지 않습니다. 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.</li>
+              <li><strong>출처를 표기합니다.</strong> 항목마다 원문 링크를 답니다. 데이터의 실시간성과 정확성은 보장하지 않습니다.</li>
+              <li><strong>전문을 복사하지 않습니다.</strong> 제목·링크·짧은 요약·자체 해석으로 구성합니다.</li>
+              <li><strong>언제든 해지할 수 있습니다.</strong> 모든 메일 하단의 '구독 취소' 버튼으로 해지합니다. 오클릭을 막기 위해 확인 페이지에서 한 번 더 확정합니다.</li>
+            </ul>
+
+            <h2>운영자와 연락처</h2>
+            <p>개인이 운영합니다. 브리핑 내용, 구독, 개인정보에 관한 문의는 아래 이메일로 보내 주세요.</p>
+            <p><a href="mailto:paun.jeong@gmail.com">paun.jeong@gmail.com</a></p>
+            <p>개인정보를 어떻게 다루는지는 <a href="privacy.html">개인정보처리방침</a>에 있습니다.</p>
+
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── 푸터 ── -->
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <div class="footer__brand">
+        <svg class="brand__mark" viewBox="0 0 26 26" aria-hidden="true">
+          <rect class="mark__bg" x="1" y="1" width="24" height="24" rx="6"/>
+          <path class="mark__line" d="M4 17 L9 11 L13 14 L17 7 L22 12" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="mark__dot" cx="17" cy="7" r="2"/>
+        </svg>
+        <span data-i18n="brand">브리핑 시그널 랩</span>
+      </div>
+      <div>
+        <p class="footer__disc-title" data-i18n="footer.disclaimerTitle">면책 안내</p>
+        <p class="footer__disc" data-i18n="footer.disclaimer">본 서비스의 모든 브리핑은 정보 제공과 관찰 노트를 목적으로 하며 투자 조언이 아닙니다. 특정 종목의 매수·매도를 권유하지 않습니다. 데이터의 실시간성과 정확성을 보장하지 않으며, 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다. 기술 브리핑은 공개 출처 기반 관찰이며, 그 외 카테고리의 수치·종목은 형식 검증용 샘플입니다.</p>
+      </div>
+      <p class="footer__disc" data-i18n="footer.sourceNote">기사 전문을 복사하지 않으며 제목·링크·짧은 요약·자체 해석 중심으로 구성합니다.</p>
+      <div class="footer__meta">
+        <span data-i18n="footer.rights">© 2026 Briefing Signal Lab. All rights reserved.</span>
+        <span><a href="about.html" data-i18n="footer.about">소개</a> · <a href="privacy.html" data-i18n="footer.privacy">개인정보처리방침</a> · <a href="mailto:paun.jeong@gmail.com">paun.jeong@gmail.com</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/content/site.js"></script>
+  <script src="assets/script.js"></script>
+</body>
+</html>

@@ -401,6 +401,8 @@ const UI = {
       en: "We do not copy full articles; content is built from titles, links, short summaries, and our own analysis.",
     },
     rights: { ko: "© 2026 Briefing Signal Lab. All rights reserved.", en: "© 2026 Briefing Signal Lab. All rights reserved." },
+    about: { ko: "소개", en: "About" },
+    privacy: { ko: "개인정보처리방침", en: "Privacy Policy" },
   },
 };
 

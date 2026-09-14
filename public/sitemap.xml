@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 정적 페이지 목록. read.html 은 ?r= 없이는 빈 페이지이고 canonical 이 read.html 이라 넣지 않는다.
+     아카이브(weekly/ market/ library/)가 생기면 빌드 스크립트가 이 파일을 생성한다(docs/seo-adsense-plan.md Phase 3). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://brevislab.com/</loc></url>
+  <url><loc>https://brevislab.com/tech.html</loc></url>
+  <url><loc>https://brevislab.com/finance.html</loc></url>
+  <url><loc>https://brevislab.com/economy.html</loc></url>
+  <url><loc>https://brevislab.com/market.html</loc></url>
+  <url><loc>https://brevislab.com/dashboard.html</loc></url>
+  <url><loc>https://brevislab.com/library.html</loc></url>
+  <url><loc>https://brevislab.com/calendar.html</loc></url>
+  <url><loc>https://brevislab.com/about.html</loc></url>
+  <url><loc>https://brevislab.com/privacy.html</loc></url>
+</urlset>
