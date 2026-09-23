@@ -80,6 +80,7 @@ function quota(left, needed) {
     MailApp: { getRemainingDailyQuota: () => (typeof left === 'function' ? left() : left) },
     GmailApp: { sendEmail: (to, subj) => sent.push({ to, subj }) },
     mailSafe_: (s) => String(s == null ? '' : s),   // 추출 블록 밖에 정의돼 있다
+    resendKey_: () => '',                            // 추출 블록 밖. 빈 값 = 기존 Gmail 경로
   });
   vm.runInContext(block(mailer, 'function sendMail_', 'function ymd_', 'sendMail_/mailQuotaOk_'), ctx);
   return { ok: ctx.mailQuotaOk_(needed, '일일 시황'), alerts: sent };
@@ -104,6 +105,7 @@ const ctxOpt = vm.createContext({
   console, CFG: { SENDER_NAME: 'BSL' },
   GmailApp: { sendEmail: (to, s, b, o) => opts.push(o) },
   mailSafe_: (s) => String(s == null ? '' : s),
+  resendKey_: () => '',                            // 추출 블록 밖. 빈 값 = 기존 Gmail 경로
 });
 vm.runInContext(block(mailer, 'function sendMail_', 'function ymd_', 'sendMail_'), ctxOpt);
 ctxOpt.sendMail_('a@x.com', 's', 'plain', '');
@@ -135,6 +137,7 @@ function warn(left, needed) {
     MailApp: { getRemainingDailyQuota: () => (typeof left === 'function' ? left() : left) },
     GmailApp: { sendEmail: (to, subj) => sent.push({ to, subj }) },
     mailSafe_: (s) => String(s == null ? '' : s),
+    resendKey_: () => '',                            // 추출 블록 밖. 빈 값 = 기존 Gmail 경로
   });
   // sendMail_ 까지 포함해야 한다 — 빼면 ReferenceError 를 mailQuotaWarn_ 의 catch 가 삼켜서
   // '알림이 안 갔다'가 '한도가 충분했다'처럼 보인다.
@@ -162,6 +165,7 @@ assert.doesNotThrow(() => {
     MailApp: { getRemainingDailyQuota: () => 0 },
     GmailApp: { sendEmail: () => { throw new Error('quota exhausted'); } },
     mailSafe_: (s) => String(s == null ? '' : s),
+    resendKey_: () => '',                            // 추출 블록 밖. 빈 값 = 기존 Gmail 경로
   });
   vm.runInContext(block(mailer, 'function sendMail_', 'function ymd_', 'sendMail_/mailQuotaWarn_'), ctx);
   ctx.mailQuotaWarn_(35, '주간');

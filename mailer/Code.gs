@@ -635,6 +635,48 @@ function checkQuota() {
   }
 }
 
+/**
+ * Resend 전환 진단 — 읽기 전용 + 테스트 1통. 실제 구독자에게는 가지 않는다.
+ * 어디로 보낼지는 스크립트 속성 RESEND_TEST_TO(쉼표 구분). 없으면 운영자 주소 1곳.
+ * ⚠️ 국내 포털 도달은 Resend 로그의 delivered 로 알 수 없다(수신 서버가 받았다는 뜻일 뿐,
+ *    인박스인지 스팸함인지는 구분하지 않는다). naver·hanmail 주소를 넣고 눈으로 볼 것.
+ */
+function checkResend() {
+  var key = resendKey_();
+  Logger.log("[Resend] 실행 계정: " + Session.getEffectiveUser().getEmail());
+  // 선언값이 아니라 실효값을 찍는다 — 키가 있다/없다가 곧 발송 수단이다.
+  Logger.log("[Resend] RESEND_API_KEY: " + (key ? "있음(" + key.slice(0, 6) + "…, " + key.length + "자)" : "없음 → GmailApp 경로"));
+  Logger.log("[Resend] 발신: " + CFG.SENDER_NAME + " <" + RESEND_FROM + "> · 회신: " + CFG.OPERATOR_EMAIL);
+  if (!key) return;
+
+  var to = String(PropertiesService.getScriptProperties().getProperty("RESEND_TEST_TO") || CFG.OPERATOR_EMAIL)
+    .split(",").map(function (s) { return s.trim(); }).filter(function (s) { return s.indexOf("@") > 0; });
+  Logger.log("[Resend] 테스트 대상 " + to.length + "명: " + to.join(" · "));
+
+  // ⚠️ 평문 두 줄로는 도달 확인이 안 된다. 실제 메일은 88KB HTML 이고 스팸 점수는 거기서 갈린다.
+  //    그날 시장-일일 행이 있으면 **구독자가 받는 것과 같은 본문**을 보낸다.
+  var subject = "[BSL] Resend 전환 테스트", detail = "", quotes = null;
+  var dg = dailyGroups_(), real = dg.groups.length > 0;
+  var plain = "이 메일이 보이면 Resend 경로가 살아 있습니다.\n스팸함에서 발견했다면 알려주세요.";
+  if (real) {
+    detail = marketBody_(); quotes = quotes_();
+    subject = "[테스트] " + CFG.DAILY_SUBJECT + " " + dg.today;
+    plain = dailyPlain_(dg, detail, quotes);
+  }
+  Logger.log("[Resend] 본문: " + (real ? "실제 일일 시황 " + dg.today + " (HTML)" : "⚠️ 시장-일일 행 없음 → 평문 — 도달 판정 근거로 약하다"));
+
+  var ok = 0;
+  for (var i = 0; i < to.length; i++) {
+    try {
+      // HTML 은 수신자별 수신거부 토큰이 들어가므로 루프 안에서 만든다.
+      sendMail_(to[i], subject, plain, real ? dailyHtml_(to[i], dg, detail, quotes) : "");
+      ok++;
+      Logger.log("[Resend] OK → " + to[i]);
+    } catch (e) { Logger.log("[ERROR] 실패 → " + to[i] + " : " + e); }
+  }
+  Logger.log("[Resend] 성공 " + ok + " / " + to.length);
+}
+
 /** 15분 폴링 트리거 생성(1회 실행). 기존 동명 트리거는 지우고 다시 만든다. */
 function createSpecialTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (tr) {
@@ -788,14 +830,61 @@ function mailSafe_(s) { return String(s == null ? "" : s).replace(/[\uD800-\uDFF
 // ===== 발송 단일 지점 =====
 // 모든 발송이 여기 한 곳을 지난다. 이유가 둘이다.
 //  (1) mailSafe_ 를 호출부마다 기억해 붙일 필요가 없다 — 빠뜨리면 이모지가 깨진 채 나간다.
-//  (2) Gmail 이 아닌 발송 수단으로 옮길 때 고칠 자리가 여기 하나다. 지금은 GmailApp 이지만
-//      한도(개인 계정 하루 100명)가 좁아 Workspace 나 전용 발송 서비스로 옮기게 된다.
+//  (2) Gmail 이 아닌 발송 수단으로 옮길 때 고칠 자리가 여기 하나다.
+//
+// 2026-09-23: 수단이 둘이 됐다. 스크립트 속성 RESEND_API_KEY 가 있으면 Resend, 없으면 GmailApp.
+// 스위치를 CFG 가 아니라 스크립트 속성에 둔 이유가 셋이다 — CFG(20~51행)를 건드리지 않아야
+// 수동 배포의 "52행~끝 교체" 원칙이 유지되고, 키를 코드에 넣지 않으며, 되돌리기가 속성 삭제
+// 한 번이라 재배포가 필요 없다.
+//
+// ⚠️ Resend 실패를 GmailApp 으로 되돌리지 않는다. 조용히 Gmail 로 새면 하루 100통 한도에
+//    걸려 절반만 나가는데, 일일은 수신자별 발송로그가 없어 그 상태가 복구 불가다.
+//    예외를 그대로 올려 호출부의 catch 가 failed 로 세게 한다.
+var RESEND_ENDPOINT = "https://api.resend.com/emails";
+var RESEND_FROM = "noreply@brevislab.com";   // Resend 에서 검증한 도메인이어야 한다
+
+function resendKey_() {
+  try { return PropertiesService.getScriptProperties().getProperty("RESEND_API_KEY") || ""; }
+  catch (e) { return ""; }                   // 속성을 못 읽으면 기존 Gmail 경로로 간다
+}
+
 function sendMail_(to, subject, plain, htmlBody) {
+  var key = resendKey_();
+  if (key) { resendSend_(key, to, subject, plain, htmlBody); return; }
   var options = { name: CFG.SENDER_NAME };
   // 빈 htmlBody 를 넘기면 Gmail 이 그 빈 HTML 을 본문으로 써서 메일이 백지로 간다.
   // 운영자 알림처럼 평문만 있는 발송이 있으므로 여기서 걸러낸다.
   if (htmlBody) options.htmlBody = mailSafe_(htmlBody);
   GmailApp.sendEmail(mailSafe_(to), mailSafe_(subject), mailSafe_(plain), options);
+}
+
+// ⚠️ reply_to 를 빼지 말 것. 발신이 noreply@ 라 이게 없으면 구독자 회신이 사라진다
+//    (2026-09-22 W39 에 실제 회신이 있었다 — 지금은 개인 Gmail 발신이라 그냥 도착했다).
+function resendSend_(key, to, subject, plain, htmlBody) {
+  var payload = {
+    from: CFG.SENDER_NAME + " <" + RESEND_FROM + ">",
+    to: [mailSafe_(to)],
+    subject: mailSafe_(subject),
+    text: mailSafe_(plain),
+    reply_to: CFG.OPERATOR_EMAIL
+  };
+  if (htmlBody) payload.html = mailSafe_(htmlBody);
+  var opts = {
+    method: "post",
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + key },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true                 // 상태코드를 직접 보고 429 만 재시도한다
+  };
+  for (var attempt = 0; attempt < 2; attempt++) {
+    var res = UrlFetchApp.fetch(RESEND_ENDPOINT, opts);
+    var code = res.getResponseCode();
+    if (code >= 200 && code < 300) return;
+    // 429 는 초당 한도(기본 10 req/s)다. 현재 발송 속도는 약 0.8/s 라 정상적으로는 안 나지만,
+    // 나면 그 수신자만 못 받는 것이라 한 번은 쉬었다 다시 본다.
+    if (code === 429 && attempt === 0) { Utilities.sleep(1200); continue; }
+    throw new Error("Resend " + code + " " + res.getContentText().slice(0, 300));
+  }
 }
 
 // ===== 일일 발송 한도 가드 =====
@@ -816,6 +905,10 @@ function sendMail_(to, subject, plain, htmlBody) {
 // ⚠️ 한도 조회 실패는 그냥 넘어간다 — 진단이 발송을 막는 주체가 되면 안 된다(2026-08-17).
 // ⚠️ 알림 메일 자체도 한도를 1 쓴다. 한도가 0이면 이 발송이 예외를 내므로 반드시 감싼다.
 function mailQuotaWarn_(needed, label) {
+  // ⚠️ 이 가드는 Gmail 한도를 본다. Resend 로 보내는 중이면 무관한 수치이므로 보지 않는다.
+  //    MailApp 호출 앞에서 끊는다 — 뒤에 두면 Resend 발송에 Gmail 스코프가 다시 얽힌다.
+  //    발송 건수는 여기서 남긴다(어느 수단으로 몇 명에게 갔는지가 로그에 없으면 결손이 안 보인다).
+  if (resendKey_()) { Logger.log("[한도] " + label + " — Resend 경로, Gmail 가드 생략 (대상 " + needed + "명)"); return; }
   var left;
   try { left = MailApp.getRemainingDailyQuota(); }
   catch (e) { Logger.log("[WARN] " + label + " 잔여 한도 조회 실패 — 경고 생략: " + e); return; }
@@ -828,11 +921,15 @@ function mailQuotaWarn_(needed, label) {
       "한도에 걸린 수신자는 발송로그에 failed 로 남고 원장이 email_partial 이 됩니다. " +
       "한도가 풀린 뒤 같은 함수를 다시 실행하면 못 받은 사람에게만 나갑니다.\n\n" +
       "⚠️ 한도는 롤링 24시간입니다. 어제 많이 썼으면 오늘도 부족합니다.\n" +
-      "근본 해결은 Google Workspace 이전입니다(100명 → 1,500명).", "");
+      "이 메일이 왔다는 것은 Gmail 로 보내는 중이라는 뜻입니다 — 스크립트 속성 RESEND_API_KEY 를 확인하세요.\n" +
+      "Workspace 이전은 기각됐습니다(2026-09-23 실측: Workspace 한도도 그대로 100).", "");
   } catch (e) { Logger.log("[ERROR] 한도 부족 알림도 실패: " + e); }
 }
 
 function mailQuotaOk_(needed, label) {
+  // ⚠️ mailQuotaWarn_ 와 같은 이유로 Resend 경로에서는 보지 않는다. 특히 이쪽은 fail-closed 라,
+  //    남겨두면 Gmail 잔여가 바닥일 때 Resend 에 여유가 있어도 일일이 통째로 막힌다.
+  if (resendKey_()) { Logger.log("[한도] " + label + " — Resend 경로, Gmail 가드 생략 (대상 " + needed + "명)"); return true; }
   var left;
   try { left = MailApp.getRemainingDailyQuota(); }
   catch (e) { Logger.log("[WARN] " + label + " 잔여 한도 조회 실패 — 가드 생략하고 발송 진행: " + e); return true; }
@@ -846,8 +943,9 @@ function mailQuotaOk_(needed, label) {
       "⚠️ 한도는 달력 하루가 아니라 롤링 24시간입니다. '내일이면 초기화'가 아니라, " +
       "24시간 전에 쓴 몫이 시간에 따라 조금씩 풀립니다. 그래서 어제 많이 썼으면 오늘도 부족합니다.\n" +
       "실제로 2026-09-01 에 그랬습니다 — 전날(월) 일일 35 + 주간 35 가 같은 창에 남아 화요일 일일이 보류됐습니다.\n\n" +
-      "근본 해결은 Google Workspace 이전입니다(한도 100명 → 1,500명). 개인 계정에서는 " +
-      "일일이 매일 나가 창에 항상 2일치가 겹치므로, 구독자 35명이면 이미 70%를 씁니다.", "");
+      "이 메일이 왔다는 것은 Gmail 로 보내는 중이라는 뜻입니다 — 스크립트 속성 RESEND_API_KEY 가 " +
+      "비었는지 확인하세요. Workspace 이전은 기각됐습니다(2026-09-23 실측: Workspace 한도도 그대로 100).\n" +
+      "개인 계정은 일일이 매일 나가 창에 항상 2일치가 겹치므로 구독자 상한이 49명입니다.", "");
   } catch (e) { Logger.log("[ERROR] 한도 부족 알림도 실패: " + e); }
   return false;
 }
