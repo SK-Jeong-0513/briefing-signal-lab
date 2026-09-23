@@ -131,4 +131,78 @@ class PostRowsTimeoutTests(unittest.TestCase):
         self.assertGreaterEqual(release.POST_TIMEOUT, 120)
 
 
+
+class NeedsReviewTests(unittest.TestCase):
+    """게이트가 떨어뜨린 항목을 버리지 않는다(handoff §5-6-a).
+
+    2026-09-14 첫 실측에서 119건이 제외됐는데 항목 자체가 어디에도 안 남아,
+    independent_evaluator 76건이 정말 나쁜지 검수기가 까다로운지 판단할 수 없었고
+    가드가 잡은 표현 4건도 어느 행인지 몰랐다.
+    """
+    def row(self, **overrides):
+        base = {"분야":"semicon","발행주":"2026-W31","유형":"signal","제목ko":"제목","제목en":"t",
+                "한줄ko":"한줄","한줄en":"l","밸류체인":"HBM","출처URL":"https://example.com/z",
+                "원문제목":"orig","원문일시":"2026-07-26T00:00:00+00:00","생성엔진":"deepseek","status":"draft"}
+        base.update(overrides)
+        return base
+
+    def test_rejected_keeps_the_row_not_just_the_title(self):
+        bad_eval = lambda r: (None, "independent_evaluator")
+        ok, bad = release.select_candidates([self.row()], "2026-W31",
+                                            datetime(2026,7,27,tzinfo=timezone.utc), bad_eval)
+        self.assertEqual(ok, [])
+        self.assertIn("row", bad[0], "원본 row 를 들고 가야 시트에 남길 수 있다")
+        self.assertEqual(bad[0]["row"]["출처URL"], "https://example.com/z")
+
+    def test_review_rows_are_needs_review_with_reasons(self):
+        rejected = [{"row": self.row(), "title": "제목", "reasons": ["guard", "duplicate"]}]
+        rows = release.review_rows(rejected, "2026-W31", "STAMP")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["상태"], "needs_review")
+        self.assertEqual(rows[0]["검수사유"], "guard, duplicate")
+        self.assertEqual(rows[0]["검수점수"], "", "점수 없이 떨어진 건도 있다(가드 위반)")
+        self.assertEqual(rows[0]["issue_key"], "2026-W31")
+        self.assertEqual(rows[0]["updated_at"], "STAMP")
+        self.assertEqual(rows[0]["published_at"], "")
+        self.assertEqual(set(rows[0]), set(release.ITEM_FIELDS), "발행항목 헤더와 열이 같아야 한다")
+
+    def test_needs_review_does_not_block_the_article_next_week(self):
+        """⚠️ 이게 이 변경의 유일한 실제 위험이다.
+
+        prior_keys 가 상태를 안 보면, 이번 주에 게이트가 떨어뜨린 기사가 다음 주에
+        duplicate_prior_issue 로 영구 배제된다. 주간-초안의 used_keys 가 status 를
+        안 보고 전 행을 읽어 2026-W32 에서 실제로 그랬다.
+        """
+        prior = release.prior_keys(
+            [{"issue_key":"2026-W30","출처URL":"https://example.com/z","원문제목":"orig","상태":"needs_review"}],
+            "2026-W31")
+        self.assertEqual(prior, set(), "needs_review 는 '발행된 적 없음'이다")
+
+    def test_prior_keys_is_an_allowlist_not_a_denylist(self):
+        """새 상태가 추가돼도 조용히 다시 들어오면 안 된다(superseded 가 실재한다)."""
+        for state in ("superseded", "cancelled", "무엇이든"):
+            prior = release.prior_keys(
+                [{"issue_key":"2026-W30","출처URL":"https://example.com/z","원문제목":"orig","상태":state}],
+                "2026-W31")
+            self.assertEqual(prior, set(), state + " 는 나간 적이 없다")
+
+    def test_issued_states_still_block(self):
+        for state in ("ready", "published"):
+            prior = release.prior_keys(
+                [{"issue_key":"2026-W30","출처URL":"https://example.com/z","원문제목":"orig","상태":state}],
+                "2026-W31")
+            self.assertIn("https://example.com/z", prior, state + " 는 차단해야 한다")
+
+    def test_blank_state_still_blocks(self):
+        """상태 열이 없던 시절의 행 — 배제하면 같은 기사가 구독자에게 두 번 나간다."""
+        prior = release.prior_keys(
+            [{"issue_key":"2026-W30","출처URL":"https://example.com/z","원문제목":"orig"}], "2026-W31")
+        self.assertIn("https://example.com/z", prior)
+
+    def test_review_post_failure_does_not_stop_the_ledger(self):
+        """needs_review 는 진단이다. 실패가 원장 기록을 막으면 고치려던 것보다 나빠진다."""
+        with patch.object(release, "post_rows", side_effect=OSError("boom")):
+            release.post_review_rows([{"상태": "needs_review"}], "2026-W31")   # 예외가 새면 실패
+
+
 if __name__ == "__main__": unittest.main()

@@ -128,11 +128,27 @@ def evaluate_row(row):
     return obj, "" if passed else "evaluation_gate"
 
 
+ISSUED_STATES = ("ready", "published")
+
+
 def prior_keys(items, issue_key):
-    """지난 호에 이미 발행된 기사 키(출처URL·정규화 원문제목). 같은 기사의 주 넘김 재게재를 막는다."""
+    """지난 호에 이미 발행된 기사 키(출처URL·정규화 원문제목). 같은 기사의 주 넘김 재게재를 막는다.
+
+    ⚠️ 실제로 나간 상태(ISSUED_STATES)만 센다. **허용 목록이어야 한다** — 제외 목록으로
+       쓰면 나중에 추가되는 상태가 조용히 다시 들어온다(weeklyCancelRelease 가 쓰는
+       superseded 가 이미 그렇다). 나가지 않은 행을 여기 넣으면 그 기사가 다음 주에
+       duplicate_prior_issue 로 영구 배제된다 — 주간-초안 시트의 used_keys 가 status 를
+       안 보고 전 행을 읽어 2026-W32 에서 실제로 그랬다.
+    """
     keys = set()
     for row in items:
         if (row.get("issue_key") or "").strip() == issue_key:
+            continue
+        status = (row.get("상태") or "").strip()
+        # 빈 상태는 '나간 것'으로 본다 — 상태 열이 없던 시절의 행이 여기 있고, 그것을
+        # 배제하면 과거 호 중복 차단이 약해져 같은 기사가 구독자에게 두 번 나간다.
+        # 우리가 쓰는 needs_review 는 항상 명시적으로 채우므로 이 예외에 걸리지 않는다.
+        if status and status not in ISSUED_STATES:
             continue
         url = (row.get("출처URL") or "").strip().lower()
         if url:
@@ -165,7 +181,10 @@ def select_candidates(rows, issue_key, now=None, evaluator=evaluate_row, prior=N
             if reason:
                 reasons.append(reason)
         if reasons:
-            rejected.append({"title": row.get("제목ko", ""), "reasons": reasons})
+            # row 를 함께 들고 간다 — 종전에는 제목·사유만 남기고 항목을 버려서,
+            # 검수기가 떨어뜨린 것이 정말 나쁜지 검수기가 까다로운지 판단할 수 없었다
+            # (2026-09-14 제외 119건 중 어느 행이 가드 위반인지도 몰랐다).
+            rejected.append({"row": row, "title": row.get("제목ko", ""), "reasons": reasons})
             continue
         accepted.append((row, evaluation))
     return accepted, rejected
@@ -177,6 +196,41 @@ def tally(values):
     for value in values:
         counts[value] = counts.get(value, 0) + 1
     return ", ".join("%s %d" % (k, counts[k]) for k in sorted(counts))
+
+
+def review_rows(rejected, issue, now):
+    """게이트가 떨어뜨린 항목을 needs_review 로 남긴다.
+
+    발송·공개에는 섞이지 않는다 — 세 소비자가 모두 상태를 좁게 본다:
+    메일러 weeklyLatestBundle_ 는 ready·published, 사이트 script.js 는 published,
+    콘솔 admin/Code.gs 는 ready 만 집는다.
+    ⚠️ 이 파일의 prior_keys 는 예외였다 — 그래서 위에서 ISSUED_STATES 로 좁혔다.
+       그 한 줄이 없으면 여기 남긴 항목이 다음 주에 영구 배제된다.
+    """
+    rows = []
+    for item in rejected:
+        row = item.get("row") or {}
+        out = {k: row.get(k, "") for k in ITEM_FIELDS}
+        out.update({"issue_key": issue, "revision": "1", "검수점수": "",
+                    "검수사유": ", ".join(item["reasons"]), "상태": "needs_review",
+                    "published_at": "", "updated_at": now})
+        rows.append(out)
+    return rows
+
+
+def post_review_rows(rows, issue):
+    """needs_review 는 진단용이다. 실패해도 원장 기록을 막지 않는다.
+
+    ⚠️ 원장이 본체다. 여기서 예외가 올라가면 '0건을 skipped 로 남긴다'가
+       '아무것도 안 남는다'가 되어 고치려던 것보다 나빠진다.
+    """
+    if not rows:
+        return
+    try:
+        post_rows("주간-발행항목", rows)          # verify 는 accepted 쪽에만 건다
+        print("[release] %s needs_review %d건 기록" % (issue, len(rows)))
+    except Exception as e:                        # noqa: BLE001 - 진단이 본 기록을 막으면 안 된다
+        print("[WARN] needs_review 기록 실패(원장은 계속 진행): %s" % e)
 
 
 def content_hash(items):
@@ -272,6 +326,9 @@ def main():
     now = datetime.now(KST).isoformat(timespec="seconds")
     reasons = tally([r for x in rejected for r in x["reasons"]])
     if not accepted:
+        # 통과 0건인 회차가 needs_review 가 가장 필요한 회차다 — 종전에는 이 경로에서
+        # 항목이 하나도 안 남아 무엇이 왜 떨어졌는지 집계 숫자 말고는 알 수 없었다.
+        post_review_rows(review_rows(rejected, issue, now), issue)
         ledger_row = {"issue_key": issue, "state": "skipped", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": "", "updated_at": now, "message": "통과 0건; 제외 %d건 (%s)" % (len(rejected), reasons)}
         post_rows("주간-발행", [ledger_row], verify=(ledger_url, issue, now, 1))
         print("[release] %s skipped" % issue)
@@ -287,6 +344,10 @@ def main():
     #    그래서 항목 POST 는 타임아웃 시 재확인까지 하고 넘어간다.
     post_rows("주간-발행항목", items,
               verify=(items_url, issue, now, len(items)) if items_url else None)
+    # ⚠️ needs_review 를 위 POST 에 합치지 않는다. verify 는 (issue_key, updated_at) 행 수만
+    #    세므로, 합치면 accepted 가 통째로 빠지고 needs_review 만 들어간 부분 기록도
+    #    건수가 맞아 통과한다. 실제로 나가는 행의 보장을 약하게 만들지 않는다.
+    post_review_rows(review_rows(rejected, issue, now), issue)
     ledger_row = {"issue_key": issue, "state": "auto_ready", "revision": "1", "manual_confirmed": "false", "auto_mode": "true", "published_at": "", "emailed_at": "", "content_hash": digest, "updated_at": now, "message": "자동 검수 통과 %d건 [%s]; 제외 %d건 (%s)" % (len(items), tally([i["분야"] for i in items]), len(rejected), reasons)}
     post_rows("주간-발행", [ledger_row], verify=(ledger_url, issue, now, 1))
     print("[release] %s auto_ready %d건 [%s]" % (issue, len(items), tally([i["분야"] for i in items])))
