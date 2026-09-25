@@ -677,6 +677,66 @@ function checkResend() {
   Logger.log("[Resend] 성공 " + ok + " / " + to.length);
 }
 
+/**
+ * Resend 발송 결과 집계 — 회차별로 몇 명에게 갔고 몇 건이 실패했는지 본다. 읽기 전용.
+ *
+ * 전환 뒤에는 Gmail Sent 에 발송 사본이 남지 않아 «몇 명에게 나갔나» 를 메일함으로 셀 수
+ * 없다. 실행 기록의 "발송 N" 은 **Resend API 가 접수한 수**이지 도착한 수가 아니다.
+ * 실제 배달 여부는 여기서만 보인다.
+ *
+ * ⚠️ delivered 는 «받는 서버가 받았다» 까지다. 인박스인지 스팸함인지는 구분하지 않는다.
+ *    국내 포털 도달은 여전히 사람이 눈으로 봐야 한다.
+ * ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 가 실행 드롭다운에서 숨긴다.
+ */
+function checkResendLog() {
+  var key = resendKey_();
+  if (!key) { Logger.log("[Resend로그] RESEND_API_KEY 없음 — Gmail 경로다. 집계할 것이 없다."); return; }
+
+  var byRound = {}, statusTotal = {}, bad = [], fetched = 0, after = "";
+  // 한 페이지 100건 상한. 구독자 54명이면 하루 한 회차가 54건이라 며칠치를 보려면 여러 장이다.
+  for (var page = 0; page < 6; page++) {
+    var url = "https://api.resend.com/emails?limit=100" + (after ? "&after=" + encodeURIComponent(after) : "");
+    var res = UrlFetchApp.fetch(url, {
+      method: "get", headers: { Authorization: "Bearer " + key }, muteHttpExceptions: true,
+    });
+    if (res.getResponseCode() !== 200) {
+      Logger.log("[ERROR] Resend 목록 조회 HTTP " + res.getResponseCode() + " " + res.getContentText().slice(0, 200));
+      return;
+    }
+    var body = JSON.parse(res.getContentText()), rows = body.data || [];
+    if (!rows.length) break;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], subj = String(r.subject || "(제목없음)");
+      var ev = String(r.last_event || "unknown");
+      byRound[subj] = byRound[subj] || { n: 0, ev: {} };
+      byRound[subj].n++;
+      byRound[subj].ev[ev] = (byRound[subj].ev[ev] || 0) + 1;
+      statusTotal[ev] = (statusTotal[ev] || 0) + 1;
+      // delivered·opened·clicked 외에는 전부 확인 대상이다(bounced·complained·failed·queued).
+      if (["delivered", "opened", "clicked"].indexOf(ev) < 0) {
+        bad.push(ev + " | " + subj + " | " + [].concat(r.to || []).join(","));
+      }
+      fetched++;
+      after = r.id;
+    }
+    if (!body.has_more) break;
+  }
+
+  Logger.log("[Resend로그] 조회 " + fetched + "건");
+  Object.keys(byRound).sort().reverse().forEach(function (subj) {
+    var e = byRound[subj].ev;
+    var parts = Object.keys(e).sort().map(function (k) { return k + " " + e[k]; });
+    Logger.log("[Resend로그] " + subj + " : " + byRound[subj].n + "건 — " + parts.join(" · "));
+  });
+  if (bad.length) {
+    Logger.log("[WARN] delivered 가 아닌 " + bad.length + "건:");
+    bad.slice(0, 40).forEach(function (line) { Logger.log("  " + line); });
+    if (bad.length > 40) Logger.log("  … 외 " + (bad.length - 40) + "건");
+  } else if (fetched) {
+    Logger.log("[Resend로그] 전부 delivered 계열이다(bounced·complained·failed 0).");
+  }
+}
+
 /** 15분 폴링 트리거 생성(1회 실행). 기존 동명 트리거는 지우고 다시 만든다. */
 function createSpecialTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (tr) {
