@@ -700,7 +700,7 @@ function checkResendLog() {
   if (!key) { Logger.log("[Resend로그] 키 없음 — Gmail 경로다. 집계할 것이 없다."); return; }
   Logger.log("[Resend로그] 사용 키: " + (readKey ? "RESEND_READ_KEY" : "RESEND_API_KEY(발송용)"));
 
-  var byRound = {}, bad = [], fetched = 0, after = "";
+  var byRound = {}, bad = [], suppressed = [], fetched = 0, after = "";
   // 한 페이지 100건 상한. 구독자 54명이면 하루 한 회차가 54건이라 며칠치를 보려면 여러 장이다.
   for (var page = 0; page < 6; page++) {
     var url = "https://api.resend.com/emails?limit=100" + (after ? "&after=" + encodeURIComponent(after) : "");
@@ -731,7 +731,9 @@ function checkResendLog() {
       byRound[subj].ev[ev] = (byRound[subj].ev[ev] || 0) + 1;
       // delivered·opened·clicked 외에는 전부 확인 대상이다(bounced·complained·failed·queued).
       if (["delivered", "opened", "clicked"].indexOf(ev) < 0) {
-        bad.push(ev + " | " + subj + " | " + [].concat(r.to || []).join(","));
+        var who = [].concat(r.to || []).join(",");
+        bad.push(ev + " | " + subj + " | " + who);
+        if (ev.indexOf("suppress") >= 0) suppressed.push(who);
       }
       fetched++;
       after = r.id;
@@ -750,7 +752,17 @@ function checkResendLog() {
     bad.slice(0, 40).forEach(function (line) { Logger.log("  " + line); });
     if (bad.length > 40) Logger.log("  … 외 " + (bad.length - 40) + "건");
   } else if (fetched) {
-    Logger.log("[Resend로그] 전부 delivered 계열이다(bounced·complained·failed 0).");
+    Logger.log("[Resend로그] 전부 delivered 계열이다(bounced·complained·failed·suppressed 0).");
+  }
+  // ⚠️ suppressed 는 다른 실패와 성격이 다르다 — **조용히** 안 나간다. Resend 가 hard bounce
+  //    나 스팸 신고가 난 주소를 차단 목록에 올리고, 그 뒤로는 발송이 suppressed 로 처리되며
+  //    실패로 보이지도 않는다. 그 사람은 구독 상태인데 영영 못 받는다(전역 §18).
+  //    soft bounce 는 목록에 올라가지 않으므로 여기 안 뜬다.
+  if (suppressed.length) {
+    Logger.log("[ERROR] ⚠️ 차단 목록(Suppression List)에 걸려 조용히 안 나간 " + suppressed.length + "명:");
+    suppressed.forEach(function (who) { Logger.log("  " + who); });
+    Logger.log("  이 사람들은 구독 상태인데도 영영 못 받는다. 해제: resend.com/emails 에서 그 주소를");
+    Logger.log("  찾아 열고 'Remove from suppression list'. ⚠️ 원인을 안 고치면 다시 올라간다.");
   }
 }
 
