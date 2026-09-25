@@ -689,21 +689,39 @@ function checkResend() {
  * ⚠️ 이름 끝에 _ 를 붙이지 말 것 — Apps Script 가 실행 드롭다운에서 숨긴다.
  */
 function checkResendLog() {
-  var key = resendKey_();
-  if (!key) { Logger.log("[Resend로그] RESEND_API_KEY 없음 — Gmail 경로다. 집계할 것이 없다."); return; }
+  // ⚠️ 목록 조회에는 full_access 키가 필요하다. Resend 권한은 full_access 와 sending_access
+  //    둘뿐이고 읽기 전용이 없다. 발송 키(RESEND_API_KEY)는 sending_access 로 두는 편이
+  //    맞다 — 매일 무인으로 도는 경로에 전권 키를 두지 않는다. 그래서 이 진단은 별도
+  //    속성 RESEND_READ_KEY 를 먼저 보고, 없으면 발송 키로 시도한다(아마 401 이 난다).
+  var readKey = "";
+  try { readKey = PropertiesService.getScriptProperties().getProperty("RESEND_READ_KEY") || ""; }
+  catch (e) { readKey = ""; }
+  var key = readKey || resendKey_();
+  if (!key) { Logger.log("[Resend로그] 키 없음 — Gmail 경로다. 집계할 것이 없다."); return; }
+  Logger.log("[Resend로그] 사용 키: " + (readKey ? "RESEND_READ_KEY" : "RESEND_API_KEY(발송용)"));
 
-  var byRound = {}, statusTotal = {}, bad = [], fetched = 0, after = "";
+  var byRound = {}, bad = [], fetched = 0, after = "";
   // 한 페이지 100건 상한. 구독자 54명이면 하루 한 회차가 54건이라 며칠치를 보려면 여러 장이다.
   for (var page = 0; page < 6; page++) {
     var url = "https://api.resend.com/emails?limit=100" + (after ? "&after=" + encodeURIComponent(after) : "");
     var res = UrlFetchApp.fetch(url, {
       method: "get", headers: { Authorization: "Bearer " + key }, muteHttpExceptions: true,
     });
-    if (res.getResponseCode() !== 200) {
-      Logger.log("[ERROR] Resend 목록 조회 HTTP " + res.getResponseCode() + " " + res.getContentText().slice(0, 200));
+    var code = res.getResponseCode(), text = res.getContentText();
+    if (code === 401 && text.indexOf("restricted") >= 0) {
+      Logger.log("[Resend로그] 이 키로는 목록을 못 읽는다 — 발송 전용(sending_access) 키다.");
+      Logger.log("  Resend 권한은 full_access / sending_access 둘뿐이고 읽기 전용이 없다.");
+      Logger.log("  택1 ① Resend 대시보드 → Emails 에서 눈으로 본다(추가 설정 없음, 가장 빠르다)");
+      Logger.log("      ② full_access 키를 새로 만들어 스크립트 속성 RESEND_READ_KEY 에 넣는다.");
+      Logger.log("         ⚠️ 발송 키(RESEND_API_KEY)는 sending_access 그대로 둘 것 — 매일 무인으로");
+      Logger.log("            도는 발송 경로에 전권 키를 두지 않는다. 키는 여러 개 만들 수 있다.");
       return;
     }
-    var body = JSON.parse(res.getContentText()), rows = body.data || [];
+    if (code !== 200) {
+      Logger.log("[ERROR] Resend 목록 조회 HTTP " + code + " " + text.slice(0, 200));
+      return;
+    }
+    var body = JSON.parse(text), rows = body.data || [];
     if (!rows.length) break;
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i], subj = String(r.subject || "(제목없음)");
@@ -711,7 +729,6 @@ function checkResendLog() {
       byRound[subj] = byRound[subj] || { n: 0, ev: {} };
       byRound[subj].n++;
       byRound[subj].ev[ev] = (byRound[subj].ev[ev] || 0) + 1;
-      statusTotal[ev] = (statusTotal[ev] || 0) + 1;
       // delivered·opened·clicked 외에는 전부 확인 대상이다(bounced·complained·failed·queued).
       if (["delivered", "opened", "clicked"].indexOf(ev) < 0) {
         bad.push(ev + " | " + subj + " | " + [].concat(r.to || []).join(","));
