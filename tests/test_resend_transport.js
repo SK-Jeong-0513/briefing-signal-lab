@@ -18,7 +18,11 @@ function run(scriptProps) {
   const ctx = vm.createContext({
     console,
     Logger: { log: () => {} },
-    Utilities: { formatDate: () => 'x', sleep: (ms) => calls.slept.push(ms) },
+    Utilities: {
+      formatDate: () => 'x', sleep: (ms) => calls.slept.push(ms),
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      computeDigest: (_alg, s) => Array.from(require('crypto').createHash('sha256').update(s).digest()),
+    },
     PropertiesService: {
       getScriptProperties: () => ({ getProperty: (k) => (scriptProps || {})[k] || null }),
     },
@@ -35,6 +39,7 @@ function run(scriptProps) {
   vm.runInContext(SRC, ctx);
   return {
     calls,
+    ctx,
     setResponse: (r) => { response = r; },
     send: (...a) => vm.runInContext('sendMail_', ctx)(...a),
     quotaOk: (n, l) => vm.runInContext('mailQuotaOk_', ctx)(n, l),
@@ -70,6 +75,21 @@ function run(scriptProps) {
   // 발신이 noreply@ 라 reply_to 가 없으면 구독자 회신이 사라진다(2026-09-22 W39 실제 회신 있음).
   assert.strictEqual(body.reply_to, 'paun.jeong@gmail.com', 'reply_to 가 운영자 주소여야 한다');
   assert(/^.+ <noreply@brevislab\.com>$/.test(body.from), 'from 은 "이름 <검증도메인>" 형식: ' + body.from);
+
+  // List-Unsubscribe 는 푸터 버튼과 같은 확인 페이지 URL 이어야 한다(수신자 토큰 포함).
+  const expectHref = vm.runInContext('unsubHref_(token_("sub@naver.com"))', t.ctx);
+  assert(/[?&]a=unsubscribe/.test(expectHref), '확인 페이지 URL: ' + expectHref);
+  assert.strictEqual(body.headers['List-Unsubscribe'], '<' + expectHref + '>');
+  // ⚠️ One-Click 금지 — POST 한 번으로 해지되면 2단계 해지 설계가 깨진다.
+  assert(!('List-Unsubscribe-Post' in body.headers), 'List-Unsubscribe-Post 를 넣지 않는다');
+}
+
+// ── 운영자 알림에는 List-Unsubscribe 를 붙이지 않는다(구독 메일이 아니다) ─────────
+{
+  const t = run({ RESEND_API_KEY: 'k' });
+  t.send('Paun.Jeong@gmail.com', '[BSL] 알림', '평문', '');
+  const body = JSON.parse(t.calls.fetch[0].opts.payload);
+  assert(!('headers' in body), '운영자 주소(대소문자 무관)에는 헤더 없음');
 }
 
 // ── 평문 전용 발송(운영자 알림)은 html 키를 넣지 않는다 ────────────────────────

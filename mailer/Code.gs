@@ -880,10 +880,14 @@ function link_(tok, action, cat, domain, label) {
 // 구독 취소 버튼. 세 메일(일일·주간·스페셜) 푸터가 공유한다.
 // 주 CTA(primary 채움)와 겹치지 않도록 테두리형(surface + border)으로 그린다.
 // 웹앱 URL 이 없으면 운영자 mailto 로 폴백한다 — 어느 경우에도 해지 경로가 사라지지 않는다.
-function unsubButton_(tok) {
-  var href = CFG.WEBAPP_URL
+// List-Unsubscribe 헤더(resendSend_)도 같은 주소를 쓴다 — 두 경로가 갈라지지 않게 한 곳에서 만든다.
+function unsubHref_(tok) {
+  return CFG.WEBAPP_URL
     ? CFG.WEBAPP_URL + "?t=" + tok + "&a=unsubscribe"
     : "mailto:" + CFG.OPERATOR_EMAIL + "?subject=" + encodeURIComponent("브리핑 구독 취소");
+}
+function unsubButton_(tok) {
+  var href = unsubHref_(tok);
   return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:12px 0 0"><tr>' +
     '<td style="border:1px solid ' + C.border + ';border-radius:8px;background:' + C.surface + '">' +
     '<a href="' + href + '" style="display:inline-block;padding:8px 16px;font-size:13px;font-weight:600;color:' + C.muted + ';text-decoration:none">구독 취소</a>' +
@@ -958,6 +962,14 @@ function resendSend_(key, to, subject, plain, htmlBody) {
     reply_to: CFG.OPERATOR_EMAIL
   };
   if (htmlBody) payload.html = mailSafe_(htmlBody);
+  // List-Unsubscribe(2026-09-26). 기업 메일 필터가 «정상 옵트인 대량 메일» 로 보는 표준 신호다
+  // (계기: 09-25 cadnix.com 550 Content Rejected). 푸터 버튼과 같은 확인 페이지 주소다.
+  // ⚠️ List-Unsubscribe-Post(One-Click)는 넣지 말 것 — 메일 클라이언트의 POST 한 번으로 해지되면
+  //    2단계 해지(확인 페이지 → 제출)가 막던 오클릭·보안 스캐너 프리페치 해지가 되살아난다.
+  // 운영자 알림에는 붙이지 않는다 — 구독 메일이 아니다.
+  if (String(to).toLowerCase().trim() !== CFG.OPERATOR_EMAIL.toLowerCase()) {
+    payload.headers = { "List-Unsubscribe": "<" + unsubHref_(token_(to)) + ">" };
+  }
   var opts = {
     method: "post",
     contentType: "application/json",
