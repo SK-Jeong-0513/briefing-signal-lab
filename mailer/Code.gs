@@ -6,7 +6,7 @@
  *
  * [설치] 응답 시트에서 확장 프로그램→Apps Script→이 파일 붙여넣기(bound 아니면 CFG.SHEET_ID).
  *   CFG의 SALT·MARKET_SHEET_ID 확인 → 웹앱 재배포 → TEST_MODE 미리보기 → createWeeklyTriggers() 1회.
- * [발송] 월요일 09:00 sendWeekly(). 콘텐츠는 BSL_market 주간-발행/주간-발행항목 rev.1에서 읽는다.
+ * [발송] 월요일 07:20 sendWeekly(). 콘텐츠는 BSL_market 주간-발행/주간-발행항목 rev.1에서 읽는다.
  * [개인정보] 이메일은 링크에 넣지 않음(해시 토큰만). 수신거부 필수.
  *
  * [일일 시황 메일 — Stage 4] sendDailyMarket(): 텔레그램 파이프가 '시장' 스프레드시트의
@@ -794,8 +794,9 @@ function createWeeklyTriggers() {
   ScriptApp.newTrigger("weeklyAlertDraft").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
   ScriptApp.newTrigger("weeklyAlertDeadline").timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(20).nearMinute(0).inTimezone("Asia/Seoul").create();
   ScriptApp.newTrigger("weeklyAlertResult").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(10).nearMinute(0).inTimezone("Asia/Seoul").create();
-  ScriptApp.newTrigger("sendWeekly").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(9).nearMinute(0).inTimezone("Asia/Seoul").create();
-  Logger.log("주간 알림 3개 + 월요일 09:00 발송 트리거 생성");
+  // 07:20 = 월요일 일일 시황 자리. 09:00 이면 화요일 일일과 Resend 한도 하루(UTC)가 겹친다(2026-09-27).
+  ScriptApp.newTrigger("sendWeekly").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).nearMinute(20).inTimezone("Asia/Seoul").create();
+  Logger.log("주간 알림 3개 + 월요일 07:20 발송 트리거 생성");
 }
 
 // ===== 이메일 HTML (테이블·인라인·SVG 없음) =====
@@ -1430,7 +1431,7 @@ function specialOnDate_(ymd) {
   }
 }
 function sendDailyMarket() {
-  // 월요일은 09:00 주간 브리핑이 나가므로 일일을 보내지 않는다.
+  // 월요일은 07:20 주간 브리핑이 일일 자리를 대신하므로 일일을 보내지 않는다(2026-09-27 부터 07:20).
   // 발송 한도는 달력 하루가 아니라 롤링 24시간이다. 월요일에 일일과 주간이 함께 나가면
   // 그 두 배치가 화요일 아침 창에 그대로 남아 다음 일일을 통째로 막는다 - 2026-09-01 에
   // 실제로 한 회차를 잃었다(필요 35 · 잔여 29). 월요일 한 회를 비우면 화요일 창에는
@@ -1804,7 +1805,7 @@ function dailyPlain_(dg, detail, quotes) {
   return lines.join("\n");
 }
 
-// ===== GitHub Actions 고정시각 호출(월요일 09:00 KST) =====
+// ===== GitHub Actions 고정시각 호출(월요일 07:20 KST) =====
 function doPost(e) {
   var expected = PropertiesService.getScriptProperties().getProperty("WEEKLY_CRON_TOKEN") || "";
   var data = {};

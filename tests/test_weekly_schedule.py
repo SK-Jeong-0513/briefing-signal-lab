@@ -31,7 +31,7 @@ _spec.loader.exec_module(release)
 
 KST = timezone(timedelta(hours=9))
 WORKFLOWS = ROOT / ".github" / "workflows"
-# 발송(월 09:00)보다 release 가 이만큼은 앞서야 한다. 실측 최대 지연 2h38m 의 약 2배.
+# 발송(월 07:20)보다 release 가 이만큼은 앞서야 한다. 실측 최대 지연 2h38m 의 약 2배.
 MIN_BUFFER_HOURS = 4.0
 GS_WEEKDAY = {"SUNDAY": 0, "MONDAY": 1, "TUESDAY": 2, "WEDNESDAY": 3,
               "THURSDAY": 4, "FRIDAY": 5, "SATURDAY": 6}
@@ -125,9 +125,14 @@ class ScheduleOrderTests(unittest.TestCase):
             gap, MIN_BUFFER_HOURS,
             "release→send 버퍼 %.2fh — GitHub Actions 지연(실측 2h38m)에 먹힌다" % gap)
 
-    def test_send_is_monday_0900_kst(self):
+    def test_send_is_monday_0720_kst(self):
+        """07:20 = 월요일 일일 시황 자리(월요일 일일은 쉰다).
+
+        Resend 일일 한도는 UTC 하루(KST 09:00~09:00)로 센다. 09:00 이후면 화요일 07:20 일일과
+        같은 UTC 월요일에 들어가 한도를 넘는다(2026-09-27).
+        """
         hour, dow, minute = self.steps["send"]
-        self.assertEqual((dow, hour, minute), (1, 9, 0))   # 1 = 월요일
+        self.assertEqual((dow, hour, minute), (1, 7, 20))   # 1 = 월요일
 
     def test_issue_key_matches_across_the_cycle(self):
         keys = {k: release.issue_key_kst(kst_dt_for(*self.steps[k])) for k in self.steps}
