@@ -225,11 +225,13 @@
     <section id="tab-special" class="hidden">
       <div class="panel">
         <h2>스페셜 리포트 발송</h2>
-        <p class="small muted" style="margin:0 0 8px">본문은 <b>③ 서재 업로드</b>에서 작성한 항목을 그대로 씁니다 — 메일에는 본문 전체가 담기고, 아래 리드 문구가 맨 위에 붙습니다. 예약한 건은 메일러가 <b>15분 주기</b>로 확인해 보내므로 실제 발송은 예약 시각보다 최대 15~30분 늦을 수 있습니다.</p>
+        <p class="small muted" style="margin:0 0 8px">본문은 <b>③ 서재 업로드</b>에서 작성한 항목을 그대로 씁니다 — 메일에는 본문 전체가 담기고, 아래 리드 문구가 맨 위에 붙습니다. 예약한 건은 메일러가 <b>15분 주기</b>로 확인해 보내므로 실제 발송은 예약 시각보다 최대 15~30분 늦을 수 있습니다.<br>
+          <b>스페셜은 날짜만 고릅니다.</b> 그날 일일 시황 발송 시각에 나가고, <b>그날 일일 시황은 발송되지 않습니다</b> — 두 메일이 같은 날 나가면 발송 한도(Resend 하루 100통)를 넘기 때문입니다. 내일 이후만 가능하고, 월요일(주간 브리핑 발송일)은 안 되며, 하루 한 건입니다.</p>
         <div class="row">
           <div class="grow"><label class="f">서재 항목</label><select id="sp-lib" onchange="spPreview()"></select></div>
-          <div><label class="f">예약 시각 (KST)</label><input id="sp-when" type="datetime-local"></div>
+          <div><label class="f">예약일 (KST, 내일 이후)</label><input id="sp-date" type="date" onchange="spDateInfo()"></div>
         </div>
+        <p class="small" id="sp-date-note" style="margin:6px 0 0"></p>
         <label class="f">메일 제목 <span class="muted" style="font-weight:400">— 비우면 “[스페셜 리포트] 제목”</span></label>
         <input id="sp-subject" placeholder="[스페셜 리포트] 2026년 2분기 13F 정리">
         <label class="f">리드 문구 <span class="muted" style="font-weight:400">— 메일 맨 위 한두 문장</span></label>
@@ -639,6 +641,7 @@
         return '<label class="small" style="display:inline-flex;align-items:center;gap:4px;font-weight:600">'+
           '<input type="checkbox" class="sp-cat" value="'+esc(c)+'" style="width:auto"> '+esc(c)+'</label>';
       }).join('');
+      document.getElementById('sp-date').min=spTomorrowKst();
       spPreview();spRender();
     }).catch(function(e){_spLoaded=false;fail(e);});
   }
@@ -667,8 +670,27 @@
       '메일제목':val('sp-subject'),
       '리드':(document.getElementById('sp-lead').value||'').trim(),
       '대상카테고리':[].slice.call(document.querySelectorAll('.sp-cat:checked')).map(function(c){return c.value;}),
-      '예약시각':val('sp-when').replace('T',' ')
+      '예약일':val('sp-date')
     };
+  }
+  // 내일(KST). 브라우저 시간대와 무관하게 KST 로 계산한다 — 서버도 KST 로 다시 검사한다.
+  function spTodayKst(){return new Date(Date.now()+9*3600000).toISOString().slice(0,10);}
+  function spTomorrowKst(){return new Date(Date.now()+9*3600000+86400000).toISOString().slice(0,10);}
+  // 날짜를 고르면 바로 안내한다: 발송 시각 + 그날 일일 시황 생략, 또는 불가 사유.
+  var _spDateOk=false;
+  function spDateInfo(){
+    var d=val('sp-date'), note=document.getElementById('sp-date-note');
+    _spDateOk=false;
+    if(!d){note.textContent='';return;}
+    note.style.color='';note.textContent='확인 중…';
+    call('specialDateInfo',d).then(function(r){
+      if(val('sp-date')!==d)return;   // 그새 다른 날짜를 골랐다
+      if(r.error){note.style.color='var(--danger)';note.textContent='⚠ '+r.error;return;}
+      _spDateOk=true;
+      note.style.color='var(--danger)';
+      note.innerHTML='⚠ <b>'+esc(d)+' 일일 시황은 발송되지 않습니다.</b> 스페셜이 그날 일일 시각('+esc(r.time)+' KST)에 대신 나갑니다. '+
+        '<span class="muted">일일 시황은 전 구독자에게서 빠지고, 스페셜은 고른 카테고리 구독자에게만 갑니다.</span>';
+    }).catch(function(e){note.textContent='';fail(e);});
   }
   function spTest(){
     var p=spPayload();
@@ -682,12 +704,14 @@
   function spSchedule(){
     var p=spPayload();
     if(!p['서재id']){toast('서재 항목을 선택하세요',true);return;}
-    if(!p['예약시각']){toast('예약 시각을 지정하세요',true);return;}
+    if(!p['예약일']){toast('예약일을 지정하세요',true);return;}
+    if(!_spDateOk){toast('예약할 수 없는 날짜입니다 — 날짜 아래 안내를 확인하세요',true);return;}
     if(!p['대상카테고리'].length){toast('대상 카테고리를 하나 이상 고르세요',true);return;}
-    if(!confirm('['+p['대상카테고리'].join(', ')+'] 구독자에게 '+p['예약시각']+' 에 발송을 예약합니다.\n'+
+    if(!confirm('['+p['대상카테고리'].join(', ')+'] 구독자에게 '+p['예약일']+' 일일 시황 시각에 발송을 예약합니다.\n\n'+
+                '⚠ 이 날('+p['예약일']+') 일일 시황은 전 구독자에게 발송되지 않습니다.\n'+
                 '실제 발송은 15분 주기 확인이라 최대 15~30분 늦을 수 있습니다.\n\n진행할까요?'))return;
     call('specialSchedule',p).then(function(r){
-      toast('예약됨: '+r.id+' · '+r.when);_spLoaded=false;loadSpecial();
+      toast('예약됨: '+r.id+' · '+r.when+' (이 날 일일 시황 생략)');_spLoaded=false;loadSpecial();
     }).catch(fail);
   }
   function spCancel(row){
@@ -728,7 +752,10 @@
         ? '<button class="btn danger" onclick="spCancel('+r._row+')">취소</button>'
         : (['발송중','부분','실패'].indexOf(st)>=0
             ? '<button class="btn" onclick="spRequeue('+r._row+')">재시도</button>' : '');
-      html+='<tr><td>'+esc(r['예약시각'])+'</td><td>'+esc(r['메일제목'])+'</td><td>'+esc(r['대상카테고리'])+'</td>'+
+      // 오늘 이후 행에만 표시한다 — 이 규칙 전(09-27 이전)에 나간 스페셜 날에는 일일도 나갔다.
+      var skip=['대기','발송중','완료','부분'].indexOf(st)>=0&&String(r['예약시각']||'').slice(0,10)>=spTodayKst()
+        ? '<br><span class="small" style="color:var(--danger)">이 날 일일 시황 생략</span>' : '';
+      html+='<tr><td>'+esc(r['예약시각'])+skip+'</td><td>'+esc(r['메일제목'])+'</td><td>'+esc(r['대상카테고리'])+'</td>'+
         '<td>'+badge+'</td><td>'+esc(r['발송수'])+(Number(r['실패수']||0)?' <span style="color:var(--danger)">실패 '+esc(r['실패수'])+'</span>':'')+'</td>'+
         '<td style="white-space:nowrap">'+action+'</td></tr>';
       if(r['message'])html+='<tr><td colspan="6" class="small muted" style="padding-top:0">'+esc(r['message'])+'</td></tr>';

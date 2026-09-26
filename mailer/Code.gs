@@ -1410,6 +1410,25 @@ function unsubSet_() {
   });
   return set;
 }
+// 그 날(KST yyyy-MM-dd)에 예약된 스페셜이 있으면 발송id, 없으면 "".
+// 2026-09-27: 스페셜(09-26 13:00)과 다음 날 일일(07:20)이 Resend 일일 한도 100 을 함께 넘겼다
+// (58 + 58). 그래서 스페셜은 콘솔에서 날짜만 고르고 그날 일일 시각에 나가며, 그날 일일은 쉰다.
+// ⚠️ 예약시각은 시트가 Date 로 바꿔 둘 수 있다 — 문자열 slice 로 비교하면 조용히 안 맞는다. ymd_ 를 쓴다.
+// ⚠️ 허용 목록이다. 취소·실패는 스페셜이 안 나가므로 일일이 나가야 한다. 제외 목록으로 바꾸면
+//    나중에 생기는 상태가 조용히 일일을 막는다.
+// ⚠️ 읽기가 실패하면 일일을 보낸다(fail-open). 진단·부가 확인이 본 발송을 죽이면 안 된다.
+var SPECIAL_ACTIVE = ["대기", "발송중", "완료", "부분"];
+function specialOnDate_(ymd) {
+  try {
+    var hit = specialTable_(SPECIAL_TAB).rows.filter(function (r) {
+      return ymd_(r["예약시각"]) === ymd && SPECIAL_ACTIVE.indexOf(String(r["상태"] || "").trim()) >= 0;
+    })[0];
+    return hit ? String(hit["발송id"] || "?") : "";
+  } catch (e) {
+    Logger.log("[WARN] 스페셜 예약 확인 실패 — 일일 시황은 그대로 보낸다: " + e);
+    return "";
+  }
+}
 function sendDailyMarket() {
   // 월요일은 09:00 주간 브리핑이 나가므로 일일을 보내지 않는다.
   // 발송 한도는 달력 하루가 아니라 롤링 24시간이다. 월요일에 일일과 주간이 함께 나가면
@@ -1419,6 +1438,11 @@ function sendDailyMarket() {
   var kst = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy,M,d").split(",").map(Number);
   if (new Date(Date.UTC(kst[0], kst[1] - 1, kst[2])).getUTCDay() === 1) {
     Logger.log("[일일] 월요일 - 주간 브리핑 발송일이라 생략(한도 확보)");
+    return;
+  }
+  var sp = specialOnDate_(Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd"));
+  if (sp) {
+    Logger.log("[일일] 스페셜 리포트 발송일이라 생략(" + sp + ") — 스페셜이 이 날 일일 자리를 대신한다");
     return;
   }
 

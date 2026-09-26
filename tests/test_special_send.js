@@ -200,7 +200,83 @@ assert(!/MailApp\.getRemainingDailyQuota/.test(sendRow),
 
 // ── 콘솔: 예약 입력 검증 ──────────────────────────────────────────────
 const sched = block(admin, 'function specialSchedule', 'function specialCancel', 'specialSchedule');
-assert(/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\[ T\]\\d\{2\}:\\d\{2\}\$/.test(sched), '예약시각 형식 검증');
+// 2026-09-27: 날짜만 받고 시각은 서버가 붙인다. 날짜 규칙은 서버에서 검사한다(화면만 믿지 않는다).
+assert(/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/.test(sched), '예약일 형식 검증(YYYY-MM-DD)');
+assert(/specialDateCheck_\(date\)/.test(sched) && /if \(chk\.error\) throw/.test(sched), '서버가 날짜 규칙을 검사한다');
+assert(/'예약시각': when/.test(sched) && /date \+ ' ' \+ chk\.time/.test(sched), '예약시각 = 예약일 + 일일 시각');
+
+// ── 콘솔: 예약일 규칙(내일 이후 · 월요일 불가 · 하루 한 건 · 시각은 실제 설정값) ──
+// 스페셜이 그날 일일 자리를 대신한다 — 어기면 Resend 일일 한도 100 을 넘는다(2026-09-27 실측 116).
+function dateCheck(date, rows) {
+  const ctx = vm.createContext({
+    console,
+    Utilities: { formatDate: (d, tz) => (tz === 'UTC' ? d.toISOString().slice(0, 10) : '2026-09-27') },
+    _openMarket_: () => ({}),
+    _readTab_: () => ({ rows: rows || [] }),
+    getDailySendTime: () => ({ time: '07:20' }),   // 기본값 07:40 이 아니라 설정값을 써야 한다
+    SPECIAL_TAB: '스페셜-발송',
+  });
+  vm.runInContext(block(admin, 'var SPECIAL_ACTIVE', 'function specialDateInfo', '예약일 검사'), ctx);
+  return JSON.parse(JSON.stringify(ctx.specialDateCheck_(date)));   // 다른 realm 객체라 deepStrictEqual 이 프로토타입으로 틀린다
+}
+assert(/내일\(2026-09-28\)/.test(dateCheck('2026-09-27').error), '오늘은 불가 — 내일 날짜를 안내한다');
+assert(dateCheck('2026-09-20').error, '과거는 불가');
+assert(/월요일/.test(dateCheck('2026-09-28').error), '월요일은 불가(주간 발송일)');
+assert(/월요일/.test(dateCheck('2026-10-05').error), '두 자리 월의 월요일도 불가');
+assert.deepStrictEqual(dateCheck('2026-09-29'), { time: '07:20' }, '화요일 = 그날 일일 시각(설정값)');
+// 콘솔 _readTab_ 은 Date 를 'yyyy-MM-dd' 로, 문자열은 'yyyy-MM-dd HH:mm' 그대로 준다 — 둘 다 잡아야 한다.
+assert(/이미 스페셜/.test(dateCheck('2026-09-30', [{ '예약시각': '2026-09-30', '상태': '대기', '발송id': 'sp-1' }]).error),
+  '같은 날 활성 스페셜이 있으면 불가(시트 Date 정규화 형식)');
+assert(/sp-2/.test(dateCheck('2026-09-30', [{ '예약시각': '2026-09-30 07:20', '상태': '완료', '발송id': 'sp-2' }]).error),
+  '같은 날 활성 스페셜이 있으면 불가(문자열 형식)');
+assert.deepStrictEqual(dateCheck('2026-09-30', [{ '예약시각': '2026-09-30 07:20', '상태': '취소' }]), { time: '07:20' },
+  '취소된 예약은 자리를 막지 않는다');
+
+// 화면: 날짜만 받고, 그날 일일 시황이 빠진다는 안내를 날짜 선택 시·확인창에서 모두 보여준다.
+const adminHtml = fs.readFileSync('admin/index.html', 'utf8');
+assert(/id="sp-date" type="date"/.test(adminHtml) && !/id="sp-when"/.test(adminHtml), '입력은 날짜만');
+assert(/call\('specialDateInfo'/.test(adminHtml), '날짜를 고르면 서버 규칙으로 바로 안내');
+assert(/일일 시황은 발송되지 않습니다/.test(adminHtml), '선택 시 안내');
+assert(/일일 시황은 전 구독자에게 발송되지 않습니다/.test(adminHtml), '확인창 안내');
+assert(/\.min=spTomorrowKst\(\)/.test(adminHtml), '달력에서 오늘 이전을 막는다');
+
+// ── 메일러: 스페셜 예약일에는 일일 시황을 쉰다 ──────────────────────────
+function onDate(ymd, rowsSrc, opts) {
+  const logs = [];
+  const ctx = vm.createContext({
+    console, Logger: { log: (m) => logs.push(String(m)) },
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },   // 테스트 Date 는 UTC 자정으로 만든다
+    SPECIAL_TAB: '스페셜-발송',
+  });
+  vm.runInContext(block(mailer, 'function ymd_', 'function marketRows_', 'ymd_'), ctx);
+  vm.runInContext(block(mailer, 'var SPECIAL_ACTIVE', 'function sendDailyMarket', 'specialOnDate_'), ctx);
+  // 행은 컨텍스트 안에서 만든다 — 밖에서 만든 Date 는 ymd_ 의 instanceof Date 에 안 걸린다.
+  vm.runInContext('var __rows = ' + rowsSrc, ctx);
+  ctx.specialTable_ = (opts && opts.throws) ? () => { throw new Error('sheet down'); } : () => ({ rows: ctx.__rows });
+  return { id: ctx.specialOnDate_(ymd), logs };
+}
+// 시트가 예약시각을 Date 로 바꿔 둔 경우 — 문자열 slice 로 비교하면 조용히 안 맞는다.
+assert.strictEqual(onDate('2026-09-29', "[{'예약시각': new Date('2026-09-29T00:00:00Z'), '상태': '대기', '발송id': 'sp-a'}]").id,
+  'sp-a', 'Date 형식 예약시각도 잡는다');
+assert.strictEqual(onDate('2026-09-29', "[{'예약시각': '2026-09-29 07:20', '상태': '발송중', '발송id': 'sp-b'}]").id,
+  'sp-b', '문자열 형식 예약시각');
+for (const st of ['대기', '발송중', '완료', '부분']) {
+  assert(onDate('2026-09-29', "[{'예약시각': '2026-09-29 07:20', '상태': '" + st + "', '발송id': 'x'}]").id, st + ' 이면 일일 생략');
+}
+for (const st of ['취소', '실패', '']) {
+  assert.strictEqual(onDate('2026-09-29', "[{'예약시각': '2026-09-29 07:20', '상태': '" + st + "', '발송id': 'x'}]").id,
+    '', (st || '빈 상태') + ' 이면 스페셜이 안 나가므로 일일은 나간다');
+}
+assert.strictEqual(onDate('2026-09-30', "[{'예약시각': '2026-09-29 07:20', '상태': '대기', '발송id': 'x'}]").id,
+  '', '다른 날 예약은 무관');
+const down = onDate('2026-09-29', '[]', { throws: true });
+assert.strictEqual(down.id, '', '시트를 못 읽으면 일일을 보낸다(fail-open)');
+assert(down.logs.some((l) => /\[WARN\]/.test(l)), 'fail-open 은 WARN 으로 흔적을 남긴다');
+
+// 순서: 월요일 생략 뒤, 시트를 읽기 전에 끊는다.
+const daily = block(mailer, 'function sendDailyMarket', 'function settingText_', 'sendDailyMarket');
+const iMon = daily.indexOf('getUTCDay() === 1'), iSp = daily.indexOf('specialOnDate_('), iDg = daily.indexOf('dailyGroups_()');
+assert(iMon > 0 && iMon < iSp && iSp < iDg, '월요일 생략 → 스페셜 확인 → 본 발송 순서');
 assert(/SPECIAL_CATEGORIES\.indexOf\(s\) >= 0/.test(sched), '카테고리 화이트리스트');
 assert(/if \(!cats\.length\) throw/.test(sched), '대상이 비면 거부');
 const cancel = block(admin, 'function specialCancel', 'function specialRequeue', 'specialCancel');

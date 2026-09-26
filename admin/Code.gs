@@ -368,7 +368,41 @@ function specialList() {
   };
 }
 
-/** 예약 생성. payload = { 서재id, 메일제목, 리드, 대상카테고리:[], 예약시각 } */
+// 메일러 SPECIAL_ACTIVE 와 동기 유지 — 이 상태의 행이 있는 날은 일일 시황이 나가지 않는다.
+var SPECIAL_ACTIVE = ['대기', '발송중', '완료', '부분'];
+
+/** 예약일 검사. { time } 또는 { error }. 화면(미리 안내)과 specialSchedule(최종 검사)이 같이 쓴다.
+ *  ⚠️ 규칙 셋 다 한도 때문이다 — 한 날에 스페셜과 일일이 겹치면 Resend 100통을 넘는다.
+ *   - 내일 이후만: 오늘 날짜면 오늘 일일이 이미 나갔거나 곧 나가 겹친다.
+ *   - 월요일 불가: 월요일은 일일이 원래 없어서 대신할 자리가 없다 — 주간과 겹친다.
+ *   - 하루 한 건: 두 건이면 그 자체로 116통이다. */
+function specialDateCheck_(date) {
+  var today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+  if (date <= today) return { error: '예약일은 내일(' + _addDaysYmd_(today, 1) + ') 이후만 가능합니다' };
+  var p = date.split('-').map(Number);
+  if (new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay() === 1) {
+    return { error: '월요일은 예약할 수 없습니다 — 그날은 주간 브리핑이 나가고 일일 시황이 원래 없어 대신할 자리가 없습니다' };
+  }
+  var dup = _readTab_(_openMarket_(), SPECIAL_TAB).rows.filter(function (r) {
+    return String(r['예약시각'] || '').slice(0, 10) === date &&
+      SPECIAL_ACTIVE.indexOf(String(r['상태'] || '').trim()) >= 0;
+  })[0];
+  if (dup) return { error: date + ' 에는 이미 스페셜이 있습니다(' + dup['발송id'] + ') — 하루 한 건만 보낼 수 있습니다' };
+  // 발송 시각은 그날 일일 시황 시각이다. DAILY_SEND_TIME_DEFAULT(07:40)가 아니라 실제 설정값을 쓴다.
+  return { time: getDailySendTime().time };
+}
+function _addDaysYmd_(ymd, n) {
+  var p = ymd.split('-').map(Number);
+  return Utilities.formatDate(new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)), 'UTC', 'yyyy-MM-dd');
+}
+/** 화면용 — 날짜를 고르면 바로 안내한다(발송 시각 또는 불가 사유). */
+function specialDateInfo(date) {
+  _assertAuth_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return { error: '날짜를 고르세요' };
+  return specialDateCheck_(String(date));
+}
+
+/** 예약 생성. payload = { 서재id, 메일제목, 리드, 대상카테고리:[], 예약일(YYYY-MM-DD) } */
 function specialSchedule(payload) {
   _assertAuth_();
   var libId = String((payload && payload['서재id']) || '').trim();
@@ -378,9 +412,13 @@ function specialSchedule(payload) {
   })[0];
   if (!lib) throw new Error('서재 항목을 찾을 수 없습니다: ' + libId);
 
-  var when = String((payload && payload['예약시각']) || '').trim();
-  // 콘솔은 KST 로 입력받는다. 메일러의 toTime_ 이 "yyyy-MM-dd HH:mm" 을 파싱하므로 그 형식으로 쓴다.
-  if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(when)) throw new Error('예약시각 형식은 YYYY-MM-DD HH:MM 입니다');
+  // 2026-09-27: 스페셜은 날짜만 받고 그날 일일 시황 시각에 나간다. 그날 일일은 메일러가 쉰다
+  // (mailer specialOnDate_). 스페셜(58)과 일일(58)이 Resend 일일 한도 100 을 함께 넘겼기 때문이다.
+  var date = String((payload && payload['예약일']) || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('예약일 형식은 YYYY-MM-DD 입니다');
+  var chk = specialDateCheck_(date);
+  if (chk.error) throw new Error(chk.error);
+  var when = date + ' ' + chk.time;   // 메일러 toTime_ 이 "yyyy-MM-dd HH:mm" 을 파싱한다
   var cats = (payload && payload['대상카테고리']) || [];
   cats = (Array.isArray(cats) ? cats : [cats]).map(function (s) { return String(s).trim(); })
     .filter(function (s) { return SPECIAL_CATEGORIES.indexOf(s) >= 0; });
@@ -392,7 +430,7 @@ function specialSchedule(payload) {
     '발송id': id, '서재id': libId,
     '메일제목': String((payload && payload['메일제목']) || '').trim() || ('[스페셜 리포트] ' + String(lib['제목'] || '')),
     '리드': String((payload && payload['리드']) || '').trim(),
-    '대상카테고리': cats.join(','), '예약시각': when.replace('T', ' '),
+    '대상카테고리': cats.join(','), '예약시각': when,
     '상태': '대기', '발송수': 0, '실패수': 0,
     created_at: now, updated_at: now, message: '',
   });
