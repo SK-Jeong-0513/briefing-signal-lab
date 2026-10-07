@@ -1127,9 +1127,13 @@ function topicPart_(text) {
 
 // 3슬롯 창의 시장-일일 행을 경제/금융/기술 순으로 그룹핑. 없으면 [].
 function dailyGroups_() {
-  var win = dailyWindow_(), today = win[0].date, yday = win[1].date;
+  var win = dailyWindow_(), today = win[0].date, yday = win[1].date, seen = {};
   var rows = marketRows_().filter(function (o) {
     if (!o.title) return false;
+    // 같은 행이 2~3벌 쌓인 적이 있다(파이프 재전송, 2026-10-07 메일에 같은 시황 3회).
+    var key = [o.date, o.cat, o.title, o.line].join("\u0001");
+    if (seen[key]) return false;
+    seen[key] = true;
     if (o.date === today) return true;                       // 오늘 것은 시간대 불문 전부
     if (o.date === yday) return slotOf_(o.title) !== "장전";  // 어제 장전은 어제 이미 나갔다
     return false;

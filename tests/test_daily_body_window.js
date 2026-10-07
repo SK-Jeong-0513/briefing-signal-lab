@@ -185,4 +185,21 @@ const FULL = [
   assert.strictEqual(dg.groups.length, 1, 'sendDailyMarket 이 "행 없음"으로 발송을 생략하지 않아야 한다');
 }
 
+// ── 같은 행이 2~3벌 쌓여도 카드는 한 번만 (2026-10-07 메일에 같은 시황 3회) ──
+// 텔레그램 파이프가 302 뒤 404 를 실패로 보고 재전송해 시트에 같은 행이 쌓였다.
+// 원인은 그쪽에서 고쳤고(TelegramPick 8dddcd7) 이건 2차 방어다.
+{
+  const c = ctx(NOW, [HEAD]);
+  const dup = { date: YDAY, cat: '경제', title: '[마감] 2차전지 재부각', line: '같은 한줄' };
+  vm.runInContext('marketRows_ = function () { return ' + JSON.stringify([
+    dup, dup, dup,
+    { date: YDAY, cat: '경제', title: '[마감] 2차전지 재부각', line: '한줄이 다르면 별개' },
+    { date: YDAY, cat: '금융', title: dup.title, line: dup.line },
+  ]) + '; }', c);
+  const dg = runJ(c, 'dailyGroups_()');
+  const econ = dg.groups.find((g) => g.label === '경제').items;
+  assert.strictEqual(econ.length, 2, '완전히 같은 행은 한 번만, 한줄이 다르면 남긴다');
+  assert.strictEqual(dg.groups.find((g) => g.label === '금융').items.length, 1, '분류가 다르면 별개');
+}
+
 console.log('test_daily_body_window.js OK');
