@@ -88,8 +88,8 @@ assert.strictEqual(vm.runInContext('quotesPlain_(null).length', c), 0, 'null이�
 
 // ── 배선: 지표가 시황 카드보다 위, 상세 브리핑은 그대로 ──
 const src = fs.readFileSync('mailer/Code.gs', 'utf8');
-assert(src.includes('quotesHtml_(quotes), body, renderBody_(detail)'), '지표 → 시황 → 상세 순서');
-assert(src.includes('dailyPlain_(dg, detail, quotes)') && src.includes('dailyHtml_(email, dg, detail, quotes)'),
+assert(src.includes('quotesHtml_(quotes), scheduleHtml_(sched), body, renderBody_(detail)'), '지표 → 일정 → 시황 → 상세 순서');
+assert(src.includes('dailyPlain_(dg, detail, quotes, sched)') && src.includes('dailyHtml_(email, dg, detail, quotes, sched)'),
   'HTML·평문 양쪽에 스냅샷 전달');
 assert(src.includes('var quotes = quotes_();'), '발송당 1회만 조회');
 

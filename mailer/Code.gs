@@ -655,13 +655,13 @@ function checkResend() {
 
   // ⚠️ 평문 두 줄로는 도달 확인이 안 된다. 실제 메일은 88KB HTML 이고 스팸 점수는 거기서 갈린다.
   //    그날 시장-일일 행이 있으면 **구독자가 받는 것과 같은 본문**을 보낸다.
-  var subject = "[BSL] Resend 전환 테스트", detail = "", quotes = null;
+  var subject = "[BSL] Resend 전환 테스트", detail = "", quotes = null, sched = null;
   var dg = dailyGroups_(), real = dg.groups.length > 0;
   var plain = "이 메일이 보이면 Resend 경로가 살아 있습니다.\n스팸함에서 발견했다면 알려주세요.";
   if (real) {
-    detail = marketBody_(); quotes = quotes_();
+    detail = marketBody_(); quotes = quotes_(); sched = todaySchedule_();
     subject = "[테스트] " + CFG.DAILY_SUBJECT + " " + dg.today;
-    plain = dailyPlain_(dg, detail, quotes);
+    plain = dailyPlain_(dg, detail, quotes, sched);
   }
   Logger.log("[Resend] 본문: " + (real ? "실제 일일 시황 " + dg.today + " (HTML)" : "⚠️ 시장-일일 행 없음 → 평문 — 도달 판정 근거로 약하다"));
 
@@ -669,7 +669,7 @@ function checkResend() {
   for (var i = 0; i < to.length; i++) {
     try {
       // HTML 은 수신자별 수신거부 토큰이 들어가므로 루프 안에서 만든다.
-      sendMail_(to[i], subject, plain, real ? dailyHtml_(to[i], dg, detail, quotes) : "");
+      sendMail_(to[i], subject, plain, real ? dailyHtml_(to[i], dg, detail, quotes, sched) : "");
       ok++;
       Logger.log("[Resend] OK → " + to[i]);
     } catch (e) { Logger.log("[ERROR] 실패 → " + to[i] + " : " + e); }
@@ -1463,6 +1463,8 @@ function sendDailyMarket() {
   var detail = marketBody_();   // 그날 장전 상세 요약(있으면 메일 하단에 첨부)
   var quotes = quotes_();       // 주요 시장 지표(실패·낡음이면 null → 블록만 생략)
   if (!quotes) alertQuotesMissing_(dg.today);   // 조용히 빠지면 다음에도 구독자가 먼저 발견한다
+  var sched = todaySchedule_(); // 오늘의 주요 일정(0건이면 안내 한 줄, 조회 실패면 null → 블록만 생략)
+  if (!sched) alertScheduleMissing_(dg.today);
 
   // 대상을 먼저 확정한다 — 한도를 보려면 몇 명인지 알아야 한다.
   var targets = [], skipped = 0, seen = {};
@@ -1482,7 +1484,7 @@ function sendDailyMarket() {
   for (var n = 0; n < targets.length; n++) {
     var to = targets[n], recipient = CFG.TEST_MODE ? CFG.OPERATOR_EMAIL : to;
     try {
-      sendMail_(recipient, subject, dailyPlain_(dg, detail, quotes), dailyHtml_(to, dg, detail, quotes));
+      sendMail_(recipient, subject, dailyPlain_(dg, detail, quotes, sched), dailyHtml_(to, dg, detail, quotes, sched));
       sent++;
       if (CFG.TEST_MODE) break;
     } catch (e) { failed++; Logger.log("[ERROR] " + to + " → " + e); }
@@ -1763,7 +1765,98 @@ function quotesPlain_(q) {
     .concat([""]);
 }
 
-function dailyHtml_(email, dg, detail, quotes) {
+// ── 오늘의 주요 일정 (경제 캘린더 시트, 2026-10-22 추가) ─────────────────────
+// 사이트 calendar.html 이 읽는 공개 CSV 를 그대로 읽는다(KeySchedule 이 쓰는 시트 — 여기선 읽기만).
+// UrlFetchApp 은 이미 쓰는 스코프라 시간 트리거 재승인이 필요 없다.
+// 시트의 '시간' 은 원본 시간대가 불분명해(Caixin 중국 PMI 가 21:45 — 미 동부로 보인다) 싣지 않는다.
+var CAL_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTu517RrSrdj2QZrwF-v750ta7hq2kq2Z4OxxTTyQF5qsrWWvh9UOGAt3rbBzm8gLTPInrOG6LNnjuJ/pub?gid=0&single=true&output=csv";
+var CAL_MAX = 10;                              // 넘으면 영향도 순 상위만 싣고 '외 N건'
+var CAL_RANK = { "높음": 0, "보통": 1, "낮음": 2 };
+
+// 스크래핑된 행에 &#x27; 같은 엔티티가 섞여 온다. 풀어서 esc_ 로 다시 감싼다.
+function htmlUnescape_(s) {
+  return String(s || "").replace(/&#x([0-9a-f]+);/gi, function (_, h) { return String.fromCharCode(parseInt(h, 16)); })
+    .replace(/&#(\d+);/g, function (_, d) { return String.fromCharCode(Number(d)); })
+    .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+// 오늘(KST) 일정. { today, items:[{region,cat,imp,title,note}], more } — 조회·파싱 실패면 null(블록 생략).
+function todaySchedule_() {
+  try {
+    var res = UrlFetchApp.fetch(CAL_CSV_URL + "&v=" + Date.now(), { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() !== 200) { Logger.log("[일정] HTTP " + res.getResponseCode()); return null; }
+    var rows = Utilities.parseCsv(res.getContentText());
+    var H = (rows[0] || []).map(function (h) { return String(h).trim(); });
+    var iD = H.indexOf("날짜"), iR = H.indexOf("지역"), iC = H.indexOf("분류"), iI = H.indexOf("영향도"),
+      iT = H.indexOf("제목"), iN = H.indexOf("설명");
+    if (iD < 0 || iT < 0) { Logger.log("[일정] 헤더에 '날짜'/'제목' 없음"); return null; }
+    var today = todayKst_(), seen = {}, items = [];
+    for (var r = 1; r < rows.length; r++) {
+      var c = rows[r], title = htmlUnescape_(c[iT]).trim();
+      if (String(c[iD] || "").trim().slice(0, 10) !== today || !title) continue;
+      if (seen[title]) continue;               // 같은 날 같은 제목 중복행(사이트와 같은 규칙)
+      seen[title] = 1;
+      var note = iN >= 0 ? htmlUnescape_(c[iN]).trim() : "";
+      if (/^시간/.test(note) || note === title) note = "";   // 시각·국가 메타만 있는 설명은 뺀다
+      if (note.length > 120) note = note.slice(0, 120).trim() + " …";   // 스크래핑 행은 문단째 들어온다
+      items.push({
+        region: iR >= 0 ? String(c[iR] || "").trim() : "", cat: iC >= 0 ? String(c[iC] || "").trim() : "",
+        imp: iI >= 0 ? String(c[iI] || "").trim() : "", title: title, note: note, ord: items.length,
+      });
+    }
+    items.sort(function (a, b) {
+      var ra = a.imp in CAL_RANK ? CAL_RANK[a.imp] : 3, rb = b.imp in CAL_RANK ? CAL_RANK[b.imp] : 3;
+      return ra - rb || a.ord - b.ord;
+    });
+    Logger.log("[일정] " + today + " " + items.length + "건");
+    return { today: today, items: items.slice(0, CAL_MAX), more: Math.max(0, items.length - CAL_MAX) };
+  } catch (e) {
+    Logger.log("[일정] 조회 실패 — 블록 생략: " + e);
+    return null;
+  }
+}
+
+function alertScheduleMissing_(today) {
+  alertOperator_("[BSL] 일일 시황 '오늘의 주요 일정' 블록 생략 — " + today,
+    today + " 일일 시황 메일에서 일정 블록이 빠진 채 발송됩니다(나머지 본문은 정상).\n\n" +
+    "원인은 실행 로그의 '[일정]' 줄에 있습니다 — HTTP / 헤더 / 조회 예외.\n" +
+    "확인: " + CAL_CSV_URL);
+}
+
+function scheduleHtml_(s) {
+  if (!s) return "";
+  var head = '<div style="font-size:13px;font-weight:700;color:' + C.text + ';border-left:3px solid ' + C.primary +
+    ';padding-left:8px;margin:4px 0 8px">오늘의 주요 일정 · ' + esc_(s.today.slice(5)) + "</div>";
+  if (!s.items.length) {
+    return '<div style="margin:0 0 16px">' + head +
+      '<div style="font-size:13px;color:' + C.muted + '">오늘 예정된 주요 일정이 없습니다.</div></div>';
+  }
+  var rows = s.items.map(function (o) {
+    var meta = [o.region, o.cat, o.imp].filter(Boolean).join(" · ");
+    return '<tr><td style="padding:6px 0;border-top:1px solid ' + C.border + '">' +
+      '<div style="font-size:14px;font-weight:600;color:' + C.text + '">' + esc_(mailSafe_(o.title)) +
+        (meta ? ' <span style="font-size:12px;font-weight:400;color:' + C.muted + '">' + esc_(mailSafe_(meta)) + "</span>" : "") + "</div>" +
+      (o.note ? '<div style="font-size:13px;color:' + C.muted + ';margin-top:2px">' + esc_(mailSafe_(o.note)) + "</div>" : "") +
+      "</td></tr>";
+  }).join("");
+  var more = s.more ? '<div style="font-size:12px;color:' + C.muted + ';margin-top:6px">외 ' + s.more +
+    '건 — <a href="' + CFG.BASE + 'calendar.html" style="color:' + C.primary + ';text-decoration:none">경제 캘린더에서 보기</a></div>' : "";
+  return '<div style="margin:0 0 16px">' + head +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + rows + "</table>" + more + "</div>";
+}
+function schedulePlain_(s) {
+  if (!s) return [];
+  var lines = ["[오늘의 주요 일정 · " + s.today.slice(5) + "]"];
+  if (!s.items.length) lines.push("- 오늘 예정된 주요 일정이 없습니다.");
+  s.items.forEach(function (o) {
+    var meta = [o.region, o.cat, o.imp].filter(Boolean).join(" · ");
+    lines.push("- " + mailSafe_(o.title) + (meta ? " (" + mailSafe_(meta) + ")" : "") + (o.note ? " : " + mailSafe_(o.note) : ""));
+  });
+  if (s.more) lines.push("- 외 " + s.more + "건: " + CFG.BASE + "calendar.html");
+  return lines.concat([""]);
+}
+
+function dailyHtml_(email, dg, detail, quotes, sched) {
   var tok = token_(email);
   var body = dg.groups.map(function (g) {
     var sigs = g.items.map(function (o) {
@@ -1782,7 +1875,7 @@ function dailyHtml_(email, dg, detail, quotes) {
       '<div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:' + C.primary + '">BRIEFING SIGNAL LAB · ' + esc_(dg.today) + " 장전</div>",
       '<div style="font-size:20px;font-weight:700;margin-top:4px">일일 시황</div>',
     "</td></tr>",
-    '<tr><td style="padding:20px 24px">', quotesHtml_(quotes), body, renderBody_(detail),
+    '<tr><td style="padding:20px 24px">', quotesHtml_(quotes), scheduleHtml_(sched), body, renderBody_(detail),
       '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0 4px"><tr><td style="border-radius:8px;background:' + C.primary + '">',
         '<a href="' + CFG.BASE + 'market.html" style="display:inline-block;padding:12px 20px;font-size:14px;font-weight:600;color:#fff;text-decoration:none">시장 탭에서 전체 보기 →</a>',
       "</td></tr></table>",
@@ -1795,8 +1888,8 @@ function dailyHtml_(email, dg, detail, quotes) {
     "</table></td></tr></table></div>",
   ].join("");
 }
-function dailyPlain_(dg, detail, quotes) {
-  var lines = ["일일 시황 (" + dg.today + " 장전)", ""].concat(quotesPlain_(quotes));
+function dailyPlain_(dg, detail, quotes, sched) {
+  var lines = ["일일 시황 (" + dg.today + " 장전)", ""].concat(quotesPlain_(quotes)).concat(schedulePlain_(sched));
   dg.groups.forEach(function (g) {
     if (g.label) lines.push("[" + g.label + "]");
     g.items.forEach(function (o) { lines.push("- " + o.title + " : " + o.line); });
