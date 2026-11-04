@@ -21,12 +21,17 @@ REPO = HERE.parent
 MERMAID_JS = HERE / "node_modules" / "mermaid" / "dist" / "mermaid.min.js"
 ASSETS = REPO / "public" / "library" / "assets"
 REPORTS = REPO / "public" / "library" / "reports"
+NOTES = REPO / "public" / "library" / "notes"
 CATEGORIES = ("기술", "금융", "경제")
+DOC_TYPES = ("report", "note")
 BOM = chr(0xFEFF)
+BROKEN_CHAR = chr(0xFFFD)  # UTF-8 이 아닌 파일을 UTF-8 로 읽으면 나오는 문자
 SCALE = 2  # 고해상도 화면에서 흐려지지 않게 2배로 찍는다
 
 BLOCK_RE = re.compile(r"^```mermaid[ \t]*\n(.*?)^```[ \t]*$", re.M | re.S)
 SANKEY_COMMA_RE = re.compile(r',(?=(?:[^"]*"[^"]*")*[^"]*$)(?![^()]*\))')
+IMAGE_RE = re.compile(r"""!\[[^\]]*\]\(\s*<?([^)\s>]+)|<img\b[^>]*\bsrc=["']([^"']+)""", re.I)
+CODE_RE = re.compile(r"^```.*?^```[ \t]*$|`[^`\n]+`", re.M | re.S)
 
 # 색은 public/assets/style.css 토큰(--surface·--text·--primary·--primary-soft·--border)
 RENDER_JS = """
@@ -65,6 +70,44 @@ def split_front_matter(text):
     return (m.group(0), text[m.end():]) if m else (None, text)
 
 
+def front_value(front, key):
+    m = re.search(r"^%s:[ \t]*(.*)$" % key, front or "", re.M)
+    return m.group(1).strip().strip("\"'") if m else ""
+
+
+def local_images(body):
+    """사이트에 없는 이미지 경로. 앱은 .md 만 받으므로 이런 그림은 공개하면 깨진다."""
+    found = []
+    for m in IMAGE_RE.finditer(CODE_RE.sub("", body)):
+        src = m.group(1) or m.group(2)
+        if re.match(r"(https?:|data:)", src, re.I):
+            continue
+        if src.startswith("library/assets/") and (ASSETS / src[len("library/assets/"):]).exists():
+            continue
+        found.append(src)
+    return found
+
+
+def check_draft(text):
+    """공개하면 망가지는 원고를 멈춘다. (프런트매터, 본문) 반환."""
+    text = text.lstrip(BOM).replace("\r\n", "\n")
+    if BROKEN_CHAR in text:
+        raise ConvertError("글자가 깨진 파일입니다. UTF-8로 다시 저장해 주세요.")
+    front, body = split_front_matter(text)
+    if front is not None:
+        doc_type = front_value(front, "type") or "report"
+        category = front_value(front, "category")
+        if doc_type not in DOC_TYPES:
+            raise ConvertError("프런트매터의 type 은 report 또는 note 여야 합니다: %s" % doc_type)
+        if category not in CATEGORIES and (category or doc_type == "report"):
+            raise ConvertError("프런트매터의 category 는 %s 중 하나여야 합니다." % " / ".join(CATEGORIES))
+    images = local_images(body)
+    if images:
+        raise ConvertError("컴퓨터에 있는 이미지는 함께 올라가지 않습니다: %s. "
+                           "이미지를 빼거나 인터넷 주소로 바꿔 주세요." % ", ".join(images))
+    return front, body
+
+
 def find_blocks(body):
     return [m.group(1).strip() for m in BLOCK_RE.finditer(body)]
 
@@ -87,12 +130,12 @@ def rewrite_blocks(body, stem):
     return BLOCK_RE.sub(repl, body)
 
 
-def build_front_matter(body, category, date, tags):
+def build_front_matter(body, category, date, tags, doc_type="report"):
     """프런트매터가 없는 원고용. 제목은 H1, 초록은 첫 일반 문단에서 가져온다."""
     title = re.search(r"^#\s+(.+)$", body, re.M)
     if not title:
         raise ConvertError("프런트매터도 H1 제목도 없습니다. 원고 맨 위에 # 제목 을 넣어 주세요.")
-    if category not in CATEGORIES:
+    if category not in CATEGORIES and (category or doc_type == "report"):
         raise ConvertError("프런트매터가 없어 --category 가 필요합니다: %s" % " / ".join(CATEGORIES))
     abstract = ""
     for para in re.split(r"\n\s*\n", body[title.end():]):
@@ -100,18 +143,12 @@ def build_front_matter(body, category, date, tags):
         if para and not re.match(r"[#\-*|>`!\[]", para):
             abstract = " ".join(para.split())
             break
-    return "\n".join([
-        "---",
-        "title: %s" % title.group(1).strip(),
-        "type: report",
-        "category: %s" % category,
-        "tags: [%s]" % ", ".join(tags),
-        "date: %s" % date,
-        "abstract: %s" % abstract,
-        "access: free",
-        "---",
-        "",
-    ])
+    lines = ["---", "title: %s" % title.group(1).strip(), "type: %s" % doc_type]
+    if category:
+        lines.append("category: %s" % category)
+    lines += ["tags: [%s]" % ", ".join(tags), "date: %s" % date, "abstract: %s" % abstract,
+              "access: free", "---", ""]
+    return "\n".join(lines)
 
 
 def encode_sankey(src):
@@ -192,21 +229,25 @@ def publish(paths, title):
         raise ConvertError("%s (로컬 커밋은 만들어졌고 푸시는 안 됐습니다)" % e)
 
 
-def prepare(text, slug, category, tags, allow_no_charts=False):
+def prepare(text, slug, category, tags, allow_no_charts=False, doc_type="report"):
     """원고를 검사해 결과물 계획을 돌려준다. 아무것도 쓰지 않는다."""
     if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", slug or ""):
         raise ConvertError("파일 이름은 영문 소문자·숫자·하이픈만 씁니다: %s" % slug)
-    front, body = split_front_matter(text.lstrip(BOM).replace("\r\n", "\n"))
+    if doc_type not in DOC_TYPES:
+        raise ConvertError("유형은 report 또는 note 여야 합니다: %s" % doc_type)
+    front, body = check_draft(text)
+    if front is not None:
+        doc_type = front_value(front, "type") or "report"
     blocks = find_blocks(body)
     if not blocks and not allow_no_charts:
         raise ConvertError("mermaid 블록이 0건입니다. 변환할 차트가 없습니다.")
     today = datetime.datetime.now(ZoneInfo("Asia/Seoul")).date()
     stem = "%s-%s" % (today.strftime("%Y-%m"), slug)
     if front is None:
-        front = build_front_matter(body, category, today.isoformat(), tags) + "\n"
+        front = build_front_matter(body, category, today.isoformat(), tags, doc_type) + "\n"
     return {
         "stem": stem, "front": front, "body": body, "blocks": blocks,
-        "report": REPORTS / (stem + ".md"),
+        "report": (NOTES if doc_type == "note" else REPORTS) / (stem + ".md"),
         "images": [ASSETS / ("%s-%d.png" % (stem, i)) for i in range(1, len(blocks) + 1)],
     }
 
@@ -254,6 +295,9 @@ def main(argv=None):
             print("푸시 완료. 목록 갱신과 배포는 library-manifest.yml 이 이어서 합니다.")
         else:
             print("아직 공개되지 않았습니다. 확인 후 같은 명령에 --force --publish 를 더해 실행하세요.")
+    except UnicodeDecodeError:
+        print("[ERROR] UTF-8 파일이 아닙니다. UTF-8로 다시 저장해 주세요.", file=sys.stderr)
+        return 1
     except ConvertError as e:
         print("[ERROR] %s" % e, file=sys.stderr)
         return 1

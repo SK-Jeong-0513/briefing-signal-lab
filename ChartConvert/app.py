@@ -31,11 +31,6 @@ STATIC = {
 }
 
 
-def front_value(front, key):
-    m = re.search(r"^%s:\s*(.*)$" % key, front or "", re.M)
-    return m.group(1).strip().strip("\"'") if m else ""
-
-
 def suggest_slug(filename):
     """파일 이름에서 후보를 만든다. 한글 이름이면 빈 값이고 사용자가 채운다."""
     stem = pathlib.PurePath(filename or "").stem.lower()
@@ -46,30 +41,30 @@ def preview(data):
     text = data.get("text") or ""
     if not text.strip():
         raise convert.ConvertError("빈 파일입니다.")
-    front, body = convert.split_front_matter(text.lstrip(convert.BOM).replace("\r\n", "\n"))
-    if front is not None and front_value(front, "category") not in convert.CATEGORIES:
-        raise convert.ConvertError("프런트매터의 category 는 %s 중 하나여야 합니다." % " / ".join(convert.CATEGORIES))
+    front, body = convert.check_draft(text)
     blocks = convert.find_blocks(body)
     pngs = convert.render_png(blocks) if blocks else []
     h1 = re.search(r"^#\s+(.+)$", body, re.M)
-    title = front_value(front, "title") or (h1.group(1).strip() if h1 else "")
+    title = convert.front_value(front, "title") or (h1.group(1).strip() if h1 else "")
     if not title:
         raise convert.ConvertError("제목이 없습니다. 원고 맨 위에 # 제목 을 넣어 주세요.")
-    abstract = front_value(front, "abstract")
+    abstract = convert.front_value(front, "abstract")
     if not abstract:
         try:
-            abstract = front_value(convert.build_front_matter(body, "경제", "", []), "abstract")
+            abstract = convert.front_value(convert.build_front_matter(body, "경제", "", []), "abstract")
         except convert.ConvertError:
             abstract = ""
-    tags = front_value(front, "tags").strip("[]")
+    tags = convert.front_value(front, "tags").strip("[]")
+    doc_type = convert.front_value(front, "type") or "report"
     warnings = []
     if not blocks:
-        warnings.append("mermaid 차트가 없습니다. 글만 있는 리포트로 공개됩니다.")
-    if "출처" not in body:
+        warnings.append("mermaid 차트가 없습니다. 글만 공개됩니다.")
+    if doc_type == "report" and "출처" not in body:
         warnings.append("원고에 '출처'가 없습니다. 수치의 근거를 적어 두세요.")
     return {
-        "title": title, "abstract": abstract, "category": front_value(front, "category"),
-        "tags": tags, "has_front": front is not None, "slug": suggest_slug(data.get("filename")),
+        "title": title, "abstract": abstract, "category": convert.front_value(front, "category"),
+        "doc_type": doc_type, "tags": tags, "has_front": front is not None,
+        "slug": suggest_slug(data.get("filename")),
         "charts": len(pngs), "warnings": warnings,
         "images": ["data:image/png;base64," + base64.b64encode(p).decode() for p in pngs],
     }
@@ -80,7 +75,7 @@ def publish(data):
         raise convert.ConvertError("원고의 수치와 출처를 확인했다는 항목을 체크해 주세요.")
     tags = [t.strip() for t in (data.get("tags") or "").split(",") if t.strip()]
     job = convert.prepare(data.get("text") or "", data.get("slug"), data.get("category"), tags,
-                          allow_no_charts=True)
+                          allow_no_charts=True, doc_type=data.get("doc_type") or "report")
     taken = convert.taken_files(job)
     if taken and data.get("overwrite") is not True:
         return 409, {"needs_overwrite": True, "files": taken}

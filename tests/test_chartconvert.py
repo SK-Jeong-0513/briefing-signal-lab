@@ -105,6 +105,57 @@ A,B""")
     raise AssertionError("칸 수가 틀린 행이 통과했다")
 
 
+def stops(text):
+    try:
+        convert.check_draft(text)
+    except convert.ConvertError:
+        return True
+    return False
+
+
+def test_broken_text_stops():
+    assert stops("# 제목\n\n" + convert.BROKEN_CHAR * 4)
+
+
+def test_local_image_stops():
+    assert stops("# 제목\n\n![그림](images/a.png)\n")
+    assert stops('# 제목\n\n<img src="a.png">\n')
+
+
+def test_web_image_and_code_sample_pass():
+    assert not stops("# 제목\n\n![그림](https://example.com/a.png)\n")
+    assert not stops("# 제목\n\n`![a](b.png)`\n\n```md\n![a](b.png)\n```\n")
+
+
+def test_existing_site_image_passes():
+    name = next(convert.ASSETS.glob("*.svg")).name
+    assert not stops("# 제목\n\n![그림](library/assets/%s)\n" % name)
+
+
+def test_note_front_matter_needs_no_category():
+    assert not stops("---\ntitle: 노트\ntype: note\n---\n본문\n")
+    assert stops("---\ntitle: 리포트\ntype: report\n---\n본문\n")
+    assert stops("---\ntitle: 노트\ntype: note\ncategory: 투자\n---\n본문\n")
+    assert stops("---\ntitle: 기타\ntype: memo\ncategory: 경제\n---\n본문\n")
+
+
+def test_note_goes_to_notes_folder():
+    job = convert.prepare("# 노트\n\n본문\n", "n", "", [], allow_no_charts=True, doc_type="note")
+    assert job["report"].parent == convert.NOTES
+    assert "type: note\n" in job["front"] and "category" not in job["front"]
+    with_front = convert.prepare("---\ntitle: 노트\ntype: note\n---\n본문\n", "n", "", [], allow_no_charts=True)
+    assert with_front["report"].parent == convert.NOTES
+
+
+def test_report_stays_in_reports_folder():
+    job = convert.prepare("# 글\n\n본문\n", "r", "경제", [], allow_no_charts=True)
+    assert job["report"].parent == convert.REPORTS
+
+
+def test_front_value_does_not_read_next_line():
+    assert convert.front_value("---\nabstract: \naccess: free\n---\n", "abstract") == ""
+
+
 def test_bad_slug_fails():
     assert convert.main(["없는파일.md", "--slug", "한글"]) == 1
 

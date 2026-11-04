@@ -89,7 +89,9 @@ input[type=text], select { height:var(--control-h); width:100%; padding:10px; bo
     <div class="row">
       <div class="field"><label for="slug">파일 이름 (영문 소문자·숫자·하이픈)</label>
         <input id="slug" type="text" autocomplete="off" spellcheck="false" placeholder="us-federal-interest"></div>
-      <div class="field"><label for="category">분류</label>
+      <div class="field"><label for="doctype">유형</label>
+        <select id="doctype"><option value="report">리포트</option><option value="note">노트</option></select></div>
+      <div class="field"><label for="category">분류 (노트는 선택)</label>
         <select id="category"><option value="">선택</option><option>기술</option><option>금융</option><option>경제</option></select></div>
       <div class="field"><label for="tags">태그 (쉼표로 구분)</label>
         <input id="tags" type="text" autocomplete="off"></div>
@@ -129,17 +131,26 @@ async function post(path, body) {
 }
 function refreshPublish() {
   const needOverwrite = !$("overwrite-row").hidden && !$("overwrite").checked;
-  $("publish").disabled = !($("slug").value.trim() && $("category").value && $("confirmed").checked) || needOverwrite;
+  const categoryOk = $("category").value || $("doctype").value === "note";
+  $("publish").disabled = !($("slug").value.trim() && categoryOk && $("confirmed").checked) || needOverwrite;
 }
-["slug", "category", "confirmed", "overwrite"].forEach(id => $(id).addEventListener("input", () => {
+["slug", "doctype", "category", "confirmed", "overwrite"].forEach(id => $(id).addEventListener("input", () => {
   if (id === "slug") $("overwrite-row").hidden = true;
   refreshPublish();
 }));
 
+// 메모장의 ANSI 저장은 UTF-8 이 아니다. 그대로 읽으면 한글이 깨진 채 공개되므로 변환한다.
+async function readText(file) {
+  const bytes = await file.arrayBuffer();
+  try { return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), converted: false }; }
+  catch (e) { return { text: new TextDecoder("euc-kr").decode(bytes), converted: true }; }
+}
+
 async function load(file) {
   showError(""); $("review").hidden = true; $("result").hidden = true;
   if (!/\.(md|markdown)$/i.test(file.name)) return showError(".md 파일만 올릴 수 있습니다: " + file.name);
-  state.text = await file.text(); state.filename = file.name;
+  const { text, converted } = await readText(file);
+  state.text = text; state.filename = file.name;
   $("drop-title").textContent = file.name; $("drop-sub").textContent = "다른 파일로 바꾸려면 다시 놓거나 누르세요";
   showBusy("차트를 그리는 중입니다…");
   try {
@@ -148,8 +159,10 @@ async function load(file) {
     state.hasFront = data.has_front;
     $("title").textContent = data.title; $("abstract").textContent = data.abstract;
     $("slug").value = data.slug; $("category").value = data.category; $("tags").value = data.tags;
-    $("category").disabled = $("tags").disabled = data.has_front;
-    $("warnings").replaceChildren(...data.warnings.map(w => {
+    $("doctype").value = data.doc_type;
+    $("doctype").disabled = $("category").disabled = $("tags").disabled = data.has_front;
+    const notices = converted ? ["ANSI 파일이라 UTF-8로 변환했습니다. 제목과 차트의 한글을 확인해 주세요."].concat(data.warnings) : data.warnings;
+    $("warnings").replaceChildren(...notices.map(w => {
       const p = document.createElement("p"); p.className = "msg warn"; p.textContent = w; return p;
     }));
     $("charts").replaceChildren(...data.images.map((src, i) => {
@@ -171,7 +184,8 @@ $("publish").onclick = async () => {
   showError(""); showBusy("공개하는 중입니다…"); $("publish").disabled = true;
   try {
     const { status, data } = await post("/api/publish", {
-      text: state.text, slug: $("slug").value.trim(), category: $("category").value, tags: $("tags").value,
+      text: state.text, slug: $("slug").value.trim(), doc_type: $("doctype").value,
+      category: $("category").value, tags: $("tags").value,
       confirmed: $("confirmed").checked, overwrite: $("overwrite").checked,
     });
     if (status === 409) {
