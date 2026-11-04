@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChartConvert — 서재 리포트 올리기</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<script>document.documentElement.dataset.theme = localStorage.getItem("cc-theme") || "dark";</script>
+<style>
+:root {
+  --canvas:#F7F8FA; --surface:#FFFFFF; --text:#17202A; --muted:#5F6B7A; --border:#D8DEE8;
+  --primary:#2454D6; --primary-hover:#1B43AD; --primary-soft:#E8EEFF;
+  --on-primary:#FFFFFF; --success:#12733E; --warning:#8A5300; --danger:#C9342F;
+  --r-sm:4px; --r-md:8px; --r-lg:12px; --s-xs:4px; --s-sm:8px; --s-md:16px; --s-lg:24px; --s-xl:32px;
+  --e-raised:0 1px 3px rgba(23,32,42,.08), 0 1px 2px rgba(23,32,42,.04);
+  --control-h:calc(1rem * 1.55 + 2 * 10px + 2px);
+  --font:Inter, Pretendard, system-ui, sans-serif;
+}
+:root[data-theme="dark"] {
+  --canvas:#10151C; --surface:#1A2029; --text:#E6EAF0; --muted:#9AA6B4; --border:#2A323D;
+  --primary:#5B82E8; --primary-hover:#7396EE; --primary-soft:#22304F;
+  --on-primary:#10151C; --success:#2FA968; --warning:#C79A3A; --danger:#E4655F;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--canvas); color:var(--text); font:400 1rem/1.55 var(--font); }
+svg.icon { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+.top { display:flex; align-items:center; justify-content:space-between; gap:var(--s-md);
+  padding:var(--s-md) var(--s-lg); background:var(--surface); border-bottom:1px solid var(--border); }
+.top h1 { margin:0; font-size:1.25rem; font-weight:650; line-height:1.3; }
+.icon-btn { display:inline-flex; align-items:center; justify-content:center; width:var(--control-h); height:var(--control-h);
+  border:1px solid var(--border); border-radius:var(--r-md); background:transparent; color:var(--text); cursor:pointer; }
+.icon-btn:hover { background:var(--primary-soft); }
+main { max-width:900px; margin:0 auto; padding:var(--s-lg); display:flex; flex-direction:column; gap:var(--s-lg); }
+.drop { display:flex; flex-direction:column; align-items:center; gap:var(--s-sm); width:100%; padding:var(--s-xl) var(--s-md);
+  background:var(--surface); border:1px dashed var(--border); border-radius:var(--r-md); color:var(--muted);
+  font:inherit; text-align:center; cursor:pointer; }
+.drop strong { color:var(--text); font-weight:600; }
+.drop:hover, .drop.over { border-color:var(--primary); background:var(--primary-soft); }
+.drop:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.panel { display:flex; flex-direction:column; gap:var(--s-md); padding:var(--s-md); background:var(--surface);
+  border-radius:var(--r-md); box-shadow:var(--e-raised); }
+.panel h2 { margin:0; font-size:1.25rem; font-weight:650; line-height:1.3; }
+.muted { margin:0; color:var(--muted); }
+.row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:var(--s-sm); }
+.field { display:flex; flex-direction:column; justify-content:flex-end; gap:var(--s-xs); flex:1 1 180px; min-width:0; }
+label, .label { font-size:.875rem; font-weight:600; line-height:1.4; }
+input[type=text], select { height:var(--control-h); width:100%; padding:10px; border:1px solid var(--border);
+  border-radius:var(--r-sm); background:var(--surface); color:var(--text); font:inherit; }
+.check { display:flex; align-items:flex-start; gap:var(--s-sm); font-weight:400; font-size:1rem; line-height:1.55; }
+.check input { margin:5px 0 0; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:var(--s-sm); height:var(--control-h); padding:0 var(--s-md);
+  border:0; border-radius:var(--r-md); background:var(--primary); color:var(--on-primary); font:600 1rem/1 var(--font); cursor:pointer; }
+.btn:hover:not(:disabled) { background:var(--primary-hover); }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.link-btn { padding:0; border:0; background:none; color:var(--primary); font:inherit; cursor:pointer; text-decoration:underline; }
+.msg { display:flex; align-items:flex-start; gap:var(--s-sm); margin:0; }
+.msg.warn { color:var(--warning); } .msg.err { color:var(--danger); } .msg.ok { color:var(--success); }
+.msg a { color:inherit; font-weight:600; }
+.charts { display:flex; flex-direction:column; gap:var(--s-md); }
+.charts img { display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:var(--r-md); }
+[hidden] { display:none !important; }
+@media (max-width:480px) { main { padding:var(--s-md); } .top { padding:var(--s-sm) var(--s-md); } .btn { width:100%; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>ChartConvert</h1>
+  <button class="icon-btn" id="theme" type="button" aria-label="화면 밝기 바꾸기" title="화면 밝기 바꾸기">
+    <svg class="icon" id="icon-sun" viewBox="0 0 24 24"></svg>
+    <svg class="icon" id="icon-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+  </button>
+</header>
+<main>
+  <button class="drop" id="drop" type="button">
+    <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg>
+    <strong id="drop-title">원고 .md 파일을 여기에 놓으세요</strong>
+    <span id="drop-sub">또는 눌러서 파일 선택</span>
+  </button>
+  <input id="file" type="file" accept=".md,text/markdown" hidden>
+  <p class="msg err" id="error" role="alert" hidden></p>
+  <p class="muted" id="busy" role="status" hidden></p>
+
+  <section class="panel" id="review" hidden>
+    <div>
+      <h2 id="title"></h2>
+      <p class="muted" id="abstract"></p>
+    </div>
+    <div id="warnings"></div>
+    <div class="row">
+      <div class="field"><label for="slug">파일 이름 (영문 소문자·숫자·하이픈)</label>
+        <input id="slug" type="text" autocomplete="off" spellcheck="false" placeholder="us-federal-interest"></div>
+      <div class="field"><label for="category">분류</label>
+        <select id="category"><option value="">선택</option><option>기술</option><option>금융</option><option>경제</option></select></div>
+      <div class="field"><label for="tags">태그 (쉼표로 구분)</label>
+        <input id="tags" type="text" autocomplete="off"></div>
+    </div>
+    <div class="charts" id="charts"></div>
+    <label class="check"><input id="confirmed" type="checkbox"><span>원고의 수치와 출처를 확인했습니다. 공개하면 누구나 볼 수 있습니다.</span></label>
+    <label class="check" id="overwrite-row" hidden><input id="overwrite" type="checkbox"><span id="overwrite-text"></span></label>
+    <div class="row"><button class="btn" id="publish" type="button" disabled>서재에 공개</button></div>
+  </section>
+
+  <section class="panel" id="result" hidden>
+    <p class="msg" id="live" role="status"></p>
+    <div><button class="link-btn" id="again" type="button">다른 원고 올리기</button></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const state = { text: "", filename: "", hasFront: false };
+
+$("icon-sun").innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
+function paintTheme() {
+  const dark = document.documentElement.dataset.theme === "dark";
+  $("icon-sun").hidden = !dark; $("icon-moon").hidden = dark;
+  $("icon-sun").style.display = dark ? "" : "none"; $("icon-moon").style.display = dark ? "none" : "";
+}
+$("theme").onclick = () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next; localStorage.setItem("cc-theme", next); paintTheme();
+};
+paintTheme();
+
+function showError(text) { $("error").textContent = text ? "[ERROR] " + text : ""; $("error").hidden = !text; }
+function showBusy(text) { $("busy").textContent = text || ""; $("busy").hidden = !text; }
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return { status: res.status, data: await res.json() };
+}
+function refreshPublish() {
+  const needOverwrite = !$("overwrite-row").hidden && !$("overwrite").checked;
+  $("publish").disabled = !($("slug").value.trim() && $("category").value && $("confirmed").checked) || needOverwrite;
+}
+["slug", "category", "confirmed", "overwrite"].forEach(id => $(id).addEventListener("input", () => {
+  if (id === "slug") $("overwrite-row").hidden = true;
+  refreshPublish();
+}));
+
+async function load(file) {
+  showError(""); $("review").hidden = true; $("result").hidden = true;
+  if (!/\.(md|markdown)$/i.test(file.name)) return showError(".md 파일만 올릴 수 있습니다: " + file.name);
+  state.text = await file.text(); state.filename = file.name;
+  $("drop-title").textContent = file.name; $("drop-sub").textContent = "다른 파일로 바꾸려면 다시 놓거나 누르세요";
+  showBusy("차트를 그리는 중입니다…");
+  try {
+    const { status, data } = await post("/api/preview", { text: state.text, filename: file.name });
+    if (status !== 200) return showError(data.error);
+    state.hasFront = data.has_front;
+    $("title").textContent = data.title; $("abstract").textContent = data.abstract;
+    $("slug").value = data.slug; $("category").value = data.category; $("tags").value = data.tags;
+    $("category").disabled = $("tags").disabled = data.has_front;
+    $("warnings").replaceChildren(...data.warnings.map(w => {
+      const p = document.createElement("p"); p.className = "msg warn"; p.textContent = w; return p;
+    }));
+    $("charts").replaceChildren(...data.images.map((src, i) => {
+      const img = new Image(); img.src = src; img.alt = "차트 미리보기 " + (i + 1); return img;
+    }));
+    $("confirmed").checked = false; $("overwrite").checked = false; $("overwrite-row").hidden = true;
+    $("review").hidden = false; refreshPublish();
+  } catch (e) { showError("앱 서버에 연결하지 못했습니다. 실행 창이 열려 있는지 확인해 주세요."); }
+  finally { showBusy(""); }
+}
+
+$("drop").onclick = () => $("file").click();
+$("file").onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ""; };
+["dragenter", "dragover"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach(t => document.addEventListener(t, e => { e.preventDefault(); $("drop").classList.remove("over"); }));
+document.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) load(f); });
+
+$("publish").onclick = async () => {
+  showError(""); showBusy("공개하는 중입니다…"); $("publish").disabled = true;
+  try {
+    const { status, data } = await post("/api/publish", {
+      text: state.text, slug: $("slug").value.trim(), category: $("category").value, tags: $("tags").value,
+      confirmed: $("confirmed").checked, overwrite: $("overwrite").checked,
+    });
+    if (status === 409) {
+      $("overwrite-text").textContent = "같은 이름의 리포트를 덮어씁니다: " + data.files.join(", ");
+      $("overwrite-row").hidden = false; return;
+    }
+    if (status !== 200) return showError(data.error);
+    $("review").hidden = true; $("result").hidden = false; watchLive(data);
+  } catch (e) { showError("앱 서버에 연결하지 못했습니다. GitHub에 올라갔는지 확인해 주세요."); }
+  finally { showBusy(""); refreshPublish(); }
+};
+
+async function watchLive(item) {
+  const box = $("live");
+  box.className = "msg"; box.textContent = "GitHub에 올렸습니다. 사이트 반영을 기다리는 중입니다(보통 1~3분)…";
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 10000));
+    const res = await fetch("/api/live?id=" + encodeURIComponent(item.id)).then(r => r.json()).catch(() => ({}));
+    if (res.live) {
+      box.className = "msg ok"; box.textContent = "서재에 공개됐습니다. ";
+      const a = document.createElement("a"); a.href = item.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "리포트 열기";
+      box.append(a); return;
+    }
+  }
+  box.className = "msg warn";
+  box.textContent = "7분 안에 사이트 반영을 확인하지 못했습니다. GitHub Actions 실행 결과를 확인해 주세요.";
+}
+$("again").onclick = () => {
+  $("result").hidden = true; $("drop-title").textContent = "원고 .md 파일을 여기에 놓으세요";
+  $("drop-sub").textContent = "또는 눌러서 파일 선택"; state.text = "";
+};
+</script>
+</body>
+</html>

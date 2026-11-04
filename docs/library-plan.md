@@ -54,6 +54,10 @@ abstract_en:            # 예약
 - tech/finance/economy — 하단 "이 분야 심층 리포트 →" 스트립(manifest를 category로 필터).
 - 페이지네이션 없음(초기 소량, 나중에 "더 보기").
 
+## 차트가 든 리포트
+
+`read.html`은 Mermaid를 그리지 않는다. 차트가 든 AI 원고는 [`ChartConvert/`](../ChartConvert/README.md)로 PNG 변환 후 올린다.
+
 ## 파일 범위
 
 신규:

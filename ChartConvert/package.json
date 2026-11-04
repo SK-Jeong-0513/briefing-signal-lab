@@ -1,0 +1,8 @@
+{
+  "name": "chartconvert",
+  "private": true,
+  "description": "Local renderer deps for ChartConvert. Never shipped to the site.",
+  "dependencies": {
+    "mermaid": "12.3.0"
+  }
+}
